@@ -35,10 +35,34 @@ client-side from Coinbase over HTTPS. The only requirement is an internet connec
   - MA7 orange · MA25 red · MA99 green · MA150 cyan · MA200 magenta · MA300 white
 - **RSI(14) panel** with a gold smoothing MA, dashed 70/30 bands, 50 midline,
   and green/red overbought/oversold fills — styled to look like TradingView.
+- **Drawing toolbar** (left side) — a full canvas-overlay drawing engine:
+  - Trend line, ray, extended line, horizontal line/ray, vertical line,
+    parallel channel (3-click), rectangle, ellipse.
+  - Fibonacci retracement, extension, fan, time zones.
+  - Long / short position tools (entry / target / stop with RR).
+  - Text, callout, measure tool.
+  - Magnet (snap to OHLC), lock, hide-all, remove-all.
+  - **Full lifecycle:** click to place (1/2/3-click per tool), hover to highlight,
+    click to select, drag handles to resize, drag body to move, `Delete` to remove,
+    `Esc` to cancel. **Right-click** any shape for a context menu (settings, clone,
+    quick colors, z-order, delete) or right-click empty chart for add-alert /
+    add-indicator. **Double-click** a shape to open its settings dialog
+    (color, width, line style, fill, text, price label).
+  - **Persistence:** drawings are saved to `localStorage` per symbol+timeframe and
+    restored automatically.
+- **Indicators** (⊞ Indicators button) — add/remove/configure, with searchable menu:
+  - Overlays: EMA, SMA, Bollinger Bands, VWAP.
+  - Separate panes: Volume, MACD, Stochastic, ATR, Momentum, Williams %R, CCI.
+  - Each has a settings gear (periods, colors) and an × to remove; a live legend
+    shows active overlays.
+- **Price alerts** (🔔 Alert button, or right-click chart) — create alerts above/below
+  a price; a dashed line marks each on the chart; when price crosses, you get a
+  browser notification + in-app toast + beep. Saved per symbol in `localStorage`.
 - **Synthetic spread/ratio charts** — any symbol with a `/` (e.g. `NEAR-USD/INJ-USD`)
   is computed live by aligning both legs' candles and dividing them component-wise.
-- **Watchlist** grouped into sections (SPREADS / ALPHA / SECTION 2 / BTC PAIRS /
-  SECTION 3), live prices + 24h change, click any row to load it.
+- **Watchlist** grouped into TradingView's sections (SPREADS / MEME / PRIVACY /
+  OMEGA / ALPHA / SECTION 2 / BTC PAIRS / SECTION 3) with real coin logos, live
+  prices, absolute + % change; click any row to load it.
 - **Timeframes:** 1m, 5m, 15m, 1H, 4H, 6H, 12H, 1D, 1W.
   - Native Coinbase granularities: 1m, 5m, 15m, 1h, 6h, 1d.
   - 4H / 12H / 1W are **aggregated** on the fly from a finer base granularity.

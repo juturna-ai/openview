@@ -43,12 +43,12 @@
   #status{margin-left:auto; font-size:11px; color:var(--muted); white-space:nowrap;}
   .dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green); margin-right:5px; vertical-align:middle;}
 
-  #main{flex:1; position:relative; padding-top:46px; display:flex; flex-direction:column;}
-  #chartWrap{width:100%; flex:1 1 auto; min-height:120px;}
+  #main{flex:1; position:relative; padding-top:46px; display:flex; flex-direction:column; overflow:hidden;}
+  #chartWrap{width:100%; flex:1 1 0; min-height:60px;}   /* the only growable pane */
   #chart{width:100%; height:100%;}
   #draw{cursor:crosshair;}
-  #rsiWrap{height:30%; min-height:130px; flex:0 0 auto; border-top:1px solid var(--border); position:relative;}
-  #subPanes{flex:0 0 auto;}
+  #rsiWrap{flex:0 1 auto; height:26%; min-height:96px; border-top:1px solid var(--border); position:relative;}
+  #subPanes{flex:0 1 auto; min-height:0;}
   #rsiLabel{position:absolute; top:6px; left:10px; font-size:11px; color:var(--muted); z-index:5;}
   #rsiLabel b{font-weight:600;}
   #rsi{width:100%; height:100%;}
@@ -89,8 +89,8 @@
   .tbtn:hover{background:var(--hover);}
 
   /* ── sub-panes for separate-pane indicators (MACD, Stoch, etc.) ── */
-  #subPanes{display:none; flex-direction:column;}
-  .subpane{position:relative; flex:1; min-height:100px;}
+  #subPanes{display:none; flex-direction:column; flex:0 1 auto; min-height:0;}
+  .subpane{position:relative; height:120px; flex:0 1 120px; min-height:70px; border-top:1px solid var(--border);}
   .subpane .subLabel{position:absolute; top:4px; left:8px; z-index:5; font-size:11px; color:var(--muted);}
   .subpane .subClose{cursor:pointer; margin-left:8px; color:var(--muted);}
   .subpane .subClose:hover{color:var(--red);}
@@ -296,8 +296,9 @@ const rsiLine = rsiChart.addLineSeries({ color:"#9c6ade", lineWidth:1, priceLine
 const rsiMa   = rsiChart.addLineSeries({ color:"#e6b400", lineWidth:2, priceLineVisible:false, lastValueVisible:true });
 
 // sync the two time scales
-chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r) rsiChart.timeScale().setVisibleLogicalRange(r); });
-rsiChart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r) chart.timeScale().setVisibleLogicalRange(r); });
+let _rsiSyncing=false;   // reentrancy guard so the two scales don't ping-pong
+chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r&&!_rsiSyncing){ _rsiSyncing=true; try{rsiChart.timeScale().setVisibleLogicalRange(r);}catch(e){} _rsiSyncing=false; } });
+rsiChart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r&&!_rsiSyncing){ _rsiSyncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} _rsiSyncing=false; } });
 
 function resize(){
   chart.applyOptions({ width:chartEl.clientWidth, height:chartEl.clientHeight });
@@ -364,7 +365,8 @@ const TF = {
 
 function parseCandlesAgg(raw){
   if(!Array.isArray(raw)) return [];
-  return raw.map(k=>({ time:k[0], low:+k[1], high:+k[2], open:+k[3], close:+k[4] }));
+  // Coinbase candle = [time, low, high, open, close, volume]; keep volume for VWAP/Volume.
+  return raw.map(k=>({ time:k[0], low:+k[1], high:+k[2], open:+k[3], close:+k[4], volume:+k[5]||0 }));
 }
 
 // Roll base bars up into fixed-size buckets aligned to epoch.
@@ -373,11 +375,12 @@ function aggregate(bars, base, bucket){
   const groups = {};
   for(const b of bars){
     const t = Math.floor(b.time / bucket) * bucket;   // bucket start
-    const g = groups[t] || (groups[t] = { time:t, open:b.open, high:b.high, low:b.low, close:b.close, _first:b.time, _last:b.time });
+    const g = groups[t] || (groups[t] = { time:t, open:b.open, high:b.high, low:b.low, close:b.close, volume:0, _first:b.time, _last:b.time });
     if(b.time <= g._first){ g.open = b.open; g._first = b.time; }
     if(b.time >= g._last ){ g.close = b.close; g._last = b.time; }
     if(b.high > g.high) g.high = b.high;
     if(b.low  < g.low ) g.low  = b.low;
+    g.volume += b.volume||0;
   }
   return Object.values(groups)
     .map(({_first,_last,...g})=>g)
@@ -462,14 +465,14 @@ function makeRatio(a, b){
     // wick must still envelope the real open & close
     hi = Math.max(hi, o, c);
     lo = Math.min(lo, o, c);
-    out.push({ time:k.time, open:o, high:hi, low:lo, close:c });
+    out.push({ time:k.time, open:o, high:hi, low:lo, close:c, volume:k.volume||0 });
   }
   return out;
 }
 
 function fmt(v){ return v>=100 ? v.toFixed(2) : v>=1 ? v.toFixed(3) : v.toPrecision(4); }
 
-async function loadChart(symbol, tf){
+async function loadChart(symbol, tf, keepView){
   document.getElementById("symName").textContent = symbol;
   document.getElementById("tfName").textContent = (TF[tf]||{}).label || tf;
   try{
@@ -513,9 +516,12 @@ async function loadChart(symbol, tf){
     if(typeof renderAllIndicators==="function") renderAllIndicators();
     if(typeof checkAlerts==="function") checkAlerts();
 
-    // show the most recent ~420 bars (≈ TradingView's default view), not all ~1400
-    const view = Math.min(data.length, 420);
-    chart.timeScale().setVisibleLogicalRange({ from: data.length-view, to: data.length+2 });
+    // show the most recent ~420 bars on first/symbol/tf load only — NOT on the 20s
+    // refresh (that would yank the view back while the user is panning/zooming).
+    if(!keepView){
+      const view = Math.min(data.length, 420);
+      chart.timeScale().setVisibleLogicalRange({ from: data.length-view, to: data.length+2 });
+    }
     document.getElementById("status").innerHTML = `<span class="dot"></span>Live · Coinbase API · ${data.length} bars`;
   }catch(e){
     document.getElementById("ohlc").innerHTML = `<span class="down">⚠ ${e.message}</span>`;
@@ -775,10 +781,33 @@ function onToolClick(t,el){
   });
   draw.tool=t.key; draw.pending=null; draw.sel=null;
   const drawing=(t.key!=="cross");
+  // While a DRAW tool is active the canvas owns all events and the chart can't pan.
+  // In CROSSHAIR mode the canvas is click-through (chart pans) EXCEPT when the cursor
+  // is over a drawing — then the hover tracker flips it interactive so you can
+  // select/drag/right-click existing shapes. (see installHoverTracker)
   dcanvas.style.pointerEvents = drawing ? "auto" : "none";
   dcanvas.style.cursor = drawing ? "crosshair" : "default";
   chart.applyOptions({ handleScroll:!drawing, handleScale:!drawing });
   redraw();
+}
+
+// In crosshair mode, watch the cursor (via a listener on the chart wrapper that
+// always fires) and make the overlay canvas interactive only when hovering a shape,
+// so empty-space drags still pan the chart but shapes stay clickable/editable.
+function installHoverTracker(){
+  const wrap=document.getElementById("chartWrap");
+  wrap.addEventListener("mousemove", e=>{
+    if(draw.tool!=="cross") return;          // draw tools already own the canvas
+    if(draw.drag||draw.pending) return;
+    const r=dcanvas.getBoundingClientRect();
+    const p={ x:e.clientX-r.left, y:e.clientY-r.top };
+    const hit=hitTest(p);
+    const over=!!hit && !draw.hidden;
+    dcanvas.style.pointerEvents = over ? "auto" : "none";
+    dcanvas.style.cursor = over ? (hit.handle==="body"?"move":"pointer") : "default";
+    const newHover=over?hit.id:null;
+    if(newHover!==draw.hover){ draw.hover=newHover; redraw(); }
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -831,27 +860,31 @@ let uid=1; function newId(){ return "s"+(uid++); }
 
 dcanvas.addEventListener("mousedown", e=>{
   if(e.button!==0) return;                 // left only; right handled by contextmenu
-  if(draw.tool==="cross") return;
   e.preventDefault();
   const p=evtPt(e), c=ptToCoord(p);
 
-  // ── if a tool is mid-placement, this click adds the next point ──
-  if(draw.pending){
-    addPendingPoint(c);
+  // ── CROSSHAIR mode: the canvas only receives this when hovering a shape (the
+  //    hover tracker flipped pointer-events on). Select & drag it. ──
+  if(draw.tool==="cross"){
+    if(draw.locked) return;
+    const hit=hitTest(p);
+    if(hit){ draw.sel=hit.id; draw.drag={ id:hit.id, handle:hit.handle, last:c }; redraw(); }
     return;
   }
 
-  // ── select-tool behavior is implicit: clicking a shape selects/drags it ──
-  if(!draw.locked){
+  // ── DRAW mode below ──
+  // mid-placement: this click adds the next point of the pending shape
+  if(draw.pending){ addPendingPoint(c); return; }
+
+  // click directly on a HANDLE of the currently-selected shape → resize it
+  if(!draw.locked && draw.sel){
     const hit=hitTest(p);
-    if(hit){
-      draw.sel=hit.id;
-      draw.drag={ id:hit.id, handle:hit.handle, last:c };
-      redraw(); return;
+    if(hit && hit.id===draw.sel && typeof hit.handle==="number"){
+      draw.drag={ id:hit.id, handle:hit.handle, last:c }; redraw(); return;
     }
   }
 
-  // ── otherwise begin a NEW shape with the active tool ──
+  // otherwise the active tool ALWAYS starts a new shape
   startPending(c);
 });
 
@@ -927,11 +960,13 @@ dcanvas.addEventListener("mousemove", e=>{
 
 window.addEventListener("mouseup", ()=>{ if(draw.drag){ persist(); draw.drag=null; } });
 
-// double-click finishes a multi-point pending OR opens settings on a shape
+// double-click finishes a MULTI-point pending (>2 pts, e.g. channel) OR opens settings.
+// For 2-point tools the second mousedown already commits; dbl-click must NOT pop their
+// endpoint (that produced a degenerate 1-point shape that got discarded).
 dcanvas.addEventListener("dblclick", e=>{
   if(draw.pending){
-    // for >2-pt tools, dbl-click commits with current points
-    if(draw.pending.pts.length>=2){ draw.pending.pts.pop(); commitPending(); }
+    if(draw.pending.pts.length>2){ draw.pending.pts.pop(); commitPending(); }
+    // 2-point tools: ignore — mousedown #2 handles the commit.
     return;
   }
   const hit=hitTest(evtPt(e));
@@ -981,7 +1016,7 @@ function hitTest(p){
   return null;
 }
 function nearShape(s,p){
-  const a=px(s.pts[0]); if(a.x==null) return false;
+  const a=px(s.pts[0]); if(a.x==null||a.y==null) return false;
   const W=dcanvas.clientWidth, H=dcanvas.clientHeight;
   if(s.type==="hline") return Math.abs(p.y-a.y)<6;
   if(s.type==="hray")  return Math.abs(p.y-a.y)<6 && p.x>=a.x;
@@ -1157,7 +1192,6 @@ function drawShape(s, selected, hovered){
   const P=s.pts.map(px);
   if(P[0].x==null) return;
   const a=P[0], b=P[1];
-  if(hovered && !selected){ st._glow=true; }
 
   switch(s.type){
     case "trend": if(b)strokeLine(a.x,a.y,b.x,b.y,st); break;
@@ -1252,7 +1286,7 @@ function drawPosition(s,P,st){
   strokeLine(x1,a.y,x2,a.y,{color:"#2962ff",width:1.3,dash:0});
   strokeLine(x1,b.y,x2,b.y,{color:"#26a69a",width:1.1,dash:0});
   strokeLine(x1,sy,x2,sy,{color:"#ef5350",width:1.1,dash:0});
-  const rr=Math.abs((tgt-entry)/(entry-stop));
+  const rr=(entry-stop)!==0 ? Math.abs((tgt-entry)/(entry-stop)) : 0;
   dctx.save(); dctx.fillStyle="#d1d4dc"; dctx.font="10px sans-serif";
   dctx.fillText(`Entry ${fmt(entry)}`,x1+4,a.y-3);
   dctx.fillText(`Target ${fmt(tgt)}  (RR ${rr.toFixed(1)})`,x1+4,b.y-3);
@@ -1313,6 +1347,7 @@ const IND_CATALOG = [
   { type:"sma",   name:"SMA",             pane:"main", params:{length:50, color:"#42a5f5"} },
   { type:"bb",    name:"Bollinger Bands", pane:"main", params:{length:20, mult:2, color:"#26c6da"} },
   { type:"vwap",  name:"VWAP",            pane:"main", params:{color:"#ab47bc"} },
+  { type:"volume",name:"Volume",          pane:"sub",  params:{} },
   { type:"macd",  name:"MACD",            pane:"sub",  params:{fast:12, slow:26, signal:9} },
   { type:"stoch", name:"Stochastic",      pane:"sub",  params:{k:14, d:3} },
   { type:"atr",   name:"ATR",             pane:"sub",  params:{length:14, color:"#ff9800"} },
@@ -1363,6 +1398,7 @@ function addIndicator(type){
 }
 function removeIndicator(id){
   const idx=indicators.findIndex(i=>i.id===id); if(idx<0) return; const ind=indicators[idx];
+  if(ind.syncMain){ try{ chart.timeScale().unsubscribeVisibleLogicalRangeChange(ind.syncMain); }catch(e){} }
   ind.series.forEach(s=>{ try{ (ind.subChart||chart).removeSeries(s); }catch(e){} });
   if(ind.subChart){ try{ ind.subChart.remove(); }catch(e){} if(ind.paneEl) ind.paneEl.remove(); }
   indicators.splice(idx,1); renderIndLegend(); layoutPanes();
@@ -1383,10 +1419,15 @@ function buildIndicatorSeries(ind){
       grid:{vertLines:{color:"#1e222d"},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39"},
       timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false}, crosshair:{mode:0} });
     ind.subChart=sc;
-    chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r) try{sc.timeScale().setVisibleLogicalRange(r);}catch(e){} });
-    sc.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r) try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} });
+    // store sync handlers so removeIndicator can unsubscribe (avoid leaks on add/remove)
+    let syncing=false;
+    ind.syncMain=r=>{ if(r&&!syncing){ syncing=true; try{sc.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
+    ind.syncSub =r=>{ if(r&&!syncing){ syncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(ind.syncMain);
+    sc.timeScale().subscribeVisibleLogicalRangeChange(ind.syncSub);
     if(ind.type==="macd") ind.series=[ sc.addHistogramSeries({color:"#26a69a"}), sc.addLineSeries({color:"#2962ff",lineWidth:1.5}), sc.addLineSeries({color:"#ff9800",lineWidth:1.5}) ];
     else if(ind.type==="stoch") ind.series=[ sc.addLineSeries({color:"#2962ff",lineWidth:1.5}), sc.addLineSeries({color:"#ff9800",lineWidth:1.5}) ];
+    else if(ind.type==="volume") ind.series=[ sc.addHistogramSeries({color:"#26a69a"}) ];
     else ind.series=[ sc.addLineSeries({color:ind.params.color||"#ff9800",lineWidth:1.5}) ];
     setTimeout(()=>{ try{ sc.applyOptions({width:el.clientWidth,height:el.clientHeight}); }catch(e){} },0);
   }
@@ -1405,6 +1446,7 @@ function renderIndicator(ind){
       case "mom": ind.series[0].setData(momCalc(d,pp.length)); break;
       case "willr": ind.series[0].setData(willrCalc(d,pp.length)); break;
       case "cci": ind.series[0].setData(cciCalc(d,pp.length)); break;
+      case "volume": ind.series[0].setData(d.map(b=>({time:b.time, value:b.volume||0, color: b.close>=b.open?"#26a69a88":"#ef535088"}))); break;
     }
   }catch(e){}
 }
@@ -1413,7 +1455,15 @@ function layoutPanes(){
   const subs=indicators.filter(i=>i.pane==="sub").length;
   const wrap=document.getElementById("subPanes");
   wrap.style.display = subs?"flex":"none";
-  setTimeout(()=>{ indicators.filter(i=>i.subChart).forEach(i=>{ try{ i.subChart.applyOptions({width:i.paneEl.clientWidth,height:i.paneEl.clientHeight}); }catch(e){} }); resize(); sizeCanvas(); },0);
+  // resize after the browser has applied the new flex layout, then re-derive the
+  // overlay canvas size and redraw so drawings stay pinned to the candles.
+  const apply=()=>{
+    indicators.filter(i=>i.subChart).forEach(i=>{ try{ i.subChart.applyOptions({width:i.paneEl.clientWidth,height:i.paneEl.clientHeight}); }catch(e){} });
+    resize();
+    sizeCanvas();
+  };
+  if(window.requestAnimationFrame){ requestAnimationFrame(()=>{ apply(); requestAnimationFrame(redraw); }); }
+  else setTimeout(apply,0);
 }
 function renderIndLegend(){
   const box=document.getElementById("indLegend"); box.innerHTML="";
@@ -1451,7 +1501,10 @@ function openIndicatorSettings(id){
   dlg.innerHTML='<div class="dh"><span>'+ind.name+' settings</span><span class="cl" id="dlgClose">×</span></div><div class="db">'+fields+'</div><div class="df"><button class="btn ghost" id="dlgCancel">Cancel</button><button class="btn primary" id="dlgOk">OK</button></div>';
   dlg.classList.add("open"); backdrop.classList.add("open");
   const apply=()=>{ Object.keys(ind.params).forEach(k=>{ const el=document.getElementById("ip_"+k); if(!el)return; ind.params[k]= el.type==="color"?el.value:+el.value; });
-    if(ind.series[0] && ind.params.color && ind.pane==="main" && ind.type!=="bb") ind.series[0].applyOptions({color:ind.params.color});
+    if(ind.params.color && ind.pane==="main"){
+      // BB has 3 line series; single-line indicators have 1 — recolor all of them
+      ind.series.forEach(s=>{ try{ s.applyOptions({color:ind.params.color}); }catch(e){} });
+    }
     renderIndicator(ind); renderIndLegend(); };
   dlg.querySelectorAll("input").forEach(el=>el.addEventListener("input",apply));
   document.getElementById("dlgOk").onclick=()=>{ apply(); closeDlg(); };
@@ -1526,6 +1579,7 @@ function closeAllPopups(){ hideCtx(); toggleIndicatorsMenu(false); toggleAlertsP
 
 // ── Boot ──
 buildWatchlist();
+installHoverTracker();     // lets crosshair mode select/edit shapes while still panning
 loadPersisted();           // restore saved drawings for current symbol+tf
 loadAlerts();              // restore saved alerts for current symbol
 loadChart(activeSymbol, activeTF);
@@ -1534,7 +1588,7 @@ resize();
 sizeCanvas();
 window.addEventListener("resize", ()=>{ resize(); sizeCanvas(); });
 setInterval(refreshPrices, 6000);
-setInterval(()=>loadChart(activeSymbol, activeTF), 20000);
+setInterval(()=>loadChart(activeSymbol, activeTF, true), 20000);  // keepView: don't snap the chart
 </script>
 </body>
 </html>
