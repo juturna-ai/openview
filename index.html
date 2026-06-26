@@ -179,7 +179,7 @@
     </div>
     <div id="chartWrap" style="position:relative;">
       <div id="chart" style="position:absolute; inset:0;"></div>
-      <canvas id="draw" style="position:absolute; inset:0; pointer-events:none; z-index:100; outline:1px solid transparent;"></canvas>
+      <canvas id="draw" style="position:absolute; inset:0; pointer-events:auto; z-index:100;"></canvas>
     </div>
     <div id="rsiWrap">
       <div id="rsiLabel">RSI 14 close <b id="rsiVal" style="color:#7e57c2">—</b> <b id="rsiMaVal" style="color:#e0a82e">—</b></div>
@@ -786,33 +786,40 @@ function selectTool(key){
     x.classList.toggle("active", x.dataset.tool===key);
   });
   draw.tool=key; draw.pending=null; draw.needClicks=0; draw.pendingClickMode=false; draw.sel=null;
+  // The canvas is ALWAYS interactive now (pointerEvents stays "auto"). The chart's own
+  // pan/zoom is disabled while drawing tools are active; in crosshair mode we forward
+  // empty-space drags to the chart manually (see the pan logic in mousedown/move).
   const drawing=(key!=="cross");
-  // A DRAW tool makes the canvas own all events (chart can't pan). In CROSSHAIR mode
-  // the canvas is click-through (chart pans) EXCEPT when hovering a drawing — the hover
-  // tracker flips it interactive so you can select/drag/right-click. (installHoverTracker)
-  dcanvas.style.pointerEvents = drawing ? "auto" : "none";
   dcanvas.style.cursor = drawing ? "crosshair" : "default";
-  chart.applyOptions({ handleScroll:!drawing, handleScale:!drawing });
+  chart.applyOptions({ handleScroll:false, handleScale:!drawing });   // wheel-zoom stays in cross mode
   redraw();
 }
 
-// In crosshair mode, watch the cursor (via a listener on the chart wrapper that
-// always fires) and make the overlay canvas interactive only when hovering a shape,
-// so empty-space drags still pan the chart but shapes stay clickable/editable.
-function installHoverTracker(){
-  const wrap=document.getElementById("chartWrap");
-  wrap.addEventListener("mousemove", e=>{
-    if(draw.tool!=="cross") return;          // draw tools already own the canvas
-    if(draw.drag||draw.pending) return;
-    const r=dcanvas.getBoundingClientRect();
-    const p={ x:e.clientX-r.left, y:e.clientY-r.top };
-    const hit=hitTest(p);
-    const over=!!hit && !draw.hidden;
-    dcanvas.style.pointerEvents = over ? "auto" : "none";
-    dcanvas.style.cursor = over ? (hit.handle==="body"?"move":"pointer") : "default";
-    const newHover=over?hit.id:null;
-    if(newHover!==draw.hover){ draw.hover=newHover; redraw(); }
-  });
+// No-op kept for boot compatibility (panning + hover are handled inline now).
+function installHoverTracker(){}
+
+// Manual chart pan for crosshair mode (the canvas always covers the chart, so the
+// chart's built-in drag-to-scroll can't see the gesture — we forward it here).
+let panState=null;
+function startPan(p){
+  const ts=chart.timeScale();
+  panState={ startX:p.x, startScroll:ts.scrollPosition() };
+}
+function doPan(p){
+  if(!panState) return;
+  const ts=chart.timeScale();
+  const spacing = currentBarSpacing();                       // px per bar
+  const deltaBars = (p.x - panState.startX) / spacing;        // drag-left → scroll back
+  ts.scrollToPosition(panState.startScroll - deltaBars, false);
+  redraw();
+}
+function currentBarSpacing(){
+  // estimate px-per-bar from two visible bars
+  if(lastData.length<2) return 6;
+  const a=lastData[lastData.length-2], b=lastData[lastData.length-1];
+  const xa=chart.timeScale().timeToCoordinate(a.time), xb=chart.timeScale().timeToCoordinate(b.time);
+  if(xa!=null&&xb!=null&&xa!==xb) return Math.abs(xb-xa);
+  return 6;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -831,11 +838,13 @@ function priceToY(price){ return candle.priceToCoordinate(price); }
 function xToTime(x){
   const t=chart.timeScale().coordinateToTime(x);
   if(t!=null) return t;
+  // Past the last bar coordinateToTime returns null. Extrapolate WITHOUT rounding
+  // so the value round-trips exactly through timeToX (otherwise the handle "sticks").
   if(lastData.length<2) return lastData.length?lastData[lastData.length-1].time:0;
   const a=lastData[lastData.length-2], b=lastData[lastData.length-1];
   const xa=chart.timeScale().timeToCoordinate(a.time), xb=chart.timeScale().timeToCoordinate(b.time);
   if(xa==null||xb==null||xa===xb) return b.time;
-  return Math.round(b.time + (x-xb)*(b.time-a.time)/(xb-xa));
+  return b.time + (x-xb)*(b.time-a.time)/(xb-xa);   // fractional time, no Math.round
 }
 function yToPrice(y){ return candle.coordinateToPrice(y); }
 
@@ -872,11 +881,11 @@ dcanvas.addEventListener("mousedown", e=>{
   const p=evtPt(e), c=ptToCoord(p);
   downPt=p; downMoved=false;
 
-  // ── CROSSHAIR mode: canvas only gets this when hovering a shape → select/drag it ──
+  // ── CROSSHAIR mode: click a shape → select/drag it; click empty → pan the chart ──
   if(draw.tool==="cross"){
-    if(draw.locked) return;
-    const hit=hitTest(p);
+    const hit = draw.locked ? null : hitTest(p);
     if(hit){ draw.sel=hit.id; draw.drag={ id:hit.id, handle:hit.handle, last:c }; redraw(); }
+    else { draw.sel=null; startPan(p); redraw(); }
     return;
   }
 
@@ -953,22 +962,23 @@ dcanvas.addEventListener("mousemove", e=>{
   draw.mouse=p;
   if(downPt && Math.hypot(p.x-downPt.x, p.y-downPt.y)>3) downMoved=true;
 
+  if(panState){ doPan(p); return; }                       // panning the chart (cross mode)
   if(draw.drag && !draw.locked){ applyDrag(draw.drag, c); redraw(); return; }
 
   if(draw.pending){
-    // the last point tracks the cursor while placing
-    draw.pending.pts[draw.pending.pts.length-1]=c;
+    draw.pending.pts[draw.pending.pts.length-1]=c;        // endpoint tracks cursor
     redraw(); return;
   }
-  // hover feedback (draw mode)
+  // hover feedback
   const hit=hitTest(p);
   const nh=hit?hit.id:null;
   if(nh!==draw.hover){ draw.hover=nh; redraw(); }
   dcanvas.style.cursor = hit ? (hit.handle==="body"?"move":"pointer")
-                       : (draw.tool==="cross"?"default":"crosshair");
+                       : (draw.tool==="cross"?(panState?"grabbing":"crosshair"):"crosshair");
 });
 
 window.addEventListener("mouseup", e=>{
+  if(panState){ panState=null; downPt=null; downMoved=false; redraw(); return; }   // end chart pan
   // finishing a drag-edit of an existing shape
   if(draw.drag){ persist(); draw.drag=null; downPt=null; return; }
 
