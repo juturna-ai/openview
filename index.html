@@ -732,6 +732,7 @@ const draw = {
   shapes:[],          // {id,type,pts:[{time,price}],style:{...},text}
   pending:null,       // shape being created
   needClicks:2,       // clicks remaining to finish pending
+  pendingClickMode:false, // true once a press without drag puts us in click-click mode
   sel:null,           // selected shape id
   hover:null,         // hovered shape id
   drag:null,          // {id, handle:int|'body', last:{time,price}}
@@ -775,16 +776,20 @@ function onToolClick(t,el){
     if(t.key==="hide"){  draw.hidden=on; redraw(); }
     return;
   }
+  selectTool(t.key);
+}
+
+// Activate a tool by key (also used to auto-return to crosshair after placing).
+function selectTool(key){
   document.querySelectorAll('.tool[data-tool]').forEach(x=>{
     if(["magnet","lock","hide"].includes(x.dataset.tool)) return;
-    x.classList.toggle("active", x.dataset.tool===t.key);
+    x.classList.toggle("active", x.dataset.tool===key);
   });
-  draw.tool=t.key; draw.pending=null; draw.sel=null;
-  const drawing=(t.key!=="cross");
-  // While a DRAW tool is active the canvas owns all events and the chart can't pan.
-  // In CROSSHAIR mode the canvas is click-through (chart pans) EXCEPT when the cursor
-  // is over a drawing — then the hover tracker flips it interactive so you can
-  // select/drag/right-click existing shapes. (see installHoverTracker)
+  draw.tool=key; draw.pending=null; draw.needClicks=0; draw.pendingClickMode=false; draw.sel=null;
+  const drawing=(key!=="cross");
+  // A DRAW tool makes the canvas own all events (chart can't pan). In CROSSHAIR mode
+  // the canvas is click-through (chart pans) EXCEPT when hovering a drawing — the hover
+  // tracker flips it interactive so you can select/drag/right-click. (installHoverTracker)
   dcanvas.style.pointerEvents = drawing ? "auto" : "none";
   dcanvas.style.cursor = drawing ? "crosshair" : "default";
   chart.applyOptions({ handleScroll:!drawing, handleScale:!drawing });
@@ -858,13 +863,16 @@ function ptToCoord(p){ return snap(xToTime(p.x), yToPrice(p.y)); }
 // ─────────────────────────────────────────────────────────────────────
 let uid=1; function newId(){ return "s"+(uid++); }
 
+// Tracks the press location so mouseup can tell a CLICK from a DRAG.
+let downPt=null, downMoved=false;
+
 dcanvas.addEventListener("mousedown", e=>{
   if(e.button!==0) return;                 // left only; right handled by contextmenu
   e.preventDefault();
   const p=evtPt(e), c=ptToCoord(p);
+  downPt=p; downMoved=false;
 
-  // ── CROSSHAIR mode: the canvas only receives this when hovering a shape (the
-  //    hover tracker flipped pointer-events on). Select & drag it. ──
+  // ── CROSSHAIR mode: canvas only gets this when hovering a shape → select/drag it ──
   if(draw.tool==="cross"){
     if(draw.locked) return;
     const hit=hitTest(p);
@@ -872,11 +880,12 @@ dcanvas.addEventListener("mousedown", e=>{
     return;
   }
 
-  // ── DRAW mode below ──
-  // mid-placement: this click adds the next point of the pending shape
-  if(draw.pending){ addPendingPoint(c); return; }
+  // ── DRAW mode ──
+  // If a multi-point shape is mid-placement (e.g. channel waiting for 3rd point),
+  // this press adds the next point.
+  if(draw.pending && draw.pendingClickMode){ addPendingPoint(c); return; }
 
-  // click directly on a HANDLE of the currently-selected shape → resize it
+  // Resize a handle of the currently-selected shape.
   if(!draw.locked && draw.sel){
     const hit=hitTest(p);
     if(hit && hit.id===draw.sel && typeof hit.handle==="number"){
@@ -884,46 +893,45 @@ dcanvas.addEventListener("mousedown", e=>{
     }
   }
 
-  // otherwise the active tool ALWAYS starts a new shape
-  startPending(c);
+  // Begin a new shape. The endpoint follows the cursor until release (drag) or
+  // until the next click (click-click), whichever the user does.
+  if(!draw.pending) startPending(c);
 });
 
 function startPending(c){
   const tool=draw.tool;
   const need=CLICKS[tool]||2;
-  draw.needClicks=need;
-  if(need===1){
-    finishOneClick(tool,c);
-    return;
-  }
+  if(need===1){ finishOneClick(tool,c); return; }
   draw.pending={ id:newId(), type:tool, pts:[c, {...c}], style:{...DEFAULT_STYLE} };
-  draw.needClicks=need-1;        // first point placed, remaining to set
+  draw.needClicks=need-1;           // points still to set after the first
+  draw.pendingClickMode=false;      // becomes true if user releases without dragging
   redraw();
 }
 
+// Adds the next point in CLICK-CLICK mode (used for the 3rd point of a channel,
+// or when the user clicks instead of drags).
 function addPendingPoint(c){
   const pend=draw.pending;
-  pend.pts[pend.pts.length-1]=c;          // lock current floating point
+  pend.pts[pend.pts.length-1]=c;
   draw.needClicks--;
-  if(draw.needClicks<=0){
-    commitPending();
-  } else {
-    pend.pts.push({...c});                 // new floating point for next segment
-    redraw();
-  }
+  if(draw.needClicks<=0){ commitPending(); }
+  else { pend.pts.push({...c}); redraw(); }
 }
 
 function commitPending(){
   const pend=draw.pending;
-  draw.pending=null; draw.needClicks=0;
-  // reject degenerate (all points identical)
-  const p0=pend.pts[0];
-  const degenerate=pend.pts.every(pt=>pt.time===p0.time && pt.price===p0.price);
-  if(degenerate){ redraw(); return; }
+  draw.pending=null; draw.needClicks=0; draw.pendingClickMode=false;
+  if(!pend) return;
+  // reject a shape whose points are all the same spot (an accidental click)
+  const a=pend.pts[0], b=pend.pts[pend.pts.length-1];
+  const tooSmall = pend.pts.every(pt=>pt.time===a.time && pt.price===a.price);
+  if(tooSmall){ redraw(); return; }
   draw.shapes.push(pend);
   draw.sel=pend.id;
-  // auto-return to crosshair after placing (TradingView default), keep tool if user holds nothing
   persist();
+  // TradingView default: after placing one drawing, return to the crosshair so the
+  // next click SELECTS (rather than spawning another line). Re-pick the tool to draw again.
+  selectTool("cross");
   redraw();
 }
 
@@ -937,36 +945,64 @@ function finishOneClick(tool,c){
     const s={ id:newId(), type:tool, pts:[c], style:{...DEFAULT_STYLE} };
     draw.shapes.push(s); draw.sel=s.id;
   }
-  persist(); redraw();
+  persist(); selectTool("cross"); redraw();
 }
 
 dcanvas.addEventListener("mousemove", e=>{
   const p=evtPt(e), c=ptToCoord(p);
   draw.mouse=p;
-  if(draw.drag && !draw.locked){
-    applyDrag(draw.drag, c); redraw(); return;
-  }
+  if(downPt && Math.hypot(p.x-downPt.x, p.y-downPt.y)>3) downMoved=true;
+
+  if(draw.drag && !draw.locked){ applyDrag(draw.drag, c); redraw(); return; }
+
   if(draw.pending){
-    draw.pending.pts[draw.pending.pts.length-1]=c;   // floating point tracks cursor
+    // the last point tracks the cursor while placing
+    draw.pending.pts[draw.pending.pts.length-1]=c;
     redraw(); return;
   }
-  // hover feedback
+  // hover feedback (draw mode)
   const hit=hitTest(p);
-  const newHover=hit?hit.id:null;
-  if(newHover!==draw.hover){ draw.hover=newHover; redraw(); }
+  const nh=hit?hit.id:null;
+  if(nh!==draw.hover){ draw.hover=nh; redraw(); }
   dcanvas.style.cursor = hit ? (hit.handle==="body"?"move":"pointer")
                        : (draw.tool==="cross"?"default":"crosshair");
 });
 
-window.addEventListener("mouseup", ()=>{ if(draw.drag){ persist(); draw.drag=null; } });
+window.addEventListener("mouseup", e=>{
+  // finishing a drag-edit of an existing shape
+  if(draw.drag){ persist(); draw.drag=null; downPt=null; return; }
 
-// double-click finishes a MULTI-point pending (>2 pts, e.g. channel) OR opens settings.
-// For 2-point tools the second mousedown already commits; dbl-click must NOT pop their
-// endpoint (that produced a degenerate 1-point shape that got discarded).
+  // finishing the creation gesture for a pending shape
+  if(draw.pending){
+    const pend=draw.pending;
+    const need=CLICKS[pend.type]||2;
+    if(downMoved){
+      // PRESS-DRAG-RELEASE: the user dragged out the shape in one gesture.
+      if(need<=2){
+        // 2-point shapes are complete on release.
+        commitPending();
+      } else {
+        // multi-point (channel): first segment set by the drag, remaining points
+        // are placed by subsequent CLICKS.
+        pend.pts.push({...pend.pts[pend.pts.length-1]});
+        draw.needClicks=need-2;
+        draw.pendingClickMode=true;
+      }
+    } else {
+      // CLICK (no drag): switch to click-click mode and wait for the next click(s).
+      draw.pendingClickMode=true;
+    }
+  }
+  downPt=null; downMoved=false;
+});
+
+// double-click finishes a click-click pending (commit with current points) OR
+// opens settings on a shape.
 dcanvas.addEventListener("dblclick", e=>{
   if(draw.pending){
-    if(draw.pending.pts.length>2){ draw.pending.pts.pop(); commitPending(); }
-    // 2-point tools: ignore — mousedown #2 handles the commit.
+    // drop the floating endpoint and commit what's placed
+    if(draw.pending.pts.length>1) draw.pending.pts.pop();
+    commitPending();
     return;
   }
   const hit=hitTest(evtPt(e));
