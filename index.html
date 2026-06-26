@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Free Chart — Live Crypto (Coinbase)</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root{
+    --bg:#131722; --panel:#1e222d; --panel2:#181c27; --border:#2a2e39;
+    --text:#d1d4dc; --muted:#787b86; --green:#26a69a; --red:#ef5350;
+    --accent:#2962ff; --hover:#2a2e39;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); overflow:hidden;}
+  #app{display:flex; height:100vh; width:100vw;}
+
+  #topbar{position:absolute; top:0; left:0; right:300px; height:46px; background:var(--bg);
+    border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; padding:0 12px; z-index:20;}
+  #symbolBox{font-weight:700; font-size:15px; letter-spacing:.3px; white-space:nowrap;}
+  #symbolBox .exch{color:var(--muted); font-weight:400; font-size:12px; margin-left:6px;}
+  .tf-group{display:flex; gap:2px; margin-left:8px;}
+  .tf{padding:5px 9px; font-size:12px; border-radius:4px; cursor:pointer; color:var(--muted); user-select:none;}
+  .tf:hover{background:var(--hover); color:var(--text);}
+  .tf.active{background:var(--accent); color:#fff;}
+  #maLegend{font-size:11px; margin-left:12px; white-space:nowrap;}
+  #maLegend span{margin-right:8px;}
+  #ohlc{font-size:11px; color:var(--muted); margin-left:10px; white-space:nowrap;}
+  #ohlc b{color:var(--text); font-weight:600;}
+  #status{margin-left:auto; font-size:11px; color:var(--muted); white-space:nowrap;}
+  .dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green); margin-right:5px; vertical-align:middle;}
+
+  #main{flex:1; position:relative; padding-top:46px;}
+  #chart{width:100%; height:68%;}
+  #rsiWrap{height:32%; border-top:1px solid var(--border); position:relative;}
+  #rsiLabel{position:absolute; top:6px; left:10px; font-size:11px; color:var(--muted); z-index:5;}
+  #rsiLabel b{font-weight:600;}
+  #rsi{width:100%; height:100%;}
+
+  #watchlist{width:300px; background:var(--panel); border-left:1px solid var(--border);
+    display:flex; flex-direction:column; overflow:hidden;}
+  #wlHead{padding:10px 12px; font-size:13px; font-weight:600; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;}
+  #wlHead .sub{font-size:10px; color:var(--muted); font-weight:400;}
+  #wlCols{display:flex; padding:6px 12px; font-size:10px; color:var(--muted);
+    border-bottom:1px solid var(--border); text-transform:uppercase; letter-spacing:.5px;}
+  #wlCols .c1{flex:1;} #wlCols .c2{width:90px; text-align:right;} #wlCols .c3{width:70px; text-align:right;}
+  #wlBody{flex:1; overflow-y:auto;}
+  .section{padding:6px 12px; font-size:10px; color:var(--muted); background:var(--panel2);
+    text-transform:uppercase; letter-spacing:.6px; border-bottom:1px solid var(--border);}
+  .row{display:flex; align-items:center; padding:7px 12px; cursor:pointer; border-bottom:1px solid rgba(42,46,57,.4);}
+  .row:hover{background:var(--hover);}
+  .row.active{background:#1c2c4a;}
+  .row .sym{flex:1; display:flex; align-items:center; gap:8px;}
+  .row .sym .nm{font-size:12px; font-weight:600;}
+  .row .ic{width:18px; height:18px; border-radius:50%; background:var(--accent); color:#fff;
+    font-size:9px; display:flex; align-items:center; justify-content:center; font-weight:700;}
+  .row .last{width:90px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums;}
+  .row .chg{width:70px; text-align:right; font-size:11px; font-variant-numeric:tabular-nums;}
+  .up{color:var(--green);} .down{color:var(--red);}
+  #wlBody::-webkit-scrollbar{width:8px;}
+  #wlBody::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
+  .flash-up{animation:fu .6s;} .flash-down{animation:fd .6s;}
+  @keyframes fu{0%{background:rgba(38,166,154,.25);}100%{background:transparent;}}
+  @keyframes fd{0%{background:rgba(239,83,80,.25);}100%{background:transparent;}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="main">
+    <div id="topbar">
+      <span id="symbolBox"><span id="symName">NEAR-USD/INJ-USD</span><span class="exch">· Coinbase · <span id="tfName">1D</span></span></span>
+      <div class="tf-group" id="tfGroup">
+        <span class="tf" data-i="1m">1m</span>
+        <span class="tf" data-i="5m">5m</span>
+        <span class="tf" data-i="15m">15m</span>
+        <span class="tf" data-i="1h">1H</span>
+        <span class="tf" data-i="4h">4H</span>
+        <span class="tf" data-i="6h">6H</span>
+        <span class="tf" data-i="12h">12H</span>
+        <span class="tf active" data-i="1d">1D</span>
+        <span class="tf" data-i="1w">1W</span>
+      </div>
+      <span id="maLegend"></span>
+      <span id="ohlc"></span>
+      <span id="status"><span class="dot"></span>Live · Coinbase API</span>
+    </div>
+    <div id="chart"></div>
+    <div id="rsiWrap">
+      <div id="rsiLabel">RSI 14 close <b id="rsiVal" style="color:#7e57c2">—</b> <b id="rsiMaVal" style="color:#e0a82e">—</b></div>
+      <div id="rsi"></div>
+    </div>
+  </div>
+
+  <div id="watchlist">
+    <div id="wlHead">Watchlist <span class="sub">comeback</span></div>
+    <div id="wlCols"><span class="c1">Symbol</span><span class="c2">Last</span><span class="c3">Chg%</span></div>
+    <div id="wlBody"></div>
+  </div>
+</div>
+
+<script>
+// ── Coinbase Exchange public API (no key, no paywall) ──
+const API = "https://api.exchange.coinbase.com";
+
+// Coinbase uses BASE-USD. Watchlist mirrors your TradingView layout.
+// (Symbols Coinbase doesn't list are silently skipped in the price feed.)
+const GROUPS = [
+  { name:"SPREADS",   symbols:["NEAR-USD/INJ-USD"] },
+  { name:"ALPHA",     symbols:["INJ-USD","NEAR-USD"] },
+  { name:"SECTION 2", symbols:["BTC-USD","XRP-USD","BNB-USD","ETH-USD","LINK-USD","BCH-USD","SOL-USD"] },
+  { name:"BTC PAIRS", symbols:["ETH-BTC","SOL-BTC","LINK-BTC","TAO-USD","RENDER-USD"] },
+  { name:"SECTION 3", symbols:["BTC-USD","ADA-USD","DOGE-USD","AVAX-USD","DOT-USD"] },
+];
+const ALL = [...new Set(GROUPS.flatMap(g=>g.symbols))];
+
+let activeSymbol = "NEAR-USD/INJ-USD";
+let activeTF = "1d";  // timeframe key into TF{}
+
+// ── Chart setup ──
+const chartEl = document.getElementById("chart");
+const rsiEl   = document.getElementById("rsi");
+const common = {
+  layout:{ background:{color:"#131722"}, textColor:"#d1d4dc" },
+  grid:{ vertLines:{color:"#1e222d"}, horzLines:{color:"#1e222d"} },
+  rightPriceScale:{ borderColor:"#2a2e39" },
+  timeScale:{ borderColor:"#2a2e39", timeVisible:true, secondsVisible:false },
+  crosshair:{ mode:0 },
+};
+const chart = LightweightCharts.createChart(chartEl, common);
+const candle = chart.addCandlestickSeries({
+  upColor:"#26a69a", downColor:"#ef5350", borderVisible:false,
+  wickUpColor:"#26a69a", wickDownColor:"#ef5350",
+});
+
+// TradingView shows 7/25/99 MAs + SMA 150/200/300 — recreate all six.
+// MA colors matched to the TradingView screenshot:
+// MA7 orange · MA25 red · MA99 green · MA150 cyan · MA200 magenta · MA300 white
+const MAS = [
+  { p:7,   color:"#ff9800", w:1 },   // orange
+  { p:25,  color:"#e53935", w:1 },   // red
+  { p:99,  color:"#43a047", w:1 },   // green
+  { p:150, color:"#26c6da", w:1 },   // cyan / light blue
+  { p:200, color:"#ec407a", w:1 },   // magenta / pink
+  { p:300, color:"#e0e0e0", w:1 },   // white / light gray
+];
+const maSeries = MAS.map(m => chart.addLineSeries({
+  color:m.color, lineWidth:m.w, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false,
+}));
+
+// RSI panel — styled to match TradingView (overbought fill, RSI + MA, fixed scale)
+const rsiChart = LightweightCharts.createChart(rsiEl, { ...common });
+
+// Keep the panel pinned to a sensible RSI window so it reads like TradingView.
+const rsiScale = () => ({ priceRange:{ minValue:18, maxValue:82 } });
+
+// Overbought (>70) green highlight: baseline anchored at 70, fill only above it.
+const rsiOver = rsiChart.addBaselineSeries({
+  baseValue:{ type:"price", price:70 },
+  topFillColor1:"rgba(38,166,154,0.30)", topFillColor2:"rgba(38,166,154,0.05)",
+  topLineColor:"rgba(0,0,0,0)",
+  bottomFillColor1:"rgba(0,0,0,0)", bottomFillColor2:"rgba(0,0,0,0)",
+  bottomLineColor:"rgba(0,0,0,0)",
+  priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
+});
+// Oversold (<30) red highlight: baseline at 30, fill only below it.
+const rsiUnder = rsiChart.addBaselineSeries({
+  baseValue:{ type:"price", price:30 },
+  topFillColor1:"rgba(0,0,0,0)", topFillColor2:"rgba(0,0,0,0)",
+  topLineColor:"rgba(0,0,0,0)",
+  bottomFillColor1:"rgba(239,83,80,0.05)", bottomFillColor2:"rgba(239,83,80,0.30)",
+  bottomLineColor:"rgba(0,0,0,0)",
+  priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
+});
+// dashed 70 / 30 bands + faint 50 midline
+const band70  = rsiChart.addLineSeries({ color:"#787b86", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+const band30  = rsiChart.addLineSeries({ color:"#787b86", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+const band50  = rsiChart.addLineSeries({ color:"#3a3e4a", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+// RSI line (purple, thin) + smoothing MA (gold, thicker), added last = on top.
+const rsiLine = rsiChart.addLineSeries({ color:"#9c6ade", lineWidth:1, priceLineVisible:false, lastValueVisible:true, autoscaleInfoProvider:rsiScale });
+const rsiMa   = rsiChart.addLineSeries({ color:"#e6b400", lineWidth:2, priceLineVisible:false, lastValueVisible:true });
+
+// sync the two time scales
+chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r) rsiChart.timeScale().setVisibleLogicalRange(r); });
+rsiChart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r) chart.timeScale().setVisibleLogicalRange(r); });
+
+function resize(){
+  chart.applyOptions({ width:chartEl.clientWidth, height:chartEl.clientHeight });
+  rsiChart.applyOptions({ width:rsiEl.clientWidth, height:rsiEl.clientHeight });
+}
+window.addEventListener("resize", resize);
+
+// ── Indicator math ──
+function smaSeries(data, period){
+  const out=[]; let sum=0;
+  for(let i=0;i<data.length;i++){
+    sum+=data[i].close;
+    if(i>=period) sum-=data[i-period].close;
+    if(i>=period-1) out.push({ time:data[i].time, value:sum/period });
+  }
+  return out;
+}
+function rsiSeries(data, period=14){
+  const out=[]; let gain=0, loss=0;
+  for(let i=1;i<data.length;i++){
+    const d = data[i].close - data[i-1].close;
+    const up = Math.max(d,0), dn = Math.max(-d,0);
+    if(i<=period){ gain+=up; loss+=dn;
+      if(i===period){ gain/=period; loss/=period;
+        out.push({ time:data[i].time, value: loss===0?100:100-100/(1+gain/loss) }); }
+    } else {
+      gain=(gain*(period-1)+up)/period;
+      loss=(loss*(period-1)+dn)/period;
+      out.push({ time:data[i].time, value: loss===0?100:100-100/(1+gain/loss) });
+    }
+  }
+  return out;
+}
+// simple MA over an arbitrary {time,value} series (for RSI smoothing)
+function maOfSeries(series, period){
+  const out=[]; let sum=0;
+  for(let i=0;i<series.length;i++){
+    sum+=series[i].value;
+    if(i>=period) sum-=series[i-period].value;
+    if(i>=period-1) out.push({ time:series[i].time, value:sum/period });
+  }
+  return out;
+}
+
+// ── Data loading (Coinbase) ──
+// Coinbase candle = [time(s), low, high, open, close, volume], newest-first, ≤300 per call.
+// Native granularities only: 1m,5m,15m,1h,6h,1d. 4h/12h/1w are AGGREGATED from a base.
+//   base   = native granularity (sec) we actually fetch
+//   bucket = target bar size (sec); if === base, no aggregation
+//   pages  = how many ≤300-bar windows to paginate for depth
+// pages tuned to Coinbase's real max depth per granularity (loop stops early on empty,
+// so slightly over-asking is harmless). Every TF now pulls far more history than before.
+const TF = {
+  "1m":  { label:"1m",  base:60,    bucket:60,     pages:26 },  // ~7k bars (Coinbase caps 1m history)
+  "5m":  { label:"5m",  base:300,   bucket:300,    pages:36 },  // ~10k bars (~1 month)
+  "15m": { label:"15m", base:900,   bucket:900,    pages:18 },  // ~5k bars
+  "1h":  { label:"1H",  base:3600,  bucket:3600,   pages:36 },  // ~10k bars (back to 2025)
+  "4h":  { label:"4H",  base:3600,  bucket:14400,  pages:36 },  // 4×1h, deep
+  "6h":  { label:"6H",  base:21600, bucket:21600,  pages:20 },  // ~5.5k bars (to 2022)
+  "12h": { label:"12H", base:21600, bucket:43200,  pages:20 },  // 2×6h, to 2022
+  "1d":  { label:"1D",  base:86400, bucket:86400,  pages:9 },   // ~1.4k bars (to 2022)
+  "1w":  { label:"1W",  base:86400, bucket:604800, pages:9 },   // 7×1d
+};
+
+function parseCandlesAgg(raw){
+  if(!Array.isArray(raw)) return [];
+  return raw.map(k=>({ time:k[0], low:+k[1], high:+k[2], open:+k[3], close:+k[4] }));
+}
+
+// Roll base bars up into fixed-size buckets aligned to epoch.
+function aggregate(bars, base, bucket){
+  if(bucket === base) return bars;
+  const groups = {};
+  for(const b of bars){
+    const t = Math.floor(b.time / bucket) * bucket;   // bucket start
+    const g = groups[t] || (groups[t] = { time:t, open:b.open, high:b.high, low:b.low, close:b.close, _first:b.time, _last:b.time });
+    if(b.time <= g._first){ g.open = b.open; g._first = b.time; }
+    if(b.time >= g._last ){ g.close = b.close; g._last = b.time; }
+    if(b.high > g.high) g.high = b.high;
+    if(b.low  < g.low ) g.low  = b.low;
+  }
+  return Object.values(groups)
+    .map(({_first,_last,...g})=>g)
+    .sort((a,b)=>a.time-b.time);
+}
+
+
+// ── Bad-print filter ──
+// Exchange feeds occasionally emit a single corrupt candle with an impossible
+// high/low (e.g. INJ 2025-11-08 printed a 14.75 high on a day it opened 7.68 /
+// closed 7.44). Dividing that into a ratio creates a fake spike. We clamp any
+// wick that exceeds ~4× the LOCAL-median wick of its neighbors (genuine
+// volatility is allowed; lone glitches are pulled back in line).
+function median(arr){
+  if(!arr.length) return 0;
+  const s=[...arr].sort((a,b)=>a-b), m=s.length>>1;
+  return s.length%2 ? s[m] : (s[m-1]+s[m])/2;
+}
+function sanitize(bars){
+  const N=bars.length, W=10, K=4, MINW=0.15;   // window radius, slack factor, min allowed wick
+  if(N<6) return bars;
+  const upW=bars.map(k=>{const t=Math.max(k.open,k.close); return t? (k.high-t)/t : 0;});
+  const dnW=bars.map(k=>{const b=Math.min(k.open,k.close); return b? (b-k.low)/b : 0;});
+  const out=bars.map(k=>({...k}));
+  for(let i=0;i<N;i++){
+    const lo=Math.max(0,i-W), hi=Math.min(N,i+W+1);
+    const u=[],d=[]; for(let j=lo;j<hi;j++) if(j!==i){ u.push(upW[j]); d.push(dnW[j]); }
+    const top=Math.max(out[i].open,out[i].close), bot=Math.min(out[i].open,out[i].close);
+    const upCap=top*(1+Math.max(median(u)*K, MINW));
+    const dnFloor=bot*(1-Math.max(median(d)*K, MINW));
+    if(out[i].high>upCap)  out[i].high=upCap;
+    if(out[i].low<dnFloor) out[i].low=dnFloor;
+  }
+  return out;
+}
+
+async function fetchKlines(product, tfKey){
+  const tf = TF[tfKey] || TF["1d"];
+  const g = tf.base;
+  const span = 300 * g;                 // seconds covered by one full page
+  let end = null;                       // null = newest; Coinbase returns latest
+  const all = [];
+  for(let i=0; i<tf.pages; i++){
+    const qs = end===null
+      ? `granularity=${g}`
+      : `granularity=${g}&start=${end-span}&end=${end}`;
+    let raw;
+    try{
+      const res = await fetch(`${API}/products/${product}/candles?${qs}`);
+      raw = await res.json();
+    }catch{ break; }
+    const page = parseCandlesAgg(raw);
+    if(!page.length) break;
+    all.push(...page);
+    end = Math.min(...page.map(k=>k.time)) - g;   // step strictly before the oldest bar we got
+    if(page.length < 200) break;                  // short page = reached start of history; stop early
+  }
+  // dedupe by time, oldest-first
+  const seen = {};
+  const out = [];
+  for(const k of all){ if(seen[k.time]) continue; seen[k.time]=1; out.push(k); }
+  out.sort((a,b)=>a.time-b.time);
+  if(!out.length) throw new Error("No data for "+product);
+  const clean = sanitize(out);                  // strip corrupt bad-print wicks
+  return aggregate(clean, tf.base, tf.bucket);  // roll up to 4h/12h/1w if needed
+}
+
+// Build synthetic A/B ratio (spread) by aligning candles on matching timestamps
+function makeRatio(a, b){
+  const bm = {}; b.forEach(k=>bm[k.time]=k);
+  const out=[];
+  for(const k of a){
+    const q = bm[k.time];
+    if(!q || !q.open || !q.close || !q.high || !q.low) continue;
+    // TradingView spread = component-wise division (NOT high/low cross terms,
+    // which falsely assume A peaks the instant B bottoms → fake giant wicks).
+    const o = k.open/q.open;
+    const c = k.close/q.close;
+    let hi = k.high/q.high;
+    let lo = k.low/q.low;
+    if(lo > hi) [lo, hi] = [hi, lo];          // guard if division flips order
+    // wick must still envelope the real open & close
+    hi = Math.max(hi, o, c);
+    lo = Math.min(lo, o, c);
+    out.push({ time:k.time, open:o, high:hi, low:lo, close:c });
+  }
+  return out;
+}
+
+function fmt(v){ return v>=100 ? v.toFixed(2) : v>=1 ? v.toFixed(3) : v.toPrecision(4); }
+
+async function loadChart(symbol, tf){
+  document.getElementById("symName").textContent = symbol;
+  document.getElementById("tfName").textContent = (TF[tf]||{}).label || tf;
+  try{
+    let data;
+    if(symbol.includes("/")){
+      const [a,b] = symbol.split("/");
+      const [ka,kb] = await Promise.all([fetchKlines(a,tf), fetchKlines(b,tf)]);
+      data = makeRatio(ka, kb);
+      if(!data.length) throw new Error("No overlapping data for "+symbol);
+    } else {
+      data = await fetchKlines(symbol, tf);
+    }
+    candle.setData(data);
+
+    // moving averages
+    const legend=[];
+    maSeries.forEach((s,i)=>{
+      const m = MAS[i];
+      const sd = smaSeries(data, m.p);
+      s.setData(sd);
+      if(sd.length) legend.push(`<span style="color:${m.color}">MA${m.p} ${fmt(sd[sd.length-1].value)}</span>`);
+    });
+    document.getElementById("maLegend").innerHTML = legend.slice(0,6).join("");
+
+    // RSI + smoothing MA + TradingView-style fills
+    const r = rsiSeries(data, 14);
+    const rm = maOfSeries(r, 14);
+    rsiOver.setData(r);                                  // green fill where RSI>70
+    rsiUnder.setData(r);                                 // red fill where RSI<30
+    band70.setData(r.map(d=>({time:d.time, value:70})));
+    band50.setData(r.map(d=>({time:d.time, value:50})));
+    band30.setData(r.map(d=>({time:d.time, value:30})));
+    rsiLine.setData(r);
+    rsiMa.setData(rm);
+    if(r.length)  document.getElementById("rsiVal").textContent   = r[r.length-1].value.toFixed(2);
+    if(rm.length) document.getElementById("rsiMaVal").textContent = rm[rm.length-1].value.toFixed(2);
+
+    // show the most recent ~420 bars (≈ TradingView's default view), not all ~1400
+    const view = Math.min(data.length, 420);
+    chart.timeScale().setVisibleLogicalRange({ from: data.length-view, to: data.length+2 });
+    document.getElementById("status").innerHTML = `<span class="dot"></span>Live · Coinbase API · ${data.length} bars`;
+  }catch(e){
+    document.getElementById("ohlc").innerHTML = `<span class="down">⚠ ${e.message}</span>`;
+  }
+}
+
+// crosshair → OHLC legend
+chart.subscribeCrosshairMove(p=>{
+  const c = p.seriesData.get(candle);
+  if(!c) return;
+  const col = c.close>=c.open ? "var(--green)":"var(--red)";
+  document.getElementById("ohlc").innerHTML =
+    `O<b>${fmt(c.open)}</b> H<b>${fmt(c.high)}</b> L<b>${fmt(c.low)}</b> C<b style="color:${col}">${fmt(c.close)}</b>`;
+});
+rsiChart.subscribeCrosshairMove(p=>{
+  const v = p.seriesData.get(rsiLine);
+  const m = p.seriesData.get(rsiMa);
+  if(v) document.getElementById("rsiVal").textContent   = v.value.toFixed(2);
+  if(m) document.getElementById("rsiMaVal").textContent = m.value.toFixed(2);
+});
+
+// ── Watchlist ──
+const rowMap = {};
+function buildWatchlist(){
+  const body = document.getElementById("wlBody");
+  body.innerHTML = "";
+  GROUPS.forEach(g=>{
+    const s = document.createElement("div"); s.className="section"; s.textContent=g.name; body.appendChild(s);
+    g.symbols.forEach(sym=>{
+      const row = document.createElement("div");
+      row.className="row"+(sym===activeSymbol?" active":"");
+      row.dataset.sym = sym;
+      const isRatio = sym.includes("/");
+      const base = sym.split("/")[0].split("-")[0];
+      row.innerHTML = `<span class="sym"><span class="ic" style="${isRatio?'background:#8e44ad':''}">${isRatio?'÷':(base[0]||"?")}</span><span class="nm">${sym}</span></span>
+        <span class="last" data-last>—</span><span class="chg" data-chg>—</span>`;
+      row.onclick = ()=>{
+        activeSymbol = sym;
+        document.querySelectorAll(".row").forEach(r=>r.classList.remove("active"));
+        document.querySelectorAll(`.row[data-sym="${sym}"]`).forEach(r=>r.classList.add("active"));
+        loadChart(sym, activeTF);
+      };
+      body.appendChild(row);
+      (rowMap[sym] = rowMap[sym]||[]).push(row);
+    });
+  });
+}
+
+// Coinbase has no bulk 24hr endpoint; use per-product /stats (24h open/last).
+async function fetchStats(product){
+  try{
+    const r = await fetch(`${API}/products/${product}/stats`);
+    const s = await r.json();
+    if(!s || !s.last) return null;
+    return { last:+s.last, open:+s.open };
+  }catch{ return null; }
+}
+
+async function refreshPrices(){
+  // resolve every leg we need (plain symbols + both sides of any ratio)
+  const legs = new Set();
+  ALL.forEach(sym=> sym.split("/").forEach(s=>legs.add(s)) );
+  const entries = await Promise.all([...legs].map(async p=>[p, await fetchStats(p)]));
+  const stats = Object.fromEntries(entries);
+
+  ALL.forEach(sym=>{
+    let price, chg;
+    if(sym.includes("/")){
+      const [a,b] = sym.split("/");
+      const sa = stats[a], sb = stats[b];
+      if(!sa || !sb) return;
+      price = sa.last / sb.last;
+      const prev = sa.open && sb.open ? sa.open/sb.open : price;
+      chg = prev ? (price/prev - 1)*100 : 0;
+    } else {
+      const s = stats[sym];
+      if(!s) return;
+      price = s.last;
+      chg = s.open ? (s.last/s.open - 1)*100 : 0;
+    }
+    const txt = price >= 1 ? price.toLocaleString(undefined,{maximumFractionDigits:2}) : price.toPrecision(4);
+    (rowMap[sym]||[]).forEach(row=>{
+      const lastEl = row.querySelector("[data-last]");
+      const chgEl  = row.querySelector("[data-chg]");
+      if(lastEl.textContent !== txt){
+        row.classList.remove("flash-up","flash-down"); void row.offsetWidth;
+        row.classList.add(chg>=0?"flash-up":"flash-down");
+      }
+      lastEl.textContent = txt;
+      chgEl.textContent = (chg>=0?"+":"")+chg.toFixed(2)+"%";
+      chgEl.className = "chg "+(chg>=0?"up":"down");
+    });
+  });
+}
+
+// ── Timeframe buttons ──
+document.getElementById("tfGroup").addEventListener("click", e=>{
+  const t = e.target.closest(".tf"); if(!t) return;
+  document.querySelectorAll(".tf").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active");
+  activeTF = t.dataset.i;
+  loadChart(activeSymbol, activeTF);
+});
+
+// ── Boot ──
+buildWatchlist();
+loadChart(activeSymbol, activeTF);
+refreshPrices();
+resize();
+setInterval(refreshPrices, 6000);
+setInterval(()=>loadChart(activeSymbol, activeTF), 20000);
+</script>
+</body>
+</html>
