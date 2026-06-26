@@ -679,8 +679,21 @@ function onToolClick(t, el){
 }
 
 // ── coordinate conversion (price/time ⇄ pixels) ──
-function timeToX(time){ const c = chart.timeScale().timeToCoordinate(time); return c; }
-function priceToY(price){ const c = candle.priceToCoordinate(price); return c; }
+// timeToCoordinate returns null for times not on a bar (e.g. drawings placed in
+// empty space past the last candle). We fall back to linear extrapolation from
+// the two most recent bars so such drawings still render after pan/zoom.
+function timeToX(time){
+  const c = chart.timeScale().timeToCoordinate(time);
+  if(c!=null) return c;
+  if(lastData.length<2) return null;
+  const a=lastData[lastData.length-2], b=lastData[lastData.length-1];
+  const xa=chart.timeScale().timeToCoordinate(a.time);
+  const xb=chart.timeScale().timeToCoordinate(b.time);
+  if(xa==null||xb==null||b.time===a.time) return null;
+  const px=(xb-xa)/(b.time-a.time);            // pixels per second
+  return xb + (time-b.time)*px;
+}
+function priceToY(price){ return candle.priceToCoordinate(price); }
 function xToTime(x){ return chart.timeScale().coordinateToTime(x); }
 function yToPrice(y){ return candle.coordinateToPrice(y); }
 
