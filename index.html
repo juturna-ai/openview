@@ -178,6 +178,8 @@
   .panel .pi .meta{color:var(--muted); font-size:11px;}
   .panel .search{margin:8px 12px; padding:7px 10px; background:#131722; border:1px solid var(--border);
     border-radius:5px; color:#d1d4dc; font-size:13px; outline:none;}
+  .panel .indcat{font-size:10px; font-weight:700; letter-spacing:.6px; color:var(--muted);
+    text-transform:uppercase; padding:10px 14px 4px; position:sticky; top:0; background:#1e222d;}
 
   /* ── settings dialog ── */
   #dlgBackdrop{position:fixed; inset:0; background:#0008; display:none; z-index:400;}
@@ -2063,18 +2065,71 @@ chart.subscribeCrosshairMove(()=>{ if(draw.shapes.length||draw.pending||alerts.l
 const indicators = [];
 let indUid=1;
 
+// Each entry: type, name, category, pane ("main" overlay | "sub" separate pane),
+// default params. `src` (close/open/hl2/hlc3/ohlc4) is offered on indicators that
+// support a configurable source — TradingView exposes it on most.
 const IND_CATALOG = [
-  { type:"ema",   name:"EMA",             pane:"main", params:{length:21, color:"#ffeb3b"} },
-  { type:"sma",   name:"SMA",             pane:"main", params:{length:50, color:"#42a5f5"} },
-  { type:"bb",    name:"Bollinger Bands", pane:"main", params:{length:20, mult:2, color:"#26c6da"} },
-  { type:"vwap",  name:"VWAP",            pane:"main", params:{color:"#ab47bc"} },
-  { type:"volume",name:"Volume",          pane:"sub",  params:{} },
-  { type:"macd",  name:"MACD",            pane:"sub",  params:{fast:12, slow:26, signal:9} },
-  { type:"stoch", name:"Stochastic",      pane:"sub",  params:{k:14, d:3} },
-  { type:"atr",   name:"ATR",             pane:"sub",  params:{length:14, color:"#ff9800"} },
-  { type:"mom",   name:"Momentum",        pane:"sub",  params:{length:10, color:"#66bb6a"} },
-  { type:"willr", name:"Williams %R",     pane:"sub",  params:{length:14, color:"#ec407a"} },
-  { type:"cci",   name:"CCI",             pane:"sub",  params:{length:20, color:"#29b6f6"} },
+  // ── Moving Averages (overlay) ──
+  { type:"sma",   name:"SMA",                   cat:"Moving Averages", pane:"main", params:{length:9,  src:"close", color:"#42a5f5"} },
+  { type:"ema",   name:"EMA",                   cat:"Moving Averages", pane:"main", params:{length:9,  src:"close", color:"#ffeb3b"} },
+  { type:"wma",   name:"WMA",                   cat:"Moving Averages", pane:"main", params:{length:9,  src:"close", color:"#ab47bc"} },
+  { type:"vwma",  name:"VWMA",                  cat:"Moving Averages", pane:"main", params:{length:20, src:"close", color:"#26a69a"} },
+  { type:"hma",   name:"Hull MA (HMA)",         cat:"Moving Averages", pane:"main", params:{length:9,  src:"close", color:"#ff7043"} },
+  { type:"dema",  name:"Double EMA (DEMA)",     cat:"Moving Averages", pane:"main", params:{length:9,  src:"close", color:"#7e57c2"} },
+  { type:"tema",  name:"Triple EMA (TEMA)",     cat:"Moving Averages", pane:"main", params:{length:9,  src:"close", color:"#26c6da"} },
+  { type:"alma",  name:"ALMA",                  cat:"Moving Averages", pane:"main", params:{length:9,  offset:0.85, sigma:6, src:"close", color:"#9ccc65"} },
+  { type:"smma",  name:"Smoothed MA (RMA)",     cat:"Moving Averages", pane:"main", params:{length:7,  src:"close", color:"#ec407a"} },
+  { type:"lsma",  name:"Least Squares MA",      cat:"Moving Averages", pane:"main", params:{length:25, src:"close", color:"#5c6bc0"} },
+  { type:"envel", name:"Envelopes",             cat:"Moving Averages", pane:"main", params:{length:20, pct:1, src:"close", color:"#78909c"} },
+  // ── Oscillators (sub-pane) ──
+  { type:"rsi",   name:"RSI",                   cat:"Oscillators", pane:"sub", params:{length:14, src:"close", color:"#9c6ade"} },
+  { type:"macd",  name:"MACD",                  cat:"Oscillators", pane:"sub", params:{fast:12, slow:26, signal:9} },
+  { type:"stoch", name:"Stochastic",            cat:"Oscillators", pane:"sub", params:{k:14, smooth:3, d:3} },
+  { type:"stochrsi",name:"Stochastic RSI",      cat:"Oscillators", pane:"sub", params:{rsiLen:14, stochLen:14, k:3, d:3} },
+  { type:"cci",   name:"CCI",                   cat:"Oscillators", pane:"sub", params:{length:20, color:"#29b6f6"} },
+  { type:"willr", name:"Williams %R",           cat:"Oscillators", pane:"sub", params:{length:14, color:"#ec407a"} },
+  { type:"mom",   name:"Momentum",              cat:"Oscillators", pane:"sub", params:{length:10, src:"close", color:"#66bb6a"} },
+  { type:"roc",   name:"Rate of Change (ROC)",  cat:"Oscillators", pane:"sub", params:{length:9, src:"close", color:"#ffa726"} },
+  { type:"ao",    name:"Awesome Oscillator",    cat:"Oscillators", pane:"sub", params:{fast:5, slow:34} },
+  { type:"ac",    name:"Accelerator Oscillator",cat:"Oscillators", pane:"sub", params:{} },
+  { type:"uo",    name:"Ultimate Oscillator",   cat:"Oscillators", pane:"sub", params:{l1:7, l2:14, l3:28, color:"#42a5f5"} },
+  { type:"trix",  name:"TRIX",                  cat:"Oscillators", pane:"sub", params:{length:18, signal:9, color:"#26c6da"} },
+  { type:"cmo",   name:"Chande Momentum (CMO)", cat:"Oscillators", pane:"sub", params:{length:9, src:"close", color:"#ef9a9a"} },
+  { type:"ppo",   name:"PPO",                   cat:"Oscillators", pane:"sub", params:{fast:12, slow:26, signal:9} },
+  { type:"dpo",   name:"Detrended Price (DPO)", cat:"Oscillators", pane:"sub", params:{length:21, src:"close", color:"#bcaaa4"} },
+  { type:"fisher",name:"Fisher Transform",      cat:"Oscillators", pane:"sub", params:{length:9} },
+  { type:"bop",   name:"Balance of Power",      cat:"Oscillators", pane:"sub", params:{color:"#90caf9"} },
+  { type:"coppock",name:"Coppock Curve",        cat:"Oscillators", pane:"sub", params:{roc1:14, roc2:11, wma:10, color:"#80cbc4"} },
+  // ── Trend ──
+  { type:"adx",   name:"ADX / DMI",             cat:"Trend", pane:"sub", params:{di:14, adx:14} },
+  { type:"aroon", name:"Aroon",                 cat:"Trend", pane:"sub", params:{length:14} },
+  { type:"supertrend",name:"Supertrend",        cat:"Trend", pane:"main", params:{atr:10, factor:3} },
+  { type:"psar",  name:"Parabolic SAR",         cat:"Trend", pane:"main", params:{start:0.02, step:0.02, max:0.2, color:"#ffee58"} },
+  { type:"ichimoku",name:"Ichimoku Cloud",      cat:"Trend", pane:"main", params:{conv:9, base:26, spanB:52, disp:26} },
+  { type:"vortex",name:"Vortex",                cat:"Trend", pane:"sub", params:{length:14} },
+  // ── Volatility ──
+  { type:"bb",    name:"Bollinger Bands",       cat:"Volatility", pane:"main", params:{length:20, mult:2, src:"close", color:"#26c6da"} },
+  { type:"kc",    name:"Keltner Channels",      cat:"Volatility", pane:"main", params:{length:20, mult:2, atr:10, color:"#26a69a"} },
+  { type:"donchian",name:"Donchian Channels",   cat:"Volatility", pane:"main", params:{length:20, color:"#42a5f5"} },
+  { type:"atr",   name:"ATR",                   cat:"Volatility", pane:"sub", params:{length:14, color:"#ff9800"} },
+  { type:"stdev", name:"Standard Deviation",    cat:"Volatility", pane:"sub", params:{length:20, src:"close", color:"#bdbdbd"} },
+  { type:"chop",  name:"Choppiness Index",      cat:"Volatility", pane:"sub", params:{length:14, color:"#ce93d8"} },
+  { type:"bbw",   name:"Bollinger Bands Width", cat:"Volatility", pane:"sub", params:{length:20, mult:2, src:"close", color:"#4dd0e1"} },
+  // ── Volume ──
+  { type:"volume",name:"Volume",                cat:"Volume", pane:"sub", params:{} },
+  { type:"vwap",  name:"VWAP",                  cat:"Volume", pane:"main", params:{color:"#ab47bc"} },
+  { type:"obv",   name:"On Balance Volume",     cat:"Volume", pane:"sub", params:{color:"#4db6ac"} },
+  { type:"mfi",   name:"Money Flow Index",      cat:"Volume", pane:"sub", params:{length:14, color:"#ba68c8"} },
+  { type:"adl",   name:"Accum/Dist (ADL)",      cat:"Volume", pane:"sub", params:{color:"#9fa8da"} },
+  { type:"cmf",   name:"Chaikin Money Flow",    cat:"Volume", pane:"sub", params:{length:20, color:"#4fc3f7"} },
+  { type:"chaikin",name:"Chaikin Oscillator",   cat:"Volume", pane:"sub", params:{fast:3, slow:10, color:"#7986cb"} },
+  { type:"pvt",   name:"Price Volume Trend",    cat:"Volume", pane:"sub", params:{color:"#aed581"} },
+  { type:"fi",    name:"Force Index",           cat:"Volume", pane:"sub", params:{length:13, color:"#ff8a65"} },
+  // ── Bill Williams ──
+  { type:"alligator",name:"Alligator",          cat:"Bill Williams", pane:"main", params:{} },
+  { type:"fractals",name:"Williams Fractals",   cat:"Bill Williams", pane:"main", params:{} },
+  // ── Other ──
+  { type:"pivots",name:"Pivot Points Standard", cat:"Other", pane:"main", params:{} },
 ];
 
 // ── math ──
@@ -2111,6 +2166,174 @@ function momCalc(data,len){ const out=[]; for(let i=len;i<data.length;i++) out.p
 function willrCalc(data,len){ const out=[]; for(let i=len-1;i<data.length;i++){ const win=data.slice(i-len+1,i+1); const hh=Math.max(...win.map(d=>d.high)),ll=Math.min(...win.map(d=>d.low)); out.push({time:data[i].time,value:hh===ll?-50:(hh-data[i].close)/(hh-ll)*-100}); } return out; }
 function cciCalc(data,len){ const out=[]; for(let i=len-1;i<data.length;i++){ const win=data.slice(i-len+1,i+1).map(d=>(d.high+d.low+d.close)/3); const m=win.reduce((a,b)=>a+b,0)/len; const md=win.reduce((a,b)=>a+Math.abs(b-m),0)/len; const tp=(data[i].high+data[i].low+data[i].close)/3; out.push({time:data[i].time,value:md===0?0:(tp-m)/(0.015*md)}); } return out; }
 
+// ════════════════════════════════════════════════════════════════════
+//  EXTENDED INDICATOR MATH (Wave 1)
+//  Helpers operate on plain number[] aligned to `data`; pair() re-attaches
+//  times. `src()` picks the price source TradingView-style.
+// ════════════════════════════════════════════════════════════════════
+function srcArr(data,s){
+  switch(s){
+    case "open":  return data.map(d=>d.open);
+    case "high":  return data.map(d=>d.high);
+    case "low":   return data.map(d=>d.low);
+    case "hl2":   return data.map(d=>(d.high+d.low)/2);
+    case "hlc3":  return data.map(d=>(d.high+d.low+d.close)/3);
+    case "ohlc4": return data.map(d=>(d.open+d.high+d.low+d.close)/4);
+    default:      return data.map(d=>d.close);
+  }
+}
+const SRC_OPTS=["close","open","high","low","hl2","hlc3","ohlc4"];
+// Attach times to a number[] (null entries dropped) → {time,value}[]
+function pair(data,arr){ const out=[]; for(let i=0;i<arr.length;i++) if(arr[i]!=null && isFinite(arr[i])) out.push({time:data[i].time,value:arr[i]}); return out; }
+// — array primitives (null-padded to input length) —
+function smaA(a,len){ const o=new Array(a.length).fill(null); let s=0; for(let i=0;i<a.length;i++){ s+=a[i]; if(i>=len)s-=a[i-len]; if(i>=len-1)o[i]=s/len; } return o; }
+function wmaA(a,len){ const o=new Array(a.length).fill(null); const denom=len*(len+1)/2;
+  for(let i=len-1;i<a.length;i++){ let s=0; for(let j=0;j<len;j++) s+=a[i-j]*(len-j); o[i]=s/denom; } return o; }
+function rmaA(a,len){ const o=new Array(a.length).fill(null); let prev=null,seed=0;
+  for(let i=0;i<a.length;i++){ if(i<len){ seed+=a[i]; if(i===len-1){ prev=seed/len; o[i]=prev; } } else { prev=(prev*(len-1)+a[i])/len; o[i]=prev; } } return o; }
+function stdevA(a,len){ const o=new Array(a.length).fill(null);
+  for(let i=len-1;i<a.length;i++){ let m=0; for(let j=0;j<len;j++) m+=a[i-j]; m/=len; let v=0; for(let j=0;j<len;j++){ const d=a[i-j]-m; v+=d*d; } o[i]=Math.sqrt(v/len); } return o; }
+function highestA(a,len){ const o=new Array(a.length).fill(null); for(let i=len-1;i<a.length;i++){ let h=-Infinity; for(let j=0;j<len;j++) h=Math.max(h,a[i-j]); o[i]=h; } return o; }
+function lowestA(a,len){ const o=new Array(a.length).fill(null); for(let i=len-1;i<a.length;i++){ let l=Infinity; for(let j=0;j<len;j++) l=Math.min(l,a[i-j]); o[i]=l; } return o; }
+function almaA(a,len,offset,sigma){ const o=new Array(a.length).fill(null); const m=offset*(len-1), s=len/sigma;
+  for(let i=len-1;i<a.length;i++){ let num=0,den=0; for(let j=0;j<len;j++){ const w=Math.exp(-((j-m)*(j-m))/(2*s*s)); num+=a[i-len+1+j]*w; den+=w; } o[i]=num/den; } return o; }
+function trA(data){ const o=new Array(data.length).fill(0); for(let i=0;i<data.length;i++){ if(i===0){o[i]=data[i].high-data[i].low;continue;} const pc=data[i-1].close; o[i]=Math.max(data[i].high-data[i].low,Math.abs(data[i].high-pc),Math.abs(data[i].low-pc)); } return o; }
+// — moving averages exposed as {time,value}[] —
+function wmaCalc(data,len,s){ return pair(data,wmaA(srcArr(data,s),len)); }
+function vwmaCalc(data,len){ const px=data.map(d=>d.close*(d.volume||0)), vol=data.map(d=>d.volume||0);
+  const np=smaA(px,len), nv=smaA(vol,len), o=new Array(data.length).fill(null);
+  for(let i=0;i<data.length;i++) if(np[i]!=null && nv[i]) o[i]=np[i]/nv[i]; return pair(data,o); }
+function hmaCalc(data,len,s){ const a=srcArr(data,s); const half=wmaA(a,Math.max(1,Math.round(len/2))), full=wmaA(a,len);
+  const raw=a.map((_,i)=>(half[i]!=null&&full[i]!=null)?2*half[i]-full[i]:null);
+  const filled=raw.map(v=>v==null?0:v); const hull=wmaA(filled,Math.max(1,Math.round(Math.sqrt(len))));
+  const o=hull.map((v,i)=> raw[i]==null?null:v); return pair(data,o); }
+function emaA(a,len){ const o=new Array(a.length).fill(null); const k=2/(len+1); let prev=null;
+  for(let i=0;i<a.length;i++){ prev=prev==null?a[i]:a[i]*k+prev*(1-k); if(i>=len-1)o[i]=prev; } return o; }
+function demaCalc(data,len,s){ const a=srcArr(data,s); const e1=emaA(a,len), e2=emaA(e1.map(v=>v==null?0:v),len);
+  const o=a.map((_,i)=> (e1[i]!=null&&e2[i]!=null)?2*e1[i]-e2[i]:null); return pair(data,o); }
+function temaCalc(data,len,s){ const a=srcArr(data,s); const e1=emaA(a,len); const e2=emaA(e1.map(v=>v==null?0:v),len); const e3=emaA(e2.map(v=>v==null?0:v),len);
+  const o=a.map((_,i)=> (e1[i]!=null&&e2[i]!=null&&e3[i]!=null)?3*e1[i]-3*e2[i]+e3[i]:null); return pair(data,o); }
+function almaCalc(data,len,offset,sigma,s){ return pair(data,almaA(srcArr(data,s),len,offset,sigma)); }
+function smmaCalc(data,len,s){ return pair(data,rmaA(srcArr(data,s),len)); }
+function lsmaCalc(data,len,s){ const a=srcArr(data,s); const o=new Array(a.length).fill(null);
+  for(let i=len-1;i<a.length;i++){ let sx=0,sy=0,sxx=0,sxy=0; for(let j=0;j<len;j++){ const x=j, y=a[i-len+1+j]; sx+=x; sy+=y; sxx+=x*x; sxy+=x*y; }
+    const n=len, denom=n*sxx-sx*sx; const slope=denom?(n*sxy-sx*sy)/denom:0; const inter=(sy-slope*sx)/n; o[i]=slope*(len-1)+inter; } return pair(data,o); }
+function envelCalc(data,len,pct,s){ const a=srcArr(data,s); const mid=smaA(a,len), o={up:[],mid:[],lo:[]};
+  for(let i=0;i<data.length;i++) if(mid[i]!=null){ o.mid.push({time:data[i].time,value:mid[i]}); o.up.push({time:data[i].time,value:mid[i]*(1+pct/100)}); o.lo.push({time:data[i].time,value:mid[i]*(1-pct/100)}); } return o; }
+// — oscillators —
+function rsiCalc(data,len,s){ const a=srcArr(data,s); const g=[],l=[];
+  for(let i=0;i<a.length;i++){ if(i===0){g.push(0);l.push(0);continue;} const d=a[i]-a[i-1]; g.push(Math.max(d,0)); l.push(Math.max(-d,0)); }
+  const ag=rmaA(g,len), al=rmaA(l,len), o=new Array(a.length).fill(null);
+  for(let i=0;i<a.length;i++) if(ag[i]!=null) o[i]= al[i]===0?100:100-100/(1+ag[i]/al[i]); return pair(data,o); }
+function rocCalc(data,len,s){ const a=srcArr(data,s); const o=new Array(a.length).fill(null);
+  for(let i=len;i<a.length;i++) o[i]= a[i-len]?((a[i]-a[i-len])/a[i-len])*100:0; return pair(data,o); }
+function aoCalc(data,fast,slow){ const mid=data.map(d=>(d.high+d.low)/2); const sf=smaA(mid,fast), ss=smaA(mid,slow);
+  const o=mid.map((_,i)=>(sf[i]!=null&&ss[i]!=null)?sf[i]-ss[i]:null); return pair(data,o); }
+function acCalc(data){ const ao=aoCalc(data,5,34); const map={}; ao.forEach(p=>map[p.time]=p.value);
+  const aoArr=data.map(d=>map[d.time]); const sm=smaA(aoArr.map(v=>v==null?0:v),5);
+  const o=data.map((d,i)=> (map[d.time]!=null&&sm[i]!=null)?map[d.time]-sm[i]:null); return pair(data,o); }
+function uoCalc(data,l1,l2,l3){ const bp=[],tr=[];
+  for(let i=0;i<data.length;i++){ if(i===0){bp.push(0);tr.push(data[i].high-data[i].low);continue;} const pc=data[i-1].close; bp.push(data[i].close-Math.min(data[i].low,pc)); tr.push(Math.max(data[i].high,pc)-Math.min(data[i].low,pc)); }
+  const sum=(arr,i,n)=>{ let s=0; for(let j=0;j<n;j++) s+=arr[i-j]; return s; };
+  const o=new Array(data.length).fill(null);
+  for(let i=l3;i<data.length;i++){ const a7=sum(bp,i,l1)/sum(tr,i,l1), a14=sum(bp,i,l2)/sum(tr,i,l2), a28=sum(bp,i,l3)/sum(tr,i,l3); o[i]=100*(4*a7+2*a14+a28)/7; } return pair(data,o); }
+function trixCalc(data,len,sig){ const a=srcArr(data,"close"); const e1=emaA(a,len), e2=emaA(e1.map(v=>v==null?0:v),len), e3=emaA(e2.map(v=>v==null?0:v),len);
+  const tx=new Array(a.length).fill(null); for(let i=1;i<a.length;i++) if(e3[i]!=null&&e3[i-1]!=null&&e3[i-1]!==0) tx[i]=(e3[i]-e3[i-1])/e3[i-1]*100;
+  const sigA=emaA(tx.map(v=>v==null?0:v),sig); const trix=pair(data,tx); const signal=pair(data,tx.map((v,i)=> v==null?null:sigA[i])); return {trix,signal}; }
+function cmoCalc(data,len,s){ const a=srcArr(data,s); const o=new Array(a.length).fill(null);
+  for(let i=len;i<a.length;i++){ let up=0,dn=0; for(let j=0;j<len;j++){ const d=a[i-j]-a[i-j-1]; if(d>0)up+=d; else dn-=d; } o[i]=(up+dn)===0?0:(up-dn)/(up+dn)*100; } return pair(data,o); }
+function ppoCalc(data,f,s,sig){ const a=srcArr(data,"close"); const ef=emaA(a,f), es=emaA(a,s);
+  const ppo=a.map((_,i)=> (ef[i]!=null&&es[i]!=null&&es[i]!==0)?(ef[i]-es[i])/es[i]*100:null);
+  const sigA=emaA(ppo.map(v=>v==null?0:v),sig);
+  return { ppo:pair(data,ppo), signal:pair(data,ppo.map((v,i)=>v==null?null:sigA[i])), hist:pair(data,ppo.map((v,i)=>(v!=null&&sigA[i]!=null)?v-sigA[i]:null)) }; }
+function dpoCalc(data,len,s){ const a=srcArr(data,s); const sm=smaA(a,len); const shift=Math.floor(len/2)+1; const o=new Array(a.length).fill(null);
+  for(let i=0;i<a.length;i++){ if(i-shift>=0 && sm[i]!=null) o[i]=a[i-shift]-sm[i]; } return pair(data,o); }
+function fisherCalc(data,len){ const hl=data.map(d=>(d.high+d.low)/2); const hh=highestA(hl,len), ll=lowestA(hl,len);
+  const o=new Array(data.length).fill(null); let val=0,fish=0;
+  for(let i=0;i<data.length;i++){ if(hh[i]==null||ll[i]==null||hh[i]===ll[i]){ o[i]=null; continue; }
+    val=0.66*((hl[i]-ll[i])/(hh[i]-ll[i])-0.5)*2+0.67*val; val=Math.max(Math.min(val,0.999),-0.999);
+    fish=0.5*Math.log((1+val)/(1-val))+0.5*fish; o[i]=fish; } return pair(data,o); }
+function bopCalc(data){ const o=data.map(d=>{ const r=d.high-d.low; return {time:d.time,value:r===0?0:(d.close-d.open)/r}; }); return o; }
+function coppockCalc(data,r1,r2,w){ const a=srcArr(data,"close"); const roc=(n)=>{ const x=new Array(a.length).fill(0); for(let i=n;i<a.length;i++) x[i]=a[i-n]?((a[i]-a[i-n])/a[i-n])*100:0; return x; };
+  const sum=roc(r1).map((v,i)=>v+roc(r2)[i]); const cw=wmaA(sum,w); return pair(data,cw); }
+// — trend —
+function adxCalc(data,diLen,adxLen){ const plusDM=[],minusDM=[],tr=trA(data);
+  for(let i=0;i<data.length;i++){ if(i===0){plusDM.push(0);minusDM.push(0);continue;} const up=data[i].high-data[i-1].high, dn=data[i-1].low-data[i].low;
+    plusDM.push(up>dn&&up>0?up:0); minusDM.push(dn>up&&dn>0?dn:0); }
+  const str=rmaA(tr,diLen), sp=rmaA(plusDM,diLen), sm=rmaA(minusDM,diLen);
+  const pdi=new Array(data.length).fill(null), mdi=new Array(data.length).fill(null), dx=new Array(data.length).fill(null);
+  for(let i=0;i<data.length;i++){ if(str[i]&&sp[i]!=null){ pdi[i]=sp[i]/str[i]*100; mdi[i]=sm[i]/str[i]*100; const s=pdi[i]+mdi[i]; dx[i]=s===0?0:Math.abs(pdi[i]-mdi[i])/s*100; } }
+  const adx=rmaA(dx.map(v=>v==null?0:v),adxLen).map((v,i)=>dx[i]==null?null:v);
+  return { plus:pair(data,pdi), minus:pair(data,mdi), adx:pair(data,adx) }; }
+function aroonCalc(data,len){ const up=new Array(data.length).fill(null), dn=new Array(data.length).fill(null);
+  for(let i=len;i<data.length;i++){ let hi=-Infinity,lo=Infinity,hiIdx=0,loIdx=0; for(let j=0;j<=len;j++){ const h=data[i-j].high,l=data[i-j].low; if(h>hi){hi=h;hiIdx=j;} if(l<lo){lo=l;loIdx=j;} }
+    up[i]=(len-hiIdx)/len*100; dn[i]=(len-loIdx)/len*100; } return { up:pair(data,up), dn:pair(data,dn) }; }
+function supertrendCalc(data,atrLen,factor){ const tr=trA(data); const atr=rmaA(tr,atrLen);
+  const o=new Array(data.length).fill(null); let dir=1, finalUp=null, finalLo=null;
+  for(let i=0;i<data.length;i++){ if(atr[i]==null){ continue; } const hl2=(data[i].high+data[i].low)/2;
+    const bUp=hl2+factor*atr[i], bLo=hl2-factor*atr[i];
+    finalUp = (finalUp==null||bUp<finalUp||data[i-1].close>finalUp)?bUp:finalUp;
+    finalLo = (finalLo==null||bLo>finalLo||data[i-1].close<finalLo)?bLo:finalLo;
+    if(dir===1 && data[i].close<finalLo) dir=-1; else if(dir===-1 && data[i].close>finalUp) dir=1;
+    o[i]= dir===1?finalLo:finalUp; }
+  return pair(data,o).map((p,idx)=>p); }
+function psarCalc(data,start,step,max){ const o=new Array(data.length).fill(null); if(data.length<2) return [];
+  let bull=true, af=start, ep=data[0].high, sar=data[0].low;
+  for(let i=1;i<data.length;i++){ sar=sar+af*(ep-sar);
+    if(bull){ if(data[i].low<sar){ bull=false; sar=ep; ep=data[i].low; af=start; } else { if(data[i].high>ep){ ep=data[i].high; af=Math.min(af+step,max); } } }
+    else { if(data[i].high>sar){ bull=true; sar=ep; ep=data[i].high; af=start; } else { if(data[i].low<ep){ ep=data[i].low; af=Math.min(af+step,max); } } }
+    o[i]=sar; } return pair(data,o); }
+function ichimokuCalc(data,convLen,baseLen,spanBLen,disp){ const donch=(len,i)=>{ let hi=-Infinity,lo=Infinity; for(let j=0;j<len&&i-j>=0;j++){ hi=Math.max(hi,data[i-j].high); lo=Math.min(lo,data[i-j].low);} return (hi+lo)/2; };
+  const conv=[],base=[],spanA=[],spanB=[],lag=[]; const dt=(data.length>1)?(data[1].time-data[0].time):86400;
+  for(let i=0;i<data.length;i++){ if(i>=convLen-1) conv.push({time:data[i].time,value:donch(convLen,i)}); if(i>=baseLen-1) base.push({time:data[i].time,value:donch(baseLen,i)}); }
+  for(let i=0;i<data.length;i++){ if(i>=baseLen-1){ const a=(donch(convLen,i)+donch(baseLen,i))/2; spanA.push({time:data[i].time+disp*dt,value:a}); }
+    if(i>=spanBLen-1){ spanB.push({time:data[i].time+disp*dt,value:donch(spanBLen,i)}); }
+    if(i-disp>=0) lag.push({time:data[i-disp].time,value:data[i].close}); }
+  return {conv,base,spanA,spanB,lag}; }
+function vortexCalc(data,len){ const vmP=[],vmM=[],tr=trA(data);
+  for(let i=0;i<data.length;i++){ if(i===0){vmP.push(0);vmM.push(0);continue;} vmP.push(Math.abs(data[i].high-data[i-1].low)); vmM.push(Math.abs(data[i].low-data[i-1].high)); }
+  const sum=(arr,i,n)=>{ let s=0; for(let j=0;j<n&&i-j>=0;j++) s+=arr[i-j]; return s; };
+  const vip=new Array(data.length).fill(null), vim=new Array(data.length).fill(null);
+  for(let i=len;i<data.length;i++){ const t=sum(tr,i,len); if(t){ vip[i]=sum(vmP,i,len)/t; vim[i]=sum(vmM,i,len)/t; } }
+  return { plus:pair(data,vip), minus:pair(data,vim) }; }
+// — volatility —
+function kcCalc(data,len,mult,atrLen){ const a=srcArr(data,"close"); const mid=emaA(a,len), atr=rmaA(trA(data),atrLen);
+  const up=[],md=[],lo=[]; for(let i=0;i<data.length;i++) if(mid[i]!=null&&atr[i]!=null){ md.push({time:data[i].time,value:mid[i]}); up.push({time:data[i].time,value:mid[i]+mult*atr[i]}); lo.push({time:data[i].time,value:mid[i]-mult*atr[i]}); } return {up,mid:md,lo}; }
+function donchianCalc(data,len){ const up=[],md=[],lo=[]; for(let i=len-1;i<data.length;i++){ let hi=-Infinity,low=Infinity; for(let j=0;j<len;j++){ hi=Math.max(hi,data[i-j].high); low=Math.min(low,data[i-j].low);} up.push({time:data[i].time,value:hi}); lo.push({time:data[i].time,value:low}); md.push({time:data[i].time,value:(hi+low)/2}); } return {up,mid:md,lo}; }
+function stdevCalc(data,len,s){ return pair(data,stdevA(srcArr(data,s),len)); }
+function chopCalc(data,len){ const tr=trA(data); const o=new Array(data.length).fill(null); const log10=Math.log(10);
+  for(let i=len-1;i<data.length;i++){ let sTr=0,hi=-Infinity,lo=Infinity; for(let j=0;j<len;j++){ sTr+=tr[i-j]; hi=Math.max(hi,data[i-j].high); lo=Math.min(lo,data[i-j].low);} const rng=hi-lo; if(rng>0) o[i]=100*Math.log(sTr/rng)/log10/(Math.log(len)/log10); } return pair(data,o); }
+function bbwCalc(data,len,mult,s){ const r=bbCalc2(data,len,mult,s); const o=[]; for(let i=0;i<r.mid.length;i++){ if(r.mid[i].value) o.push({time:r.mid[i].time,value:(r.up[i].value-r.lo[i].value)/r.mid[i].value*100}); } return o; }
+function bbCalc2(data,len,mult,s){ const a=srcArr(data,s); const mid=smaA(a,len), sd=stdevA(a,len); const up=[],md=[],lo=[];
+  for(let i=0;i<data.length;i++) if(mid[i]!=null){ md.push({time:data[i].time,value:mid[i]}); up.push({time:data[i].time,value:mid[i]+mult*sd[i]}); lo.push({time:data[i].time,value:mid[i]-mult*sd[i]}); } return {up,mid:md,lo}; }
+// — volume —
+function obvCalc(data){ const o=[]; let v=0; for(let i=0;i<data.length;i++){ if(i>0){ if(data[i].close>data[i-1].close)v+=data[i].volume||0; else if(data[i].close<data[i-1].close)v-=data[i].volume||0; } o.push({time:data[i].time,value:v}); } return o; }
+function mfiCalc(data,len){ const tp=data.map(d=>(d.high+d.low+d.close)/3); const pos=[],neg=[];
+  for(let i=0;i<data.length;i++){ if(i===0){pos.push(0);neg.push(0);continue;} const rmf=tp[i]*(data[i].volume||0); if(tp[i]>tp[i-1]){pos.push(rmf);neg.push(0);} else if(tp[i]<tp[i-1]){pos.push(0);neg.push(rmf);} else {pos.push(0);neg.push(0);} }
+  const sum=(arr,i,n)=>{ let s=0; for(let j=0;j<n;j++) s+=arr[i-j]; return s; };
+  const o=new Array(data.length).fill(null); for(let i=len;i<data.length;i++){ const p=sum(pos,i,len), n=sum(neg,i,len); o[i]=n===0?100:100-100/(1+p/n); } return pair(data,o); }
+function adlCalc(data){ const o=[]; let v=0; for(const d of data){ const rng=d.high-d.low; const mult=rng===0?0:((d.close-d.low)-(d.high-d.close))/rng; v+=mult*(d.volume||0); o.push({time:d.time,value:v}); } return o; }
+function cmfCalc(data,len){ const mfv=data.map(d=>{ const rng=d.high-d.low; const mult=rng===0?0:((d.close-d.low)-(d.high-d.close))/rng; return mult*(d.volume||0); });
+  const vol=data.map(d=>d.volume||0); const sum=(arr,i,n)=>{ let s=0; for(let j=0;j<n;j++) s+=arr[i-j]; return s; };
+  const o=new Array(data.length).fill(null); for(let i=len-1;i<data.length;i++){ const sv=sum(vol,i,len); if(sv) o[i]=sum(mfv,i,len)/sv; } return pair(data,o); }
+function chaikinCalc(data,f,s){ const adl=adlCalc(data).map(p=>p.value); const ef=emaA(adl,f), es=emaA(adl,s);
+  const o=adl.map((_,i)=>(ef[i]!=null&&es[i]!=null)?ef[i]-es[i]:null); return pair(data,o); }
+function pvtCalc(data){ const o=[]; let v=0; for(let i=0;i<data.length;i++){ if(i>0&&data[i-1].close){ v+=(data[i].close-data[i-1].close)/data[i-1].close*(data[i].volume||0); } o.push({time:data[i].time,value:v}); } return o; }
+function fiCalc(data,len){ const raw=new Array(data.length).fill(0); for(let i=1;i<data.length;i++) raw[i]=(data[i].close-data[i-1].close)*(data[i].volume||0);
+  return pair(data,emaA(raw,len)); }
+// — Bill Williams —
+function smmaShift(data,len,shift){ const med=data.map(d=>(d.high+d.low)/2); const sm=rmaA(med,len); const dt=(data.length>1)?(data[1].time-data[0].time):86400;
+  const o=[]; for(let i=0;i<data.length;i++) if(sm[i]!=null) o.push({time:data[i].time+shift*dt,value:sm[i]}); return o; }
+function alligatorCalc(data){ return { jaw:smmaShift(data,13,8), teeth:smmaShift(data,8,5), lips:smmaShift(data,5,3) }; }
+function fractalsCalc(data){ const up=[],dn=[]; for(let i=2;i<data.length-2;i++){ const h=data[i].high,l=data[i].low;
+  if(h>data[i-1].high&&h>data[i-2].high&&h>data[i+1].high&&h>data[i+2].high) up.push({time:data[i].time,position:"aboveBar",color:"#ef5350",shape:"arrowDown",text:"▲"});
+  if(l<data[i-1].low&&l<data[i-2].low&&l<data[i+1].low&&l<data[i+2].low) dn.push({time:data[i].time,position:"belowBar",color:"#26a69a",shape:"arrowUp",text:"▼"}); } return {up,dn}; }
+function pivotsCalc(data){ // daily pivots projected from prior bar
+  const out={P:[],R1:[],S1:[],R2:[],S2:[]};
+  for(let i=1;i<data.length;i++){ const p=data[i-1]; const P=(p.high+p.low+p.close)/3; const R1=2*P-p.low, S1=2*P-p.high, R2=P+(p.high-p.low), S2=P-(p.high-p.low);
+    out.P.push({time:data[i].time,value:P}); out.R1.push({time:data[i].time,value:R1}); out.S1.push({time:data[i].time,value:S1}); out.R2.push({time:data[i].time,value:R2}); out.S2.push({time:data[i].time,value:S2}); }
+  return out; }
+
 // ── add / remove / render ──
 function addIndicator(type){
   const cat=IND_CATALOG.find(c=>c.type===type); if(!cat) return;
@@ -2124,53 +2347,152 @@ function removeIndicator(id){
   if(ind.subChart){ try{ ind.subChart.remove(); }catch(e){} if(ind.paneEl) ind.paneEl.remove(); }
   indicators.splice(idx,1); renderIndLegend(); layoutPanes();
 }
-function buildIndicatorSeries(ind){
-  if(ind.pane==="main"){
-    if(ind.type==="bb"){ ind.series=[ chart.addLineSeries({color:ind.params.color,lineWidth:1,priceLineVisible:false,lastValueVisible:false}),
-      chart.addLineSeries({color:ind.params.color,lineWidth:1,priceLineVisible:false,lastValueVisible:false}),
-      chart.addLineSeries({color:ind.params.color,lineWidth:1,priceLineVisible:false,lastValueVisible:false}) ]; }
-    else ind.series=[ chart.addLineSeries({color:ind.params.color||"#ffeb3b",lineWidth:2,priceLineVisible:false,lastValueVisible:true}) ];
-  } else {
-    const wrap=document.getElementById("subPanes");
-    const el=document.createElement("div"); el.className="subpane";
-    const label=document.createElement("div"); label.className="subLabel"; label.textContent=ind.name;
-    const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeIndicator(ind.id);
-    label.appendChild(close); el.appendChild(label); wrap.appendChild(el); ind.paneEl=el;
-    const sc=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc"},
-      grid:{vertLines:{color:"#1e222d"},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39"},
-      timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false}, crosshair:{mode:0} });
-    ind.subChart=sc;
-    // store sync handlers so removeIndicator can unsubscribe (avoid leaks on add/remove)
-    let syncing=false;
-    ind.syncMain=r=>{ if(r&&!syncing){ syncing=true; try{sc.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
-    ind.syncSub =r=>{ if(r&&!syncing){ syncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
-    chart.timeScale().subscribeVisibleLogicalRangeChange(ind.syncMain);
-    sc.timeScale().subscribeVisibleLogicalRangeChange(ind.syncSub);
-    if(ind.type==="macd") ind.series=[ sc.addHistogramSeries({color:"#26a69a"}), sc.addLineSeries({color:"#2962ff",lineWidth:1.5}), sc.addLineSeries({color:"#ff9800",lineWidth:1.5}) ];
-    else if(ind.type==="stoch") ind.series=[ sc.addLineSeries({color:"#2962ff",lineWidth:1.5}), sc.addLineSeries({color:"#ff9800",lineWidth:1.5}) ];
-    else if(ind.type==="volume") ind.series=[ sc.addHistogramSeries({color:"#26a69a"}) ];
-    else ind.series=[ sc.addLineSeries({color:ind.params.color||"#ff9800",lineWidth:1.5}) ];
-    setTimeout(()=>{ try{ sc.applyOptions({width:el.clientWidth,height:el.clientHeight}); }catch(e){} },0);
+// PLOT DESCRIPTORS: for each type, how many series and of what kind/color.
+// kind: "line" | "hist" | "area-top"/"area-bot" (cloud halves). Lets build &
+// render stay data-driven for the whole expanded catalog.
+function plotSpec(ind){
+  const p=ind.params, c=p.color;
+  const L=(color,w=1.5)=>({k:"line",color,w});
+  switch(ind.type){
+    // single-line overlays / oscillators
+    case "sma": case "ema": case "wma": case "vwma": case "hma": case "dema":
+    case "tema": case "alma": case "smma": case "lsma":
+      return [L(c||"#ffeb3b",2)];
+    case "rsi": return [L(c||"#9c6ade")];
+    case "cci": case "willr": case "mom": case "roc": case "cmo": case "dpo":
+    case "atr": case "stdev": case "chop": case "bbw": case "obv": case "mfi":
+    case "adl": case "cmf": case "chaikin": case "pvt": case "fi": case "bop":
+    case "coppock": case "vwap": case "supertrend": case "psar": case "fisher": case "uo":
+      return [L(c||"#42a5f5",2)];
+    // bands (up/mid/lo)
+    case "bb": case "kc": case "donchian": case "envel":
+      return [L(c||"#26c6da",1),L(c||"#26c6da",1),L(c||"#26c6da",1)];
+    // multi-line / hist combos
+    case "macd": return [{k:"hist",color:"#26a69a"},L("#2962ff"),L("#ff9800")];
+    case "ppo":  return [{k:"hist",color:"#26a69a"},L("#2962ff"),L("#ff9800")];
+    case "stoch": case "stochrsi": return [L("#2962ff"),L("#ff9800")];
+    case "adx": return [L("#2962ff"),L("#ef5350"),L("#ffb300",2)]; // +DI,-DI,ADX
+    case "aroon": return [L("#26a69a"),L("#ef5350")];
+    case "vortex": return [L("#26a69a"),L("#ef5350")];
+    case "ao": case "ac": return [{k:"hist",color:"#26a69a"}];
+    case "trix": return [L("#26c6da"),L("#ff9800")];
+    case "volume": return [{k:"hist",color:"#26a69a"}];
+    case "ichimoku": return [L("#2962ff"),L("#ef5350"),L("#26a69a",1),L("#ff7043",1),L("#9c6ade",1)]; // conv,base,spanA,spanB,lag
+    case "alligator": return [L("#2196f3"),L("#e53935"),L("#43a047")]; // jaw,teeth,lips
+    case "fractals": return []; // markers, not series
+    case "pivots": return [L("#787b86",1),L("#26a69a",1),L("#ef5350",1),L("#26a69a",1),L("#ef5350",1)];
+    default: return [L(c||"#ffeb3b",2)];
   }
 }
+function buildIndicatorSeries(ind){
+  const specs=plotSpec(ind);
+  if(ind.pane==="main"){
+    ind.series=specs.map(sp=> sp.k==="hist"
+      ? chart.addHistogramSeries({priceLineVisible:false,lastValueVisible:false})
+      : chart.addLineSeries({color:sp.color,lineWidth:sp.w,priceLineVisible:false,lastValueVisible:false}));
+    return;
+  }
+  const wrap=document.getElementById("subPanes");
+  const el=document.createElement("div"); el.className="subpane";
+  const label=document.createElement("div"); label.className="subLabel"; label.textContent=ind.name;
+  const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeIndicator(ind.id);
+  const gear=document.createElement("span"); gear.className="subClose"; gear.textContent="⚙"; gear.title="Settings"; gear.onclick=()=>openIndicatorSettings(ind.id);
+  label.appendChild(gear); label.appendChild(close); el.appendChild(label); wrap.appendChild(el); ind.paneEl=el;
+  const sc=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc"},
+    grid:{vertLines:{color:"#1e222d"},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39"},
+    timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false}, crosshair:{mode:0} });
+  ind.subChart=sc;
+  let syncing=false;
+  ind.syncMain=r=>{ if(r&&!syncing){ syncing=true; try{sc.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
+  ind.syncSub =r=>{ if(r&&!syncing){ syncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
+  chart.timeScale().subscribeVisibleLogicalRangeChange(ind.syncMain);
+  sc.timeScale().subscribeVisibleLogicalRangeChange(ind.syncSub);
+  ind.series=specs.map(sp=> sp.k==="hist"
+    ? sc.addHistogramSeries({color:sp.color})
+    : sc.addLineSeries({color:sp.color,lineWidth:sp.w}));
+  setTimeout(()=>{ try{ sc.applyOptions({width:el.clientWidth,height:el.clientHeight}); }catch(e){} },0);
+}
 function renderIndicator(ind){
-  const d=lastData; if(!d.length) return; const pp=ind.params;
+  const d=lastData; if(!d.length) return; const pp=ind.params; const S=ind.series;
+  const hist=(arr,pos="#26a69a",neg="#ef5350")=>arr.map(h=>({time:h.time,value:h.value,color:h.value>=0?pos:neg}));
   try{
     switch(ind.type){
-      case "ema": ind.series[0].setData(emaCalc(d,pp.length)); break;
-      case "sma": ind.series[0].setData(smaCalc(d,pp.length)); break;
-      case "bb": { const r=bbCalc(d,pp.length,pp.mult); ind.series[0].setData(r.up); ind.series[1].setData(r.mid); ind.series[2].setData(r.lo); break; }
-      case "vwap": ind.series[0].setData(vwapCalc(d)); break;
-      case "macd": { const r=macdCalc(d,pp.fast,pp.slow,pp.signal); ind.series[0].setData(r.hist.map(h=>({time:h.time,value:h.value,color:h.value>=0?"#26a69a":"#ef5350"}))); ind.series[1].setData(r.macd); ind.series[2].setData(r.signal); break; }
-      case "stoch": { const r=stochCalc(d,pp.k,pp.d); ind.series[0].setData(r.k); ind.series[1].setData(r.d); break; }
-      case "atr": ind.series[0].setData(atrCalc(d,pp.length)); break;
-      case "mom": ind.series[0].setData(momCalc(d,pp.length)); break;
-      case "willr": ind.series[0].setData(willrCalc(d,pp.length)); break;
-      case "cci": ind.series[0].setData(cciCalc(d,pp.length)); break;
-      case "volume": ind.series[0].setData(d.map(b=>({time:b.time, value:b.volume||0, color: b.close>=b.open?"#26a69a88":"#ef535088"}))); break;
+      // moving averages
+      case "sma": S[0].setData(pair(d,smaA(srcArr(d,pp.src),pp.length))); break;
+      case "ema": S[0].setData(pair(d,emaA(srcArr(d,pp.src),pp.length))); break;
+      case "wma": S[0].setData(wmaCalc(d,pp.length,pp.src)); break;
+      case "vwma": S[0].setData(vwmaCalc(d,pp.length)); break;
+      case "hma": S[0].setData(hmaCalc(d,pp.length,pp.src)); break;
+      case "dema": S[0].setData(demaCalc(d,pp.length,pp.src)); break;
+      case "tema": S[0].setData(temaCalc(d,pp.length,pp.src)); break;
+      case "alma": S[0].setData(almaCalc(d,pp.length,pp.offset,pp.sigma,pp.src)); break;
+      case "smma": S[0].setData(smmaCalc(d,pp.length,pp.src)); break;
+      case "lsma": S[0].setData(lsmaCalc(d,pp.length,pp.src)); break;
+      case "envel": { const r=envelCalc(d,pp.length,pp.pct,pp.src); S[0].setData(r.up); S[1].setData(r.mid); S[2].setData(r.lo); break; }
+      // oscillators
+      case "rsi": S[0].setData(rsiCalc(d,pp.length,pp.src)); break;
+      case "macd": { const r=macdCalc(d,pp.fast,pp.slow,pp.signal); S[0].setData(hist(r.hist)); S[1].setData(r.macd); S[2].setData(r.signal); break; }
+      case "ppo": { const r=ppoCalc(d,pp.fast,pp.slow,pp.signal); S[0].setData(hist(r.hist)); S[1].setData(r.ppo); S[2].setData(r.signal); break; }
+      case "stoch": { const r=stochCalc(d,pp.k,pp.d); S[0].setData(r.k); S[1].setData(r.d); break; }
+      case "stochrsi": { const r=stochRsiCalc(d,pp.rsiLen,pp.stochLen,pp.k,pp.d); S[0].setData(r.k); S[1].setData(r.d); break; }
+      case "cci": S[0].setData(cciCalc(d,pp.length)); break;
+      case "willr": S[0].setData(willrCalc(d,pp.length)); break;
+      case "mom": S[0].setData(pair(d,(()=>{const a=srcArr(d,pp.src),o=new Array(a.length).fill(null);for(let i=pp.length;i<a.length;i++)o[i]=a[i]-a[i-pp.length];return o;})())); break;
+      case "roc": S[0].setData(rocCalc(d,pp.length,pp.src)); break;
+      case "ao": S[0].setData(hist(aoMomColor(aoCalc(d,pp.fast,pp.slow)))); break;
+      case "ac": S[0].setData(hist(aoMomColor(acCalc(d)))); break;
+      case "uo": S[0].setData(uoCalc(d,pp.l1,pp.l2,pp.l3)); break;
+      case "trix": { const r=trixCalc(d,pp.length,pp.signal); S[0].setData(r.trix); S[1].setData(r.signal); break; }
+      case "cmo": S[0].setData(cmoCalc(d,pp.length,pp.src)); break;
+      case "dpo": S[0].setData(dpoCalc(d,pp.length,pp.src)); break;
+      case "fisher": S[0].setData(fisherCalc(d,pp.length)); break;
+      case "bop": S[0].setData(bopCalc(d)); break;
+      case "coppock": S[0].setData(coppockCalc(d,pp.roc1,pp.roc2,pp.wma)); break;
+      // trend
+      case "adx": { const r=adxCalc(d,pp.di,pp.adx); S[0].setData(r.plus); S[1].setData(r.minus); S[2].setData(r.adx); break; }
+      case "aroon": { const r=aroonCalc(d,pp.length); S[0].setData(r.up); S[1].setData(r.dn); break; }
+      case "supertrend": S[0].setData(supertrendCalc(d,pp.atr,pp.factor)); break;
+      case "psar": S[0].applyOptions({lineWidth:1,lineStyle:0,pointMarkersVisible:true,lineVisible:false}); S[0].setData(psarCalc(d,pp.start,pp.step,pp.max)); break;
+      case "ichimoku": { const r=ichimokuCalc(d,pp.conv,pp.base,pp.spanB,pp.disp); S[0].setData(r.conv); S[1].setData(r.base); S[2].setData(r.spanA); S[3].setData(r.spanB); S[4].setData(r.lag); break; }
+      case "vortex": { const r=vortexCalc(d,pp.length); S[0].setData(r.plus); S[1].setData(r.minus); break; }
+      // volatility
+      case "bb": { const r=bbCalc2(d,pp.length,pp.mult,pp.src); S[0].setData(r.up); S[1].setData(r.mid); S[2].setData(r.lo); break; }
+      case "kc": { const r=kcCalc(d,pp.length,pp.mult,pp.atr); S[0].setData(r.up); S[1].setData(r.mid); S[2].setData(r.lo); break; }
+      case "donchian": { const r=donchianCalc(d,pp.length); S[0].setData(r.up); S[1].setData(r.mid); S[2].setData(r.lo); break; }
+      case "atr": S[0].setData(pair(d,rmaA(trA(d),pp.length))); break;
+      case "stdev": S[0].setData(stdevCalc(d,pp.length,pp.src)); break;
+      case "chop": S[0].setData(chopCalc(d,pp.length)); break;
+      case "bbw": S[0].setData(bbwCalc(d,pp.length,pp.mult,pp.src)); break;
+      // volume
+      case "volume": S[0].setData(d.map(b=>({time:b.time, value:b.volume||0, color: b.close>=b.open?"#26a69a88":"#ef535088"}))); break;
+      case "vwap": S[0].setData(vwapCalc(d)); break;
+      case "obv": S[0].setData(obvCalc(d)); break;
+      case "mfi": S[0].setData(mfiCalc(d,pp.length)); break;
+      case "adl": S[0].setData(adlCalc(d)); break;
+      case "cmf": S[0].setData(cmfCalc(d,pp.length)); break;
+      case "chaikin": S[0].setData(chaikinCalc(d,pp.fast,pp.slow)); break;
+      case "pvt": S[0].setData(pvtCalc(d)); break;
+      case "fi": S[0].setData(fiCalc(d,pp.length)); break;
+      // bill williams
+      case "alligator": { const r=alligatorCalc(d); S[0].setData(r.jaw); S[1].setData(r.teeth); S[2].setData(r.lips); break; }
+      case "fractals": { const r=fractalsCalc(d); const m=[...r.up,...r.dn].sort((a,b)=>a.time-b.time); try{ candle.setMarkers(mergeMarkers(m)); }catch(e){} break; }
+      case "pivots": { const r=pivotsCalc(d); S[0].setData(r.P); S[1].setData(r.R1); S[2].setData(r.S1); S[3].setData(r.R2); S[4].setData(r.S2); break; }
     }
   }catch(e){}
 }
+// AO/AC histogram colors are by rising/falling vs previous bar, not sign.
+function aoMomColor(arr){ return arr.map((p,i)=>({time:p.time, value:p.value})); }
+// Stochastic RSI: %K/%D of stochastic applied to RSI values.
+function stochRsiCalc(data,rsiLen,stochLen,kSmooth,dSmooth){
+  const rsi=rsiCalc(data,rsiLen,"close"); const map={}; rsi.forEach(p=>map[p.time]=p.value);
+  const r=data.map(d=>map[d.time]); const raw=new Array(data.length).fill(null);
+  for(let i=0;i<data.length;i++){ if(r[i]==null)continue; let hi=-Infinity,lo=Infinity,ok=true; for(let j=0;j<stochLen;j++){ const v=r[i-j]; if(v==null){ok=false;break;} hi=Math.max(hi,v); lo=Math.min(lo,v);} if(ok&&hi!==lo) raw[i]=(r[i]-lo)/(hi-lo)*100; else if(ok) raw[i]=0; }
+  const kA=smaA(raw.map(v=>v==null?0:v),kSmooth).map((v,i)=>raw[i]==null?null:v);
+  const dA=smaA(kA.map(v=>v==null?0:v),dSmooth).map((v,i)=>kA[i]==null?null:v);
+  return { k:pair(data,kA), d:pair(data,dA) }; }
+// Fractals are series markers; keep them additive with any other markers later.
+let _fractalMarkers=[];
+function mergeMarkers(m){ _fractalMarkers=m; return m; }
 function renderAllIndicators(){ indicators.forEach(renderIndicator); }
 function layoutPanes(){
   const subs=indicators.filter(i=>i.pane==="sub").length;
@@ -2186,11 +2508,17 @@ function layoutPanes(){
   if(window.requestAnimationFrame){ requestAnimationFrame(()=>{ apply(); requestAnimationFrame(redraw); }); }
   else setTimeout(apply,0);
 }
+// summarise the user-facing params for the legend (skip color/internal keys)
+function indParamSummary(ind){
+  return Object.entries(ind.params).filter(e=>!["color","src"].includes(e[0])).map(e=>e[1]).join(", ");
+}
 function renderIndLegend(){
   const box=document.getElementById("indLegend"); box.innerHTML="";
+  // overlay indicators show in the on-chart legend; sub-pane ones get their gear
+  // in the pane label (added in buildIndicatorSeries) so we list only main here.
   indicators.filter(i=>i.pane==="main").forEach(ind=>{
     const row=document.createElement("div"); row.className="indrow";
-    const params=Object.entries(ind.params).filter(e=>e[0]!=="color").map(e=>e[1]).join(", ");
+    const params=indParamSummary(ind);
     row.innerHTML='<span class="nm" style="color:'+(ind.params.color||"#d1d4dc")+'">'+ind.name+(params?" ("+params+")":"")+'</span><span class="gear" title="Settings">⚙</span><span class="x" title="Remove">×</span>';
     row.querySelector(".gear").onclick=()=>openIndicatorSettings(ind.id);
     row.querySelector(".x").onclick=()=>removeIndicator(ind.id);
@@ -2203,31 +2531,47 @@ function toggleIndicatorsMenu(force){
   if(open){
     m.innerHTML='<div class="ph">Indicators <span class="cl" id="indClose">×</span></div><input class="search" id="indSearch" placeholder="Search…"><div class="pb" id="indList"></div>';
     const list=m.querySelector("#indList");
-    const fill=(q)=>{ q=q||""; list.innerHTML=""; IND_CATALOG.filter(c=>c.name.toLowerCase().includes(q.toLowerCase())).forEach(c=>{
-      const it=document.createElement("div"); it.className="pi";
-      it.innerHTML='<span>'+c.name+'</span><span class="meta">'+(c.pane==="main"?"overlay":"separate pane")+'</span>';
-      it.onclick=()=>addIndicator(c.type); list.appendChild(it); }); };
+    const fill=(q)=>{
+      q=(q||"").toLowerCase(); list.innerHTML="";
+      const cats=[...new Set(IND_CATALOG.map(c=>c.cat))];
+      cats.forEach(cat=>{
+        const items=IND_CATALOG.filter(c=>c.cat===cat && (c.name.toLowerCase().includes(q)||cat.toLowerCase().includes(q)));
+        if(!items.length) return;
+        const h=document.createElement("div"); h.className="indcat"; h.textContent=cat; list.appendChild(h);
+        items.forEach(c=>{
+          const it=document.createElement("div"); it.className="pi";
+          it.innerHTML='<span>'+c.name+'</span><span class="meta">'+(c.pane==="main"?"overlay":"pane")+'</span>';
+          it.onclick=()=>addIndicator(c.type); list.appendChild(it);
+        });
+      });
+      if(!list.children.length) list.innerHTML='<div class="pi" style="color:var(--muted)">No matches</div>';
+    };
     fill();
     m.querySelector("#indSearch").oninput=e=>fill(e.target.value);
     m.querySelector("#indClose").onclick=()=>toggleIndicatorsMenu(false);
     m.classList.add("open");
   } else m.classList.remove("open");
 }
+const FLOAT_PARAMS=new Set(["mult","factor","offset","sigma","start","step","max","pct"]);
 function openIndicatorSettings(id){
   const ind=indicators.find(i=>i.id===id); if(!ind) return;
   const fields=Object.entries(ind.params).map(e=>{ const k=e[0],v=e[1];
-    if(k==="color") return '<div class="field"><label>'+k+'</label><input type="color" id="ip_'+k+'" value="'+toHex(v)+'"></div>';
-    return '<div class="field"><label>'+k+'</label><input type="number" id="ip_'+k+'" value="'+v+'" step="'+(k==="mult"?0.1:1)+'"></div>';
+    if(k==="color") return '<div class="field"><label>Color</label><input type="color" id="ip_'+k+'" value="'+toHex(v)+'"></div>';
+    if(k==="src")   return '<div class="field"><label>Source</label><select id="ip_'+k+'">'+SRC_OPTS.map(o=>'<option value="'+o+'" '+(o===v?"selected":"")+'>'+o+'</option>').join("")+'</select></div>';
+    const step=FLOAT_PARAMS.has(k)?0.01:1;
+    return '<div class="field"><label>'+k+'</label><input type="number" id="ip_'+k+'" value="'+v+'" step="'+step+'"></div>';
   }).join("");
   dlg.innerHTML='<div class="dh"><span>'+ind.name+' settings</span><span class="cl" id="dlgClose">×</span></div><div class="db">'+fields+'</div><div class="df"><button class="btn ghost" id="dlgCancel">Cancel</button><button class="btn primary" id="dlgOk">OK</button></div>';
   dlg.classList.add("open"); backdrop.classList.add("open");
-  const apply=()=>{ Object.keys(ind.params).forEach(k=>{ const el=document.getElementById("ip_"+k); if(!el)return; ind.params[k]= el.type==="color"?el.value:+el.value; });
-    if(ind.params.color && ind.pane==="main"){
-      // BB has 3 line series; single-line indicators have 1 — recolor all of them
-      ind.series.forEach(s=>{ try{ s.applyOptions({color:ind.params.color}); }catch(e){} });
+  const apply=()=>{ Object.keys(ind.params).forEach(k=>{ const el=document.getElementById("ip_"+k); if(!el)return;
+      ind.params[k]= el.type==="color"?el.value : (k==="src"?el.value:+el.value); });
+    if(ind.params.color){
+      // recolor every line series of single-color indicators; banded/multi keep their fixed palette
+      if(["bb","kc","donchian","envel"].includes(ind.type)) ind.series.forEach(s=>{ try{s.applyOptions({color:ind.params.color});}catch(e){} });
+      else if(ind.series[0]) { try{ ind.series[0].applyOptions({color:ind.params.color}); }catch(e){} }
     }
     renderIndicator(ind); renderIndLegend(); };
-  dlg.querySelectorAll("input").forEach(el=>el.addEventListener("input",apply));
+  dlg.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",apply));
   document.getElementById("dlgOk").onclick=()=>{ apply(); closeDlg(); };
   document.getElementById("dlgCancel").onclick=closeDlg;
   document.getElementById("dlgClose").onclick=closeDlg;
