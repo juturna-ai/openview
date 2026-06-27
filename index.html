@@ -207,6 +207,13 @@
 
   /* ── Create-alert dialog (TradingView-style) ── */
   .alertdlg{width:440px;}
+  /* Freeview Script editor */
+  .scriptdlg{width:600px;}
+  .scriptdlg textarea{width:100%; height:300px; resize:vertical; font-family:'SF Mono',Menlo,Consolas,monospace;
+    font-size:12px; line-height:1.5; background:#0e1117; color:#d1d4dc; border:1px solid var(--border);
+    border-radius:6px; padding:10px; outline:none; tab-size:2;}
+  .scriptdlg textarea:focus{border-color:var(--accent);}
+  #scriptLegend{display:flex; flex-direction:column; gap:2px; margin-top:2px;}
   .alertdlg .dh .sym{display:inline-flex;align-items:center;gap:6px;font-weight:700;}
   .alertdlg .arow{display:flex;align-items:flex-start;gap:14px;padding:6px 0;}
   .alertdlg .arow > .alabel{width:92px;flex:none;font-size:13px;color:var(--muted);padding-top:7px;}
@@ -254,6 +261,7 @@
       <!-- Price-scale mode toggle: Normal → Log → Percent -->
       <button class="tbtn" id="btnScale" title="Price scale: Normal / Log / Percent">⤢ Auto</button>
       <button class="tbtn" id="btnIndicators">⊞ Indicators</button>
+      <button class="tbtn" id="btnScript" title="Write a custom indicator (Freeview Script)">ƒ Script</button>
       <button class="tbtn" id="btnAlert" title="Click: create alert · Right-click: manage alerts">🔔 Alert</button>
       <span id="maLegend"></span>
       <span id="ohlc"></span>
@@ -277,6 +285,7 @@
   <div id="alertsPanel" class="panel"></div>
   <div id="settingsDlg" class="dialog"></div>
   <div id="alertDlg" class="dialog alertdlg"></div>
+  <div id="scriptDlg" class="dialog scriptdlg"></div>
   <div id="dlgBackdrop"></div>
 
   <div id="watchlist">
@@ -692,8 +701,9 @@ function renderData(data, keepView){
   if(r.length)  document.getElementById("rsiVal").textContent   = r[r.length-1].value.toFixed(2);
   if(rm.length) document.getElementById("rsiMaVal").textContent = rm[rm.length-1].value.toFixed(2);
 
-  // user indicators + alerts (engine defined later in file; guard for first paint)
+  // user indicators + custom scripts + alerts (engine defined later in file; guard for first paint)
   if(typeof renderAllIndicators==="function") renderAllIndicators();
+  if(typeof renderAllScripts==="function") renderAllScripts();
   if(typeof checkAlerts==="function") checkAlerts();
 
   // Snap to the most recent ~420 bars on a fresh load, re-snapping as each
@@ -833,6 +843,7 @@ function buildWatchlist(){
         document.querySelectorAll(`.row[data-sym="${cssEsc(sym)}"]`).forEach(r=>r.classList.add("active"));
         if(typeof loadPersisted==="function") loadPersisted();   // drawings are per symbol+tf
         if(typeof loadAlerts==="function") loadAlerts();         // alerts are per symbol
+        if(typeof loadScripts==="function") loadScripts();       // custom scripts are per symbol
         loadChart(sym, activeTF);
       };
       row.querySelector(".del").onclick = (e)=>{ e.stopPropagation(); removeSymbol(g.name, sym); };
@@ -867,6 +878,7 @@ function removeSymbol(groupName, sym){
       activeSymbol = next;
       if(typeof loadPersisted==="function") loadPersisted();
       if(typeof loadAlerts==="function") loadAlerts();
+      if(typeof loadScripts==="function") loadScripts();
       loadChart(next, activeTF);
     }
   }
@@ -970,6 +982,7 @@ function removeGroup(name){
       activeSymbol = next;
       if(typeof loadPersisted==="function") loadPersisted();
       if(typeof loadAlerts==="function") loadAlerts();
+      if(typeof loadScripts==="function") loadScripts();
       loadChart(next, activeTF);
     }
   }
@@ -2938,6 +2951,193 @@ function openIndicatorSettings(id){
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  FREEVIEW SCRIPT  — sandboxed custom-indicator mini-language
+//  A pragmatic, Pine-flavored scripting layer. The user writes a JS body
+//  with curated series inputs (close/open/.../volume) + a `ta.*` library +
+//  plot()/plotHist() calls. We run it against the current bars, collect
+//  the plots, and render them as their own series (main overlay or sub
+//  pane). Scripts persist per-symbol so they survive reloads.
+//  Security note: this is a local single-file app evaluating the user's
+//  OWN code on their OWN machine. We still sandbox via new Function with
+//  only the curated API in scope (no window/fetch/localStorage) and wrap
+//  every run in try/catch so a bad script can't break the app.
+// ════════════════════════════════════════════════════════════════════
+const scripts = [];          // {id,name,code,plots:[{series,pane,...}],subChart,paneEl,...}
+let scriptUid = 1;
+const SCRIPTS_KEY = ()=>"fv_scripts_"+activeSymbol;
+
+const DEFAULT_SCRIPT =
+`// Freeview Script — write a custom indicator.
+// Inputs (arrays aligned to bars): open, high, low, close, volume, hl2, hlc3, ohlc4
+// Library: ta.sma/ema/wma/rma/rsi/atr/stdev/highest/lowest/change/roc/
+//          crossover/crossunder/cross  ·  Math.*  ·  na (=NaN)
+// Output:  plot(array, {color, pane, width})  ·  plotHist(array, {pane})
+//
+// Example: a fast/slow EMA cross with a momentum histogram.
+const fast = ta.ema(close, 12);
+const slow = ta.ema(close, 26);
+plot(fast, { color:"#26a69a", pane:"main", width:2 });
+plot(slow, { color:"#ef5350", pane:"main", width:2 });
+plotHist(ta.change(close), { pane:"sub" });`;
+
+// The `ta` library operates on number[] aligned to bars, reusing the Wave-1
+// array primitives where possible. Returns null-padded arrays (null = no value).
+function makeTA(data){
+  const closeArr=data.map(d=>d.close);
+  return {
+    sma:(a,n)=>smaA(a,n), ema:(a,n)=>emaA(a,n), wma:(a,n)=>wmaA(a,n), rma:(a,n)=>rmaA(a,n),
+    stdev:(a,n)=>stdevA(a,n), highest:(a,n)=>highestA(a,n), lowest:(a,n)=>lowestA(a,n),
+    rsi:(n=14)=>{ const r=rsiCalc(data,n,"close"); const map={}; r.forEach(p=>map[p.time]=p.value); return data.map(d=> map[d.time]==null?null:map[d.time]); },
+    atr:(n=14)=>{ const r=rmaA(trA(data),n); return r; },
+    change:(a,n=1)=>a.map((v,i)=> (i>=n&&a[i-n]!=null&&v!=null)?v-a[i-n]:null),
+    roc:(a,n=1)=>a.map((v,i)=> (i>=n&&a[i-n])?((v-a[i-n])/a[i-n])*100:null),
+    crossover:(a,b)=>a.map((v,i)=> (i>0&&a[i-1]!=null&&b[i-1]!=null&&v!=null&&b[i]!=null)?(a[i-1]<=b[i-1]&&v>b[i]?1:0):0),
+    crossunder:(a,b)=>a.map((v,i)=> (i>0&&a[i-1]!=null&&b[i-1]!=null&&v!=null&&b[i]!=null)?(a[i-1]>=b[i-1]&&v<b[i]?1:0):0),
+    cross:(a,b)=>a.map((v,i)=> (i>0)?((a[i-1]-b[i-1])*(v-b[i])<0?1:0):0),
+  };
+}
+// Compile + run a script body, returning collected plots or throwing on error.
+function runScript(code, data){
+  const plots=[];
+  const o=data.map(d=>d.open), h=data.map(d=>d.high), l=data.map(d=>d.low),
+        c=data.map(d=>d.close), v=data.map(d=>d.volume||0);
+  const hl2=data.map(d=>(d.high+d.low)/2), hlc3=data.map(d=>(d.high+d.low+d.close)/3),
+        ohlc4=data.map(d=>(d.open+d.high+d.low+d.close)/4);
+  const ta=makeTA(data);
+  const plot=(arr,opts={})=>plots.push({kind:"line", arr, color:opts.color||"#2962ff", pane:opts.pane||"main", width:opts.width||2, title:opts.title});
+  const plotHist=(arr,opts={})=>plots.push({kind:"hist", arr, color:opts.color||"#26a69a", pane:opts.pane||"sub", title:opts.title});
+  // Build a function with ONLY the curated API in scope. We can't fully sandbox
+  // arbitrary JS, but we SHADOW the dangerous globals so a casual script can't
+  // reach the network / storage / DOM. (This is the user's own code on their own
+  // machine; the shadow is a guard-rail, not a true security boundary.) Strict
+  // mode also blocks implicit global writes.
+  //  · Most globals are shadowed as undefined PARAMETERS.
+  //  · `eval`/`arguments` can't be rebound under strict mode at all, so we reject
+  //    any script that references them at the source level instead.
+  //  · reserved words (import/export) aren't usable in new Function() anyway.
+  if(/\b(eval|arguments)\b/.test(code)) throw new Error("eval / arguments are not allowed in Freeview Script");
+  const BLOCKED=["window","document","globalThis","self","top","parent","frames",
+    "fetch","XMLHttpRequest","WebSocket","EventSource","localStorage","sessionStorage",
+    "indexedDB","caches","navigator","location","history","Function",
+    "setTimeout","setInterval","requestAnimationFrame","postMessage","Worker"];
+  const params=["open","high","low","close","volume","hl2","hlc3","ohlc4","time","ta","plot","plotHist","Math","na",...BLOCKED];
+  const args=[o,h,l,c,v,hl2,hlc3,ohlc4,data.map(d=>d.time),ta,plot,plotHist,Math,NaN,...BLOCKED.map(()=>undefined)];
+  const fn=new Function(...params, '"use strict";\n'+code);
+  fn(...args);
+  return plots;
+}
+// Attach time stamps, dropping null/NaN, for LWC setData.
+function scriptPair(data,arr){ const out=[]; for(let i=0;i<arr.length;i++){ const x=arr[i]; if(x!=null&&isFinite(x)) out.push({time:data[i].time,value:x}); } return out; }
+
+function addScript(name,code){
+  const sc={ id:"sc"+(scriptUid++), name:name||("Script "+scriptUid), code, plots:[], series:[], subChart:null, paneEl:null };
+  scripts.push(sc); renderScript(sc); saveScripts(); renderScriptLegend();
+}
+function removeScript(id){
+  const i=scripts.findIndex(s=>s.id===id); if(i<0) return; const sc=scripts[i];
+  sc.series.forEach(s=>{ try{ (sc.subChart||chart).removeSeries(s); }catch(e){} });
+  if(sc.syncMain){ try{ chart.timeScale().unsubscribeVisibleLogicalRangeChange(sc.syncMain);}catch(e){} }
+  if(sc.subChart){ try{ sc.subChart.remove(); }catch(e){} if(sc.paneEl) sc.paneEl.remove(); }
+  scripts.splice(i,1); saveScripts(); renderScriptLegend(); layoutPanes();
+}
+// (Re)build a script's series from its current plots. Called on add, edit, and
+// every data refresh so custom indicators stay live like built-ins.
+function renderScript(sc){
+  const d=lastData; if(!d.length) return;
+  let plots;
+  try{ plots=runScript(sc.code,d); sc.error=null; }
+  catch(e){ sc.error=e.message; renderScriptLegend(); return; }
+  // tear down old series (plot count/pane can change between edits)
+  sc.series.forEach(s=>{ try{ (sc.subChart||chart).removeSeries(s); }catch(e){} });
+  sc.series=[];
+  const needSub=plots.some(p=>p.pane==="sub");
+  if(needSub && !sc.subChart){
+    const wrap=document.getElementById("subPanes");
+    const el=document.createElement("div"); el.className="subpane";
+    const label=document.createElement("div"); label.className="subLabel"; label.textContent="ƒ "+sc.name;
+    const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeScript(sc.id);
+    const edit=document.createElement("span"); edit.className="subClose"; edit.textContent="✎"; edit.title="Edit script"; edit.onclick=()=>openScriptEditor(sc.id);
+    label.appendChild(edit); label.appendChild(close); el.appendChild(label); wrap.appendChild(el); sc.paneEl=el;
+    const sChart=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc"},
+      grid:{vertLines:{color:"#1e222d"},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39"},
+      timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false}, crosshair:{mode:0} });
+    sc.subChart=sChart; let syncing=false;
+    sc.syncMain=r=>{ if(r&&!syncing){ syncing=true; try{sChart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(sc.syncMain);
+    sChart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r&&!syncing){ syncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } });
+    setTimeout(()=>{ try{ sChart.applyOptions({width:el.clientWidth,height:el.clientHeight}); }catch(e){} },0);
+  } else if(!needSub && sc.subChart){
+    try{ sc.subChart.remove(); }catch(e){} if(sc.paneEl) sc.paneEl.remove(); sc.subChart=null; sc.paneEl=null;
+  }
+  plots.forEach(p=>{
+    const tgt = p.pane==="sub" ? sc.subChart : chart;
+    if(!tgt) return;
+    const s = p.kind==="hist"
+      ? tgt.addHistogramSeries({ color:p.color, priceLineVisible:false })
+      : tgt.addLineSeries({ color:p.color, lineWidth:p.width, priceLineVisible:false, lastValueVisible:p.pane==="main" });
+    s.setData(scriptPair(d,p.arr)); sc.series.push(s);
+  });
+  layoutPanes();
+}
+function renderAllScripts(){ scripts.forEach(renderScript); }
+function saveScripts(){ try{ localStorage.setItem(SCRIPTS_KEY(), JSON.stringify(scripts.map(s=>({name:s.name,code:s.code})))); }catch(e){} }
+function loadScripts(){
+  // tear down existing
+  [...scripts].forEach(s=>removeScript(s.id));
+  scripts.length=0;
+  try{ const raw=localStorage.getItem(SCRIPTS_KEY()); if(raw){ JSON.parse(raw).forEach(s=>addScript(s.name,s.code)); } }catch(e){}
+  renderScriptLegend();
+}
+// Small legend chip per script under the indicator legend, with edit / remove.
+function renderScriptLegend(){
+  let box=document.getElementById("scriptLegend");
+  if(!box){ box=document.createElement("div"); box.id="scriptLegend"; const il=document.getElementById("indLegend"); il.parentNode.insertBefore(box,il.nextSibling); }
+  box.innerHTML="";
+  scripts.forEach(sc=>{
+    const row=document.createElement("div"); row.className="indrow";
+    row.innerHTML='<span class="nm" style="color:#80cbc4">ƒ '+escHtml(sc.name)+'</span>'+
+      (sc.error?'<span class="vals" style="color:#ef5350" title="'+escHtml(sc.error)+'">⚠ error</span>':'')+
+      '<span class="gear" title="Edit">✎</span><span class="x" title="Remove">×</span>';
+    row.querySelector(".gear").onclick=()=>openScriptEditor(sc.id);
+    row.querySelector(".x").onclick=()=>removeScript(sc.id);
+    box.appendChild(row);
+  });
+}
+// Pine-style editor dialog (new script when id is null, else edit existing).
+function openScriptEditor(id){
+  const sc = id ? scripts.find(s=>s.id===id) : null;
+  scriptDlg.innerHTML=`
+    <div class="dh"><span>${sc?"Edit":"New"} Freeview Script</span><span class="cl" id="scClose">×</span></div>
+    <div class="db" style="gap:8px;">
+      <input type="text" id="sc_name" class="search" style="margin:0;" placeholder="Script name" value="${sc?escHtml(sc.name):'My Script'}">
+      <textarea id="sc_code" spellcheck="false">${escHtml(sc?sc.code:DEFAULT_SCRIPT)}</textarea>
+      <div id="sc_err" class="hint" style="color:#ef5350; min-height:14px;"></div>
+    </div>
+    <div class="df">
+      ${sc?'<button class="btn ghost" id="scDel">Delete</button>':''}
+      <button class="btn ghost" id="scCancel">Cancel</button>
+      <button class="btn primary" id="scOk">${sc?"Apply":"Add"}</button>
+    </div>`;
+  scriptDlg.classList.add("open"); backdrop.classList.add("open");
+  const $=x=>scriptDlg.querySelector("#"+x);
+  const errBox=$("sc_err");
+  // live validity check as the user types (compile + dry-run on current data)
+  const validate=()=>{ const code=$("sc_code").value;
+    try{ if(lastData.length) runScript(code,lastData.slice(0,Math.min(lastData.length,60))); errBox.textContent=""; return true; }
+    catch(e){ errBox.textContent="⚠ "+e.message; return false; } };
+  $("sc_code").addEventListener("input",validate); validate();
+  const commit=()=>{ const name=$("sc_name").value.trim()||"Script"; const code=$("sc_code").value;
+    if(sc){ sc.name=name; sc.code=code; renderScript(sc); }
+    else addScript(name,code);
+    saveScripts(); renderScriptLegend(); closeScriptDlg(); };
+  $("scOk").onclick=commit;
+  $("scCancel").onclick=closeScriptDlg;
+  $("scClose").onclick=closeScriptDlg;
+  if($("scDel")) $("scDel").onclick=()=>{ removeScript(sc.id); closeScriptDlg(); };
+}
+function closeScriptDlg(){ scriptDlg.classList.remove("open"); backdrop.classList.remove("open"); }
+
+// ════════════════════════════════════════════════════════════════════
 //  ALERTS
 // ════════════════════════════════════════════════════════════════════
 const alerts=[];
@@ -3147,9 +3347,10 @@ function renderAlertsPanel(){
 }
 
 document.getElementById("btnIndicators").onclick=()=>toggleIndicatorsMenu();
+document.getElementById("btnScript").onclick=()=>openScriptEditor(null);              // ƒ → new custom-indicator script
 document.getElementById("btnAlert").onclick=()=>openAlertDialog({});                  // bell → create alert (TradingView)
 document.getElementById("btnAlert").addEventListener("contextmenu", e=>{ e.preventDefault(); toggleAlertsPanel(); });  // right-click → manage list
-function closeAllPopups(){ hideCtx(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); closeDlg(); closeAlertDlg(); }
+function closeAllPopups(){ hideCtx(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); closeDlg(); closeAlertDlg(); closeScriptDlg(); }
 
 // ── Watchlist: add-section affordances ──
 document.getElementById("wlAdd").onclick = ()=>addGroup(null);
@@ -3165,6 +3366,7 @@ buildWatchlist();
 installHoverTracker();     // lets crosshair mode select/edit shapes while still panning
 loadPersisted();           // restore saved drawings for current symbol+tf
 loadAlerts();              // restore saved alerts for current symbol
+loadScripts();             // restore saved custom indicator scripts for current symbol
 loadChart(activeSymbol, activeTF);
 resize();
 sizeCanvas();
