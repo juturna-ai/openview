@@ -243,6 +243,16 @@
           <div class="tf-menu" id="tfMenu"><!-- built by JS from TF{} --></div>
         </div>
       </div>
+      <!-- Chart-type selector (reuses the timeframe dropdown styling) -->
+      <div class="tf-sel" id="ctSel" title="Chart type">
+        <div class="tf-sel-btn" id="ctSelBtn">
+          <span class="tf-sel-label" id="ctSelLabel">⬚ Candles</span>
+          <span class="caret">▾</span>
+        </div>
+        <div class="tf-menu" id="ctMenu"><!-- built by JS from CHART_TYPES --></div>
+      </div>
+      <!-- Price-scale mode toggle: Normal → Log → Percent -->
+      <button class="tbtn" id="btnScale" title="Price scale: Normal / Log / Percent">⤢ Auto</button>
       <button class="tbtn" id="btnIndicators">⊞ Indicators</button>
       <button class="tbtn" id="btnAlert" title="Click: create alert · Right-click: manage alerts">🔔 Alert</button>
       <span id="maLegend"></span>
@@ -340,6 +350,70 @@ const candle = chart.addCandlestickSeries({
   upColor:"#26a69a", downColor:"#ef5350", borderVisible:false,
   wickUpColor:"#26a69a", wickDownColor:"#ef5350",
 });
+
+// ── Chart type + scale ──────────────────────────────────────────────
+// `candle` stays the canonical OHLC + coordinate anchor (every coord helper and
+// the crosshair legend reference it). For non-candle styles we hide the candle
+// series and feed an auxiliary series of the chosen type that shares the same
+// price scale, so coordinates and drawings still line up. Heikin Ashi / Hollow
+// are just the candle series with transformed data / per-bar colors.
+let chartType = "candles";   // candles|hollow|heikin|bars|line|area|baseline
+let scaleMode = 0;           // 0 Normal · 1 Log · 2 Percentage
+const aux = {};              // lazily-created auxiliary series keyed by type
+function auxSeries(type){
+  if(aux[type]) return aux[type];
+  if(type==="line")     aux[type]=chart.addLineSeries({ color:"#2962ff", lineWidth:2, priceLineVisible:true, lastValueVisible:true });
+  else if(type==="area")aux[type]=chart.addAreaSeries({ lineColor:"#2962ff", topColor:"rgba(41,98,255,0.30)", bottomColor:"rgba(41,98,255,0.02)", lineWidth:2 });
+  else if(type==="baseline") aux[type]=chart.addBaselineSeries({ baseValue:{type:"price",price:0}, topLineColor:"#26a69a", bottomLineColor:"#ef5350", topFillColor1:"rgba(38,166,154,0.20)", bottomFillColor1:"rgba(239,83,80,0.20)" });
+  else if(type==="bars") aux[type]=chart.addBarSeries({ upColor:"#26a69a", downColor:"#ef5350", thinBars:false });
+  return aux[type];
+}
+// Heikin Ashi transform: HA-Close=(O+H+L+C)/4; HA-Open=(prevHAO+prevHAC)/2;
+// HA-High=max(H,HAO,HAC); HA-Low=min(L,HAO,HAC). First bar bootstrap uses raw O/C.
+function heikinAshi(data){
+  const out=[]; let pO=null,pC=null;
+  for(const b of data){
+    const c=(b.open+b.high+b.low+b.close)/4;
+    const o=(pO==null)?(b.open+b.close)/2:(pO+pC)/2;
+    const h=Math.max(b.high,o,c), l=Math.min(b.low,o,c);
+    out.push({time:b.time, open:o, high:h, low:l, close:c}); pO=o; pC=c;
+  }
+  return out;
+}
+// Hollow candles: hollow body on an up-close (close≥open), filled on a down-close;
+// colored green/red by the bar vs the previous close (TradingView convention).
+function hollowData(data){
+  return data.map((b,i)=>{
+    const prev=i>0?data[i-1].close:b.open;
+    const col=(b.close>=prev)?"#26a69a":"#ef5350";
+    return { time:b.time, open:b.open, high:b.high, low:b.low, close:b.close,
+      color: b.close>=b.open ? "rgba(0,0,0,0)" : col,   // hollow when close≥open
+      borderColor:col, wickColor:col };
+  });
+}
+// Route the current data into whatever representation chartType selects.
+function applyChartType(data){
+  const d = data || lastData;
+  const showCandle = (chartType==="candles"||chartType==="hollow"||chartType==="heikin");
+  candle.applyOptions({ visible:showCandle });
+  Object.entries(aux).forEach(([k,s])=> s.applyOptions({ visible: k===chartType }));
+  if(!d || !d.length) return;
+  if(chartType==="heikin")      candle.setData(heikinAshi(d));
+  else if(chartType==="hollow") candle.setData(hollowData(d));
+  else if(showCandle)           candle.setData(d);   // plain candles
+  else {
+    candle.setData(d);  // keep candle data (invisible) so coordinates stay valid
+    const s=auxSeries(chartType);
+    if(chartType==="bars") s.setData(d.map(b=>({time:b.time,open:b.open,high:b.high,low:b.low,close:b.close})));
+    else if(chartType==="baseline"){
+      const base=d.length?d[0].close:0;
+      s.applyOptions({ baseValue:{type:"price",price:base} });
+      s.setData(d.map(b=>({time:b.time,value:b.close})));
+    } else s.setData(d.map(b=>({time:b.time,value:b.close})));
+  }
+}
+function setChartType(t){ chartType=t; applyChartType(); if(typeof syncChartTypeUI==="function") syncChartTypeUI(); }
+function setScaleMode(m){ scaleMode=m; try{ chart.priceScale("right").applyOptions({ mode:m }); }catch(e){} if(typeof syncScaleUI==="function") syncScaleUI(); }
 
 // TradingView shows 7/25/99 MAs + SMA 150/200/300 — recreate all six.
 // MA colors matched to the TradingView screenshot:
@@ -591,8 +665,8 @@ function fmt(v){ return v>=100 ? v.toFixed(2) : v>=1 ? v.toFixed(3) : v.toPrecis
 // progressive page as well as on the final result, so the chart stays live
 // while history keeps deepening underneath it.
 function renderData(data, keepView){
-  candle.setData(data);
   lastData = data;                 // expose to the drawing engine (magnet/measure/extrapolation)
+  applyChartType(data);            // route into the active chart style (candles/HA/line/…)
   if(typeof redraw==="function") redraw();
 
   // moving averages
@@ -1104,6 +1178,42 @@ document.addEventListener("click", e=>{
 });
 
 syncTfUI();  // initialise label + highlight to the default activeTF
+
+
+// ── Chart-type dropdown ──────────────────────────────────────────────
+const CHART_TYPES = [
+  { key:"candles",  label:"Candles",      icon:"⬚" },
+  { key:"hollow",   label:"Hollow Candles",icon:"▢" },
+  { key:"heikin",   label:"Heikin Ashi",  icon:"◧" },
+  { key:"bars",     label:"Bars (OHLC)",  icon:"|" },
+  { key:"line",     label:"Line",         icon:"╱" },
+  { key:"area",     label:"Area",         icon:"◢" },
+  { key:"baseline", label:"Baseline",     icon:"≂" },
+];
+const ctSel=document.getElementById("ctSel"), ctSelBtn=document.getElementById("ctSelBtn"),
+      ctSelLabel=document.getElementById("ctSelLabel"), ctMenu=document.getElementById("ctMenu");
+ctMenu.innerHTML = CHART_TYPES.map(t=>`<div class="tf-opt" data-ct="${t.key}">${t.icon}&nbsp; ${t.label}</div>`).join("");
+function syncChartTypeUI(){
+  const t=CHART_TYPES.find(x=>x.key===chartType)||CHART_TYPES[0];
+  ctSelLabel.textContent = t.icon+" "+t.label;
+  ctMenu.querySelectorAll(".tf-opt").forEach(o=>o.classList.toggle("active", o.dataset.ct===chartType));
+}
+ctSelBtn.addEventListener("click", e=>{ e.stopPropagation();
+  ctSel.classList.toggle("open"); tfSel.classList.remove("open"); });
+ctMenu.addEventListener("click", e=>{ const o=e.target.closest(".tf-opt"); if(!o) return;
+  ctSel.classList.remove("open"); setChartType(o.dataset.ct); });
+document.addEventListener("click", e=>{ if(!e.target.closest("#ctSel")) ctSel.classList.remove("open"); });
+syncChartTypeUI();
+
+// ── Price-scale mode toggle (Normal → Log → Percent) ─────────────────
+const SCALE_MODES=[{m:0,label:"⤢ Auto"},{m:1,label:"㏒ Log"},{m:2,label:"% Percent"}];
+function syncScaleUI(){ const s=SCALE_MODES.find(x=>x.m===scaleMode)||SCALE_MODES[0];
+  const b=document.getElementById("btnScale"); if(b) b.textContent=s.label; }
+document.getElementById("btnScale").addEventListener("click", ()=>{
+  const idx=SCALE_MODES.findIndex(x=>x.m===scaleMode);
+  setScaleMode(SCALE_MODES[(idx+1)%SCALE_MODES.length].m);
+});
+syncScaleUI();
 
 
 // ════════════════════════════════════════════════════════════════════
