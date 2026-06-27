@@ -1344,6 +1344,31 @@ function yToPrice(y){
   const f=priceFit(); if(!f) return null;
   return f.p1 + (y-f.y1)*f.slope;
 }
+
+// Drive the chart's built-in crosshair from the overlay cursor so the crosshair
+// lines and the right-axis price tag + bottom-axis time tag follow the mouse
+// (TradingView behaviour). The overlay canvas otherwise eats the mousemove.
+// setCrosshairPosition() doesn't reliably fire subscribeCrosshairMove when driven
+// programmatically, so we also refresh the OHLC legend ourselves here.
+function updateCrosshair(p){
+  try{
+    const price=candle.coordinateToPrice(p.y);
+    const time=chart.timeScale().coordinateToTime(p.x);
+    if(price==null || time==null){ chart.clearCrosshairPosition(); return; }
+    chart.setCrosshairPosition(price, time, candle);
+    updateOhlcLegend(time);
+  }catch(e){}
+}
+// Show the OHLC of the bar nearest the crosshair time (or the hovered price when
+// past the last bar / between bars with no exact match).
+function updateOhlcLegend(time){
+  if(!lastData.length) return;
+  let best=lastData[0], bd=Infinity;
+  for(const b of lastData){ const d=Math.abs(b.time-time); if(d<bd){bd=d;best=b;} }
+  const col = best.close>=best.open ? "var(--green)":"var(--red)";
+  document.getElementById("ohlc").innerHTML =
+    `O<b>${fmt(best.open)}</b> H<b>${fmt(best.high)}</b> L<b>${fmt(best.low)}</b> C<b style="color:${col}">${fmt(best.close)}</b>`;
+}
 // Width (px) of the right price-axis gutter — the strip past the plot where the
 // candles don't render. Used to keep ray arrowheads off the axis price tag.
 function axisW(){
@@ -1504,6 +1529,10 @@ function finishOneClick(tool,c){
 dcanvas.addEventListener("mousemove", e=>{
   const p=evtPt(e), c=ptToCoord(p);
   draw.mouse=p;
+  // The overlay canvas hides the cursor from the chart, so its built-in crosshair
+  // (and the price/time axis tags) never move. Forward the cursor position so the
+  // crosshair + axis labels track it like TradingView.
+  updateCrosshair(p);
   if(downPt && Math.hypot(p.x-downPt.x, p.y-downPt.y)>3) downMoved=true;
 
   if(panState){ doPan(p); return; }                       // panning the chart (cross mode)
@@ -1525,6 +1554,13 @@ dcanvas.addEventListener("mousemove", e=>{
   const overTrash=alertTrashHit(p);
   dcanvas.style.cursor = (hit || overTrash || na) ? (hit&&hit.handle==="body"?"move":"pointer")
                        : (draw.tool==="cross"?(panState?"grabbing":"crosshair"):"crosshair");
+});
+
+// Hide the crosshair (and its axis tags) when the cursor leaves the chart.
+dcanvas.addEventListener("mouseleave", ()=>{
+  draw.mouse=null;
+  try{ chart.clearCrosshairPosition(); }catch(e){}
+  if(draw.hover||draw.alertHover){ draw.hover=null; draw.alertHover=null; redraw(); }
 });
 
 window.addEventListener("mouseup", e=>{
