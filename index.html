@@ -28,14 +28,38 @@
   .tool .badge{position:absolute; bottom:2px; right:3px; font-size:7px; color:var(--muted);}
   .tool-sep{width:24px; height:1px; background:var(--border); margin:4px 0;}
 
+  /* z-index must beat the always-interactive drawing canvas (#draw, z-index:100)
+     so toolbar dropdowns (timeframe menu etc.) that drop over the chart stay
+     clickable instead of being swallowed by the overlay. The bar is only the top
+     46px strip, so this never blocks chart pan/zoom gestures below it. */
   #topbar{position:absolute; top:0; left:44px; right:300px; height:46px; background:var(--bg);
-    border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; padding:0 12px; z-index:20;}
+    border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; padding:0 12px; z-index:120;}
   #symbolBox{font-weight:700; font-size:15px; letter-spacing:.3px; white-space:nowrap;}
   #symbolBox .exch{color:var(--muted); font-weight:400; font-size:12px; margin-left:6px;}
-  .tf-group{display:flex; gap:2px; margin-left:8px;}
+  /* ── Timeframe selector (TradingView-style sectioned dropdown) ── */
+  .tf-group{display:flex; align-items:center; gap:2px; margin-left:8px;}
   .tf{padding:5px 9px; font-size:12px; border-radius:4px; cursor:pointer; color:var(--muted); user-select:none;}
   .tf:hover{background:var(--hover); color:var(--text);}
   .tf.active{background:var(--accent); color:#fff;}
+  .tf-sel{position:relative;}
+  .tf-sel-btn{display:flex; align-items:center; gap:5px; padding:5px 9px; font-size:12px; font-weight:600;
+    border-radius:4px; cursor:pointer; color:var(--text); user-select:none; white-space:nowrap;}
+  .tf-sel-btn:hover{background:var(--hover);}
+  .tf-sel.open .tf-sel-btn{background:var(--hover);}
+  .tf-sel-btn .caret{font-size:9px; color:var(--muted); transition:transform .12s;}
+  .tf-sel.open .tf-sel-btn .caret{transform:rotate(180deg);}
+  .tf-menu{display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:60;
+    background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:4px;
+    min-width:150px; max-height:70vh; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,.5);}
+  .tf-sel.open .tf-menu{display:block;}
+  .tf-menu::-webkit-scrollbar{width:8px;}
+  .tf-menu::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
+  .tf-sec{font-size:10px; font-weight:700; letter-spacing:.6px; color:var(--muted);
+    text-transform:uppercase; padding:8px 10px 4px;}
+  .tf-opt{display:flex; align-items:center; padding:6px 10px; font-size:13px; border-radius:4px;
+    cursor:pointer; color:var(--text); user-select:none; white-space:nowrap;}
+  .tf-opt:hover{background:var(--hover);}
+  .tf-opt.active{background:var(--accent); color:#fff;}
   #maLegend{font-size:11px; margin-left:12px; white-space:nowrap;}
   #maLegend span{margin-right:8px;}
   #ohlc{font-size:11px; color:var(--muted); margin-left:10px; white-space:nowrap;}
@@ -58,16 +82,44 @@
   #wlHead{padding:10px 12px; font-size:13px; font-weight:600; border-bottom:1px solid var(--border);
     display:flex; align-items:center; justify-content:space-between;}
   #wlHead .sub{font-size:10px; color:var(--muted); font-weight:400;}
+  #wlAdd{cursor:pointer; color:var(--muted); font-size:16px; line-height:1; padding:2px 6px;
+    border-radius:4px; font-weight:400;}
+  #wlAdd:hover{color:#fff; background:var(--hover);}
   #wlCols{display:flex; padding:6px 12px 6px 14px; font-size:11px; color:var(--muted);
     border-bottom:1px solid var(--border);}
   #wlCols .c1{flex:1;} #wlCols .c2{width:78px; text-align:right;}
   #wlCols .c3{width:66px; text-align:right;} #wlCols .c4{width:54px; text-align:right;}
   #wlBody{flex:1; overflow-y:auto;}
   .section{padding:7px 12px 5px 14px; font-size:11px; color:var(--muted); background:transparent;
-    letter-spacing:.4px; border-bottom:1px solid rgba(42,46,57,.5);}
-  .row{display:flex; align-items:center; padding:6px 12px 6px 14px; cursor:pointer;}
+    letter-spacing:.4px; border-bottom:1px solid rgba(42,46,57,.5);
+    display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; position:relative;}
+  .section:hover{background:rgba(42,46,57,.35);}
+  .section .caret{font-size:9px; width:10px; flex-shrink:0; transition:transform .12s; color:var(--muted);}
+  .section.collapsed .caret{transform:rotate(-90deg);}
+  .section .gname{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  /* section trash: hidden until header hover, far right */
+  .section .gdel{display:none; align-items:center; justify-content:center; width:20px; height:20px;
+    border-radius:4px; color:var(--muted); cursor:pointer; flex-shrink:0;}
+  .section:hover .gdel{display:flex;}
+  .section .gdel:hover{color:var(--red); background:#2a2e39;}
+  .section .gdel svg{width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:1.6;
+    stroke-linecap:round; stroke-linejoin:round;}
+  /* section drop indicator (drag a symbol onto a collapsed/empty section header) */
+  .section.drop-into{box-shadow:inset 0 0 0 1px var(--accent);}
+  .row{display:flex; align-items:center; padding:6px 12px 6px 14px; cursor:pointer; position:relative;}
   .row:hover{background:var(--hover);}
   .row.active{background:#1c2c4a;}
+  .row.dragging{opacity:.4;}
+  .row.drop-above{box-shadow:inset 0 2px 0 0 var(--accent);}
+  .row.drop-below{box-shadow:inset 0 -2px 0 0 var(--accent);}
+  /* trash button: hidden until row hover, sits over the change columns at the right edge */
+  .row .del{position:absolute; right:8px; top:50%; transform:translateY(-50%);
+    width:22px; height:22px; border-radius:4px; display:none; align-items:center;
+    justify-content:center; color:var(--muted); background:#1e222dcc; cursor:pointer; z-index:2;}
+  .row:hover .del{display:flex;}
+  .row .del:hover{color:var(--red); background:#2a2e39;}
+  .row .del svg{width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.6;
+    stroke-linecap:round; stroke-linejoin:round;}
   .row .sym{flex:1; display:flex; align-items:center; gap:9px; min-width:0;}
   .row .sym .nm{font-size:13px; font-weight:500; color:#d1d4dc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .row .ic{width:20px; height:20px; border-radius:50%; flex-shrink:0; object-fit:contain;
@@ -151,6 +203,26 @@
   .dialog .btn.primary{background:var(--accent); color:#fff;}
   .dialog .btn.ghost{background:transparent; color:#d1d4dc; border:1px solid var(--border);}
 
+  /* ── Create-alert dialog (TradingView-style) ── */
+  .alertdlg{width:440px;}
+  .alertdlg .dh .sym{display:inline-flex;align-items:center;gap:6px;font-weight:700;}
+  .alertdlg .arow{display:flex;align-items:flex-start;gap:14px;padding:6px 0;}
+  .alertdlg .arow > .alabel{width:92px;flex:none;font-size:13px;color:var(--muted);padding-top:7px;}
+  .alertdlg .actl{flex:1;display:flex;flex-direction:column;gap:8px;}
+  .alertdlg select, .alertdlg input[type=number], .alertdlg input[type=text], .alertdlg input[type=datetime-local]{
+    width:100%;padding:8px 10px;background:#131722;border:1px solid var(--border);border-radius:6px;
+    color:#d1d4dc;font-size:13px;outline:none;}
+  .alertdlg select:focus, .alertdlg input:focus{border-color:var(--accent);}
+  .alertdlg .twocol{display:flex;gap:8px;}
+  .alertdlg .twocol > *{flex:1;}
+  .alertdlg .addcond{color:var(--accent);font-size:13px;cursor:pointer;user-select:none;padding:2px 0;}
+  .alertdlg .addcond:hover{text-decoration:underline;}
+  .alertdlg .asep{height:1px;background:var(--border);margin:8px 0;}
+  .alertdlg .notif{display:flex;flex-wrap:wrap;gap:14px;}
+  .alertdlg .notif label{display:flex;align-items:center;gap:6px;font-size:13px;color:#d1d4dc;cursor:pointer;}
+  .alertdlg .notif input[type=checkbox]{width:auto;}
+  .alertdlg .hint{font-size:11px;color:var(--muted);}
+
   /* alert price lines drawn by lightweight-charts createPriceLine - styled inline */
 </style>
 </head>
@@ -161,25 +233,23 @@
     <div id="topbar">
       <span id="symbolBox"><span id="symName">NEAR-USD/INJ-USD</span><span class="exch">· Coinbase · <span id="tfName">1D</span></span></span>
       <div class="tf-group" id="tfGroup">
-        <span class="tf" data-i="1m">1m</span>
-        <span class="tf" data-i="5m">5m</span>
-        <span class="tf" data-i="15m">15m</span>
-        <span class="tf" data-i="1h">1H</span>
-        <span class="tf" data-i="4h">4H</span>
-        <span class="tf" data-i="6h">6H</span>
-        <span class="tf" data-i="12h">12H</span>
-        <span class="tf active" data-i="1d">1D</span>
-        <span class="tf" data-i="1w">1W</span>
+        <div class="tf-sel" id="tfSel">
+          <div class="tf-sel-btn" id="tfSelBtn">
+            <span class="tf-sel-label" id="tfSelLabel">1D</span>
+            <span class="caret">▾</span>
+          </div>
+          <div class="tf-menu" id="tfMenu"><!-- built by JS from TF{} --></div>
+        </div>
       </div>
       <button class="tbtn" id="btnIndicators">⊞ Indicators</button>
-      <button class="tbtn" id="btnAlert">🔔 Alert</button>
+      <button class="tbtn" id="btnAlert" title="Click: create alert · Right-click: manage alerts">🔔 Alert</button>
       <span id="maLegend"></span>
       <span id="ohlc"></span>
       <span id="status"><span class="dot"></span>Live · Coinbase API</span>
     </div>
     <div id="chartWrap" style="position:relative;">
       <div id="chart" style="position:absolute; inset:0;"></div>
-      <canvas id="draw" style="position:absolute; inset:0; pointer-events:auto; z-index:100;"></canvas>
+      <canvas id="draw" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:auto; z-index:100;"></canvas>
     </div>
     <div id="rsiWrap">
       <div id="rsiLabel">RSI 14 close <b id="rsiVal" style="color:#7e57c2">—</b> <b id="rsiMaVal" style="color:#e0a82e">—</b></div>
@@ -194,10 +264,11 @@
   <div id="indicatorsMenu" class="panel"></div>
   <div id="alertsPanel" class="panel"></div>
   <div id="settingsDlg" class="dialog"></div>
+  <div id="alertDlg" class="dialog alertdlg"></div>
   <div id="dlgBackdrop"></div>
 
   <div id="watchlist">
-    <div id="wlHead">comeback <span class="sub">▾</span></div>
+    <div id="wlHead"><span>comeback <span class="sub">▾</span></span><span id="wlAdd" title="Add section">＋</span></div>
     <div id="wlCols"><span class="c1">Symbol</span><span class="c2">Last</span><span class="c3">Chg</span><span class="c4">Chg%</span></div>
     <div id="wlBody"></div>
   </div>
@@ -209,7 +280,7 @@ const API = "https://api.exchange.coinbase.com";
 
 // Coinbase uses BASE-USD. Watchlist mirrors the TradingView "comeback" layout.
 // Symbols Coinbase doesn't list (XVG, XMR, NIL, DUSK) still appear but show "—".
-const GROUPS = [
+const DEFAULT_GROUPS = [
   { name:"SPREADS", symbols:["NEAR-USD/INJ-USD"] },
   { name:"MEME",    symbols:["BONK-USD"] },
   { name:"PRIVACY", symbols:["XVG-USD","DASH-USD","XMR-USD","NIL-USD","ZEC-USD","HYPE-USD"] },
@@ -219,7 +290,24 @@ const GROUPS = [
   { name:"BTC PAIRS", symbols:["ETH-BTC","SOL-BTC","LINK-BTC"] },
   { name:"SECTION 3", symbols:["ADA-USD","DOGE-USD","AVAX-USD","DOT-USD"] },
 ];
-const ALL = [...new Set(GROUPS.flatMap(g=>g.symbols))];
+
+// The watchlist layout is user-editable (drag to reorder, trash to remove) and
+// persisted, so GROUPS is mutable and ALL is recomputed from it on demand.
+const WL_KEY = "fv_watchlist";
+function loadGroups(){
+  try{
+    const raw = localStorage.getItem(WL_KEY);
+    if(raw){
+      const g = JSON.parse(raw);
+      // basic shape check; fall back to defaults if the stored value is junk
+      if(Array.isArray(g) && g.every(x=>x && Array.isArray(x.symbols))) return g;
+    }
+  }catch{}
+  return JSON.parse(JSON.stringify(DEFAULT_GROUPS));  // deep copy of defaults
+}
+let GROUPS = loadGroups();
+function saveGroups(){ try{ localStorage.setItem(WL_KEY, JSON.stringify(GROUPS)); }catch{} }
+function allSymbols(){ return [...new Set(GROUPS.flatMap(g=>g.symbols))]; }
 
 // Coin logos from CoinCap's free icon CDN (BASE symbol, lowercased).
 // ASTER isn't on CoinCap → falls back to a letter circle.
@@ -239,8 +327,11 @@ const common = {
   layout:{ background:{color:"#131722"}, textColor:"#d1d4dc" },
   grid:{ vertLines:{color:"#1e222d"}, horzLines:{color:"#1e222d"} },
   rightPriceScale:{ borderColor:"#2a2e39" },
-  timeScale:{ borderColor:"#2a2e39", timeVisible:true, secondsVisible:false },
+  timeScale:{ borderColor:"#2a2e39", timeVisible:true, secondsVisible:false, rightOffset:12 },
   crosshair:{ mode:0 },
+  // Pan + zoom are handled manually on the overlay canvas (dcanvas), which hides
+  // these gestures from the chart's built-in handlers, so disable them here.
+  handleScroll:false, handleScale:false,
 };
 const chart = LightweightCharts.createChart(chartEl, common);
 const candle = chart.addCandlestickSeries({
@@ -351,16 +442,18 @@ function maOfSeries(series, period){
 //   pages  = how many ≤300-bar windows to paginate for depth
 // pages tuned to Coinbase's real max depth per granularity (loop stops early on empty,
 // so slightly over-asking is harmless). Every TF now pulls far more history than before.
+// menu = long label shown in the dropdown; sec = section header it lives under.
 const TF = {
-  "1m":  { label:"1m",  base:60,    bucket:60,     pages:26 },  // ~7k bars (Coinbase caps 1m history)
-  "5m":  { label:"5m",  base:300,   bucket:300,    pages:36 },  // ~10k bars (~1 month)
-  "15m": { label:"15m", base:900,   bucket:900,    pages:18 },  // ~5k bars
-  "1h":  { label:"1H",  base:3600,  bucket:3600,   pages:36 },  // ~10k bars (back to 2025)
-  "4h":  { label:"4H",  base:3600,  bucket:14400,  pages:36 },  // 4×1h, deep
-  "6h":  { label:"6H",  base:21600, bucket:21600,  pages:20 },  // ~5.5k bars (to 2022)
-  "12h": { label:"12H", base:21600, bucket:43200,  pages:20 },  // 2×6h, to 2022
-  "1d":  { label:"1D",  base:86400, bucket:86400,  pages:9 },   // ~1.4k bars (to 2022)
-  "1w":  { label:"1W",  base:86400, bucket:604800, pages:9 },   // 7×1d
+  "1m":  { label:"1m",  menu:"1 minute",   sec:"MINUTES", base:60,    bucket:60,     pages:26 },  // ~7k bars (Coinbase caps 1m history)
+  "5m":  { label:"5m",  menu:"5 minutes",  sec:"MINUTES", base:300,   bucket:300,    pages:36 },  // ~10k bars (~1 month)
+  "15m": { label:"15m", menu:"15 minutes", sec:"MINUTES", base:900,   bucket:900,    pages:18 },  // ~5k bars
+  "30m": { label:"30m", menu:"30 minutes", sec:"MINUTES", base:900,   bucket:1800,   pages:18 },  // 2×15m
+  "1h":  { label:"1H",  menu:"1 hour",     sec:"HOURS",   base:3600,  bucket:3600,   pages:36 },  // ~10k bars (back to 2025)
+  "4h":  { label:"4H",  menu:"4 hours",    sec:"HOURS",   base:3600,  bucket:14400,  pages:36 },  // 4×1h, deep
+  "6h":  { label:"6H",  menu:"6 hours",    sec:"HOURS",   base:21600, bucket:21600,  pages:20 },  // ~5.5k bars (to 2022)
+  "12h": { label:"12H", menu:"12 hours",   sec:"HOURS",   base:21600, bucket:43200,  pages:20 },  // 2×6h, to 2022
+  "1d":  { label:"1D",  menu:"1 day",      sec:"DAYS",    base:86400, bucket:86400,  pages:9 },   // ~1.4k bars (to 2022)
+  "1w":  { label:"1W",  menu:"1 week",     sec:"DAYS",    base:86400, bucket:604800, pages:9 },   // 7×1d
 };
 
 function parseCandlesAgg(raw){
@@ -417,35 +510,55 @@ function sanitize(bars){
   return out;
 }
 
-async function fetchKlines(product, tfKey){
+// Fetch one page of newest candles (or the page ending at `end`). Returns the
+// oldest-first parsed page, or [] on error/empty.
+async function fetchPage(product, g, span, end){
+  const qs = end===null
+    ? `granularity=${g}`
+    : `granularity=${g}&start=${end-span}&end=${end}`;
+  try{
+    const res = await fetch(`${API}/products/${product}/candles?${qs}`);
+    return parseCandlesAgg(await res.json());
+  }catch{ return []; }
+}
+
+// Clean + roll up an oldest-first bar list to the target bucket. Shared by the
+// progressive loader so every partial render goes through the same pipeline.
+function finalizeBars(all, tf){
+  const seen = {};
+  const out = [];
+  for(const k of all){ if(seen[k.time]) continue; seen[k.time]=1; out.push(k); }
+  out.sort((a,b)=>a.time-b.time);
+  const clean = sanitize(out);                  // strip corrupt bad-print wicks
+  return aggregate(clean, tf.base, tf.bucket);  // roll up to 4h/12h/1w if needed
+}
+
+// Progressive history loader. Calls `onPage(barsSoFar)` after EACH page so the
+// chart can paint the newest candles immediately, then keeps deepening history
+// in the background. Pages were previously fetched all-then-render, which meant
+// up to 36 sequential round-trips before anything appeared on screen.
+async function fetchKlinesProgressive(product, tfKey, onPage){
   const tf = TF[tfKey] || TF["1d"];
   const g = tf.base;
   const span = 300 * g;                 // seconds covered by one full page
   let end = null;                       // null = newest; Coinbase returns latest
   const all = [];
   for(let i=0; i<tf.pages; i++){
-    const qs = end===null
-      ? `granularity=${g}`
-      : `granularity=${g}&start=${end-span}&end=${end}`;
-    let raw;
-    try{
-      const res = await fetch(`${API}/products/${product}/candles?${qs}`);
-      raw = await res.json();
-    }catch{ break; }
-    const page = parseCandlesAgg(raw);
+    const page = await fetchPage(product, g, span, end);
     if(!page.length) break;
     all.push(...page);
+    if(onPage) onPage(all);                        // render what we have so far
     end = Math.min(...page.map(k=>k.time)) - g;   // step strictly before the oldest bar we got
     if(page.length < 200) break;                  // short page = reached start of history; stop early
   }
-  // dedupe by time, oldest-first
-  const seen = {};
-  const out = [];
-  for(const k of all){ if(seen[k.time]) continue; seen[k.time]=1; out.push(k); }
-  out.sort((a,b)=>a.time-b.time);
-  if(!out.length) throw new Error("No data for "+product);
-  const clean = sanitize(out);                  // strip corrupt bad-print wicks
-  return aggregate(clean, tf.base, tf.bucket);  // roll up to 4h/12h/1w if needed
+  if(!all.length) throw new Error("No data for "+product);
+  return finalizeBars(all, tf);
+}
+
+// Non-progressive variant (single combined result), used where a caller just
+// wants the full series without incremental callbacks.
+async function fetchKlines(product, tfKey){
+  return fetchKlinesProgressive(product, tfKey, null);
 }
 
 // Build synthetic A/B ratio (spread) by aligning candles on matching timestamps
@@ -472,59 +585,115 @@ function makeRatio(a, b){
 
 function fmt(v){ return v>=100 ? v.toFixed(2) : v>=1 ? v.toFixed(3) : v.toPrecision(4); }
 
+// Push a finished bar series into every series + indicator. Called on each
+// progressive page as well as on the final result, so the chart stays live
+// while history keeps deepening underneath it.
+function renderData(data, keepView){
+  candle.setData(data);
+  lastData = data;                 // expose to the drawing engine (magnet/measure/extrapolation)
+  if(typeof redraw==="function") redraw();
+
+  // moving averages
+  const legend=[];
+  maSeries.forEach((s,i)=>{
+    const m = MAS[i];
+    const sd = smaSeries(data, m.p);
+    s.setData(sd);
+    if(sd.length) legend.push(`<span style="color:${m.color}">MA${m.p} ${fmt(sd[sd.length-1].value)}</span>`);
+  });
+  document.getElementById("maLegend").innerHTML = legend.slice(0,6).join("");
+
+  // RSI + smoothing MA + TradingView-style fills
+  const r = rsiSeries(data, 14);
+  const rm = maOfSeries(r, 14);
+  rsiOver.setData(r);                                  // green fill where RSI>70
+  rsiUnder.setData(r);                                 // red fill where RSI<30
+  band70.setData(r.map(d=>({time:d.time, value:70})));
+  band50.setData(r.map(d=>({time:d.time, value:50})));
+  band30.setData(r.map(d=>({time:d.time, value:30})));
+  rsiLine.setData(r);
+  rsiMa.setData(rm);
+  if(r.length)  document.getElementById("rsiVal").textContent   = r[r.length-1].value.toFixed(2);
+  if(rm.length) document.getElementById("rsiMaVal").textContent = rm[rm.length-1].value.toFixed(2);
+
+  // user indicators + alerts (engine defined later in file; guard for first paint)
+  if(typeof renderAllIndicators==="function") renderAllIndicators();
+  if(typeof checkAlerts==="function") checkAlerts();
+
+  // Snap to the most recent ~420 bars on a fresh load, re-snapping as each
+  // progressive page reindexes the scale — but only until the user pans/zooms
+  // (stopAutoSnap clears _autoSnap on the first wheel/drag) and never on the
+  // 20s background refresh (keepView).
+  if(!keepView && _autoSnap){
+    const view = Math.min(data.length, 420);
+    // Keep ~12 bars of empty room on the right (matches timeScale.rightOffset) so
+    // horizontal lines/rays have a visible "future" region to extend into.
+    chart.timeScale().setVisibleLogicalRange({ from: data.length-view, to: data.length+12 });
+  }
+  document.getElementById("status").innerHTML = `<span class="dot"></span>Live · Coinbase API · ${data.length} bars`;
+}
+
+// Token guards against a stale in-flight load clobbering a newer one (e.g. the
+// user switches symbol/TF while pages from the previous request are still
+// streaming in via progressive callbacks).
+let loadToken = 0;
+
+// Auto-snap state. While a fresh load streams pages in, each page prepends older
+// history and reindexes the logical scale, so we re-snap to the latest candle
+// on every page to keep it centred. But the SECOND the user pans/zooms we must
+// stop snapping or we'd yank their view back (the "bounces back" bug).
+//   _autoSnap – are we still allowed to auto-snap this load?
+// stopAutoSnap() is called from the real gesture handlers (the dcanvas mousedown
+// pan and the dcanvas wheel-zoom defined later), so it never interferes with the
+// chart's own input handling.
+let _autoSnap = false;
+function stopAutoSnap(){ _autoSnap = false; }
+
 async function loadChart(symbol, tf, keepView){
+  const myToken = ++loadToken;
   document.getElementById("symName").textContent = symbol;
   document.getElementById("tfName").textContent = (TF[tf]||{}).label || tf;
+  // clear any stale "No data" error from the previous symbol and show progress.
+  if(!keepView){
+    document.getElementById("ohlc").innerHTML = "";
+    document.getElementById("status").innerHTML = `<span class="dot"></span>Loading ${symbol}…`;
+    _autoSnap = true;   // a fresh load may snap to the latest candle until the user pans/zooms
+  }
+  const fresh = ()=> myToken===loadToken;       // still the active load?
+  // On a fresh (non-keepView) load, snap to the latest candle on EVERY
+  // progressive page — not just the first. Each new page prepends older history,
+  // which reindexes the logical scale; a one-time snap would then drift off the
+  // latest bar as history backfills, leaving the recent candles off-screen.
+  const paint = (data)=>{
+    if(!fresh() || !data.length) return;
+    renderData(data, keepView);   // keepView=false ⇒ re-snap to the latest bar
+  };
   try{
-    let data;
     if(symbol.includes("/")){
       const [a,b] = symbol.split("/");
-      const [ka,kb] = await Promise.all([fetchKlines(a,tf), fetchKlines(b,tf)]);
-      data = makeRatio(ka, kb);
+      // Render the spread as each side's pages arrive. Re-derive the ratio from
+      // whatever both sides have so far; the chart fills out as history deepens.
+      let lastA=[], lastB=[];
+      const tfMeta = TF[tf] || TF["1d"];
+      const repaintRatio = ()=>{
+        if(lastA.length && lastB.length)
+          paint(makeRatio(finalizeBars(lastA,tfMeta), finalizeBars(lastB,tfMeta)));
+      };
+      const [ka,kb] = await Promise.all([
+        fetchKlinesProgressive(a, tf, raw=>{ lastA=raw; repaintRatio(); }),
+        fetchKlinesProgressive(b, tf, raw=>{ lastB=raw; repaintRatio(); }),
+      ]);
+      const data = makeRatio(ka, kb);
       if(!data.length) throw new Error("No overlapping data for "+symbol);
+      paint(data);
     } else {
-      data = await fetchKlines(symbol, tf);
+      const data = await fetchKlinesProgressive(symbol, tf, raw=>{
+        if(fresh()) paint(finalizeBars(raw, TF[tf]||TF["1d"]));
+      });
+      paint(data);
     }
-    candle.setData(data);
-    lastData = data;                 // expose to the drawing engine (magnet/measure/extrapolation)
-    if(typeof redraw==="function") redraw();
-
-    // moving averages
-    const legend=[];
-    maSeries.forEach((s,i)=>{
-      const m = MAS[i];
-      const sd = smaSeries(data, m.p);
-      s.setData(sd);
-      if(sd.length) legend.push(`<span style="color:${m.color}">MA${m.p} ${fmt(sd[sd.length-1].value)}</span>`);
-    });
-    document.getElementById("maLegend").innerHTML = legend.slice(0,6).join("");
-
-    // RSI + smoothing MA + TradingView-style fills
-    const r = rsiSeries(data, 14);
-    const rm = maOfSeries(r, 14);
-    rsiOver.setData(r);                                  // green fill where RSI>70
-    rsiUnder.setData(r);                                 // red fill where RSI<30
-    band70.setData(r.map(d=>({time:d.time, value:70})));
-    band50.setData(r.map(d=>({time:d.time, value:50})));
-    band30.setData(r.map(d=>({time:d.time, value:30})));
-    rsiLine.setData(r);
-    rsiMa.setData(rm);
-    if(r.length)  document.getElementById("rsiVal").textContent   = r[r.length-1].value.toFixed(2);
-    if(rm.length) document.getElementById("rsiMaVal").textContent = rm[rm.length-1].value.toFixed(2);
-
-    // user indicators + alerts (engine defined later in file; guard for first paint)
-    if(typeof renderAllIndicators==="function") renderAllIndicators();
-    if(typeof checkAlerts==="function") checkAlerts();
-
-    // show the most recent ~420 bars on first/symbol/tf load only — NOT on the 20s
-    // refresh (that would yank the view back while the user is panning/zooming).
-    if(!keepView){
-      const view = Math.min(data.length, 420);
-      chart.timeScale().setVisibleLogicalRange({ from: data.length-view, to: data.length+2 });
-    }
-    document.getElementById("status").innerHTML = `<span class="dot"></span>Live · Coinbase API · ${data.length} bars`;
   }catch(e){
-    document.getElementById("ohlc").innerHTML = `<span class="down">⚠ ${e.message}</span>`;
+    if(fresh()) document.getElementById("ohlc").innerHTML = `<span class="down">⚠ ${e.message}</span>`;
   }
 }
 
@@ -549,7 +718,17 @@ function buildWatchlist(){
   const body = document.getElementById("wlBody");
   body.innerHTML = "";
   GROUPS.forEach(g=>{
-    const s = document.createElement("div"); s.className="section"; s.textContent=g.name; body.appendChild(s);
+    const s = document.createElement("div");
+    s.className = "section" + (g.collapsed ? " collapsed" : "");
+    s.dataset.group = g.name;
+    s.innerHTML = `<span class="caret">▾</span><span class="gname">${escHtml(g.name)}</span>`
+      + `<span class="gdel" title="Remove section">${icTrashWl()}</span>`;
+    s.onclick = (e)=>{ if(e.target.closest(".gdel")) return; toggleGroupCollapse(g.name); };
+    s.querySelector(".gdel").onclick = (e)=>{ e.stopPropagation(); removeGroup(g.name); };
+    s.oncontextmenu = (e)=>{ e.preventDefault(); e.stopPropagation(); showSectionMenu(g.name, e.clientX, e.clientY); };
+    sectionDropWire(s, g.name);     // allow dropping a symbol onto the header (esp. when collapsed)
+    body.appendChild(s);
+    if(g.collapsed) return;         // header only; rows hidden while collapsed
     g.symbols.forEach(sym=>{
       const row = document.createElement("div");
       row.className="row"+(sym===activeSymbol?" active":"");
@@ -567,19 +746,221 @@ function buildWatchlist(){
         icon = `<img class="ic" src="${logoUrl(sym)}" alt="${base}"
           onerror="this.outerHTML='<span class=\\'ic\\' style=\\'background:#2962ff\\'>${base[0]}</span>'">`;
       }
+      row.dataset.group = g.name;           // a symbol may live in >1 group; key edits by group+sym
+      row.draggable = true;
       row.innerHTML = `<span class="sym">${icon}<span class="nm">${sym}</span></span>
-        <span class="last" data-last>—</span><span class="chgabs" data-chgabs>—</span><span class="chg" data-chg>—</span>`;
+        <span class="last" data-last>—</span><span class="chgabs" data-chgabs>—</span><span class="chg" data-chg>—</span>
+        <span class="del" title="Remove from watchlist">${icTrashWl()}</span>`;
       row.onclick = ()=>{
         activeSymbol = sym;
         document.querySelectorAll(".row").forEach(r=>r.classList.remove("active"));
-        document.querySelectorAll(`.row[data-sym="${sym}"]`).forEach(r=>r.classList.add("active"));
+        document.querySelectorAll(`.row[data-sym="${cssEsc(sym)}"]`).forEach(r=>r.classList.add("active"));
         if(typeof loadPersisted==="function") loadPersisted();   // drawings are per symbol+tf
         if(typeof loadAlerts==="function") loadAlerts();         // alerts are per symbol
         loadChart(sym, activeTF);
       };
+      row.querySelector(".del").onclick = (e)=>{ e.stopPropagation(); removeSymbol(g.name, sym); };
+      wlDragWire(row);
       body.appendChild(row);
       (rowMap[sym] = rowMap[sym]||[]).push(row);
     });
+  });
+}
+
+// CSS.escape isn't on very old browsers; this is enough for our symbol set ("/", "-").
+function cssEsc(s){ return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/["\\]/g,"\\$&"); }
+
+// Small trash glyph for the per-row remove button.
+function icTrashWl(){
+  return '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>';
+}
+
+// Remove a symbol from a specific group, persist, and rebuild. If the removed
+// symbol was active, fall back to the first remaining symbol.
+function removeSymbol(groupName, sym){
+  const g = GROUPS.find(x=>x.name===groupName);
+  if(!g) return;
+  const i = g.symbols.indexOf(sym);
+  if(i<0) return;
+  g.symbols.splice(i,1);
+  delete rowMap[sym];                       // rebuilt below; stale refs would otherwise leak
+  saveGroups();
+  if(activeSymbol===sym && !allSymbols().includes(sym)){
+    const next = allSymbols()[0];
+    if(next){
+      activeSymbol = next;
+      if(typeof loadPersisted==="function") loadPersisted();
+      if(typeof loadAlerts==="function") loadAlerts();
+      loadChart(next, activeTF);
+    }
+  }
+  buildWatchlist();
+  refreshPrices();                          // repaint prices on the rebuilt rows
+}
+
+// ── Drag to reorder ──
+// HTML5 drag-and-drop. We move the (group,symbol) entry within GROUPS, allowing
+// moves across groups too, then persist and rebuild.
+let wlDrag = null;   // { group, sym } of the row being dragged
+function wlDragWire(row){
+  row.addEventListener("dragstart", e=>{
+    wlDrag = { group: row.dataset.group, sym: row.dataset.sym };
+    row.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    try{ e.dataTransfer.setData("text/plain", row.dataset.sym); }catch{}
+  });
+  row.addEventListener("dragend", ()=>{
+    row.classList.remove("dragging");
+    document.querySelectorAll(".row.drop-above,.row.drop-below")
+      .forEach(r=>r.classList.remove("drop-above","drop-below"));
+    wlDrag = null;
+  });
+  row.addEventListener("dragover", e=>{
+    if(!wlDrag) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const before = (e.clientY - row.getBoundingClientRect().top) < row.offsetHeight/2;
+    row.classList.toggle("drop-above", before);
+    row.classList.toggle("drop-below", !before);
+  });
+  row.addEventListener("dragleave", ()=>row.classList.remove("drop-above","drop-below"));
+  row.addEventListener("drop", e=>{
+    if(!wlDrag) return;
+    e.preventDefault();
+    const before = row.classList.contains("drop-above");
+    moveSymbol(wlDrag.group, wlDrag.sym, row.dataset.group, row.dataset.sym, before);
+  });
+}
+
+// Move (fromGroup,fromSym) to sit before/after (toGroup,toSym) — possibly into
+// another group. No-op when dropped on itself.
+function moveSymbol(fromGroup, fromSym, toGroup, toSym, before){
+  if(fromGroup===toGroup && fromSym===toSym) return;   // dropped on self
+  const gf = GROUPS.find(x=>x.name===fromGroup);
+  const gt = GROUPS.find(x=>x.name===toGroup);
+  if(!gf || !gt) return;
+  const fi = gf.symbols.indexOf(fromSym);
+  if(fi<0) return;
+  gf.symbols.splice(fi,1);                  // remove from source first
+  let ti = gt.symbols.indexOf(toSym);
+  if(ti<0) ti = gt.symbols.length;          // target vanished → append
+  gt.symbols.splice(before ? ti : ti+1, 0, fromSym);
+  saveGroups();
+  buildWatchlist();
+  refreshPrices();
+}
+
+// ── Sections (groups) ──
+// Section identity is its name, so names are kept unique. Right-click a header
+// for Rename / Remove section / Add symbol; click the header to collapse it.
+function escHtml(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function uniqueGroupName(name, exceptGroup){
+  let base = (name||"SECTION").trim() || "SECTION", out = base, n = 2;
+  while(GROUPS.some(g=>g!==exceptGroup && g.name===out)) out = base+" "+(n++);
+  return out;
+}
+
+function toggleGroupCollapse(name){
+  const g = GROUPS.find(x=>x.name===name); if(!g) return;
+  g.collapsed = !g.collapsed;
+  saveGroups();
+  buildWatchlist();
+  refreshPrices();
+}
+
+function renameGroup(name){
+  const g = GROUPS.find(x=>x.name===name); if(!g) return;
+  const v = prompt("Rename section:", g.name);
+  if(v==null) return;                       // cancelled
+  g.name = uniqueGroupName(v, g);
+  saveGroups();
+  buildWatchlist();
+  refreshPrices();
+}
+
+function removeGroup(name){
+  const i = GROUPS.findIndex(x=>x.name===name); if(i<0) return;
+  const g = GROUPS[i];
+  if(g.symbols.length && !confirm(`Remove section "${g.name}" and its ${g.symbols.length} symbol(s)?`)) return;
+  const removed = g.symbols.slice();
+  GROUPS.splice(i,1);
+  removed.forEach(sym=>{ if(!allSymbols().includes(sym)) delete rowMap[sym]; });
+  saveGroups();
+  // if the active symbol no longer exists anywhere, fall back to the first one left
+  if(!allSymbols().includes(activeSymbol)){
+    const next = allSymbols()[0];
+    if(next){
+      activeSymbol = next;
+      if(typeof loadPersisted==="function") loadPersisted();
+      if(typeof loadAlerts==="function") loadAlerts();
+      loadChart(next, activeTF);
+    }
+  }
+  buildWatchlist();
+  refreshPrices();
+}
+
+// Add a section after the given one (or at the end when name is null).
+function addGroup(afterName){
+  const name = uniqueGroupName("NEW SECTION");
+  const at = afterName!=null ? GROUPS.findIndex(x=>x.name===afterName)+1 : GROUPS.length;
+  GROUPS.splice(at<=0?GROUPS.length:at, 0, { name, symbols:[] });
+  saveGroups();
+  buildWatchlist();
+  renameGroup(name);                        // immediately prompt for a real name
+}
+
+// Add a symbol to a section. Accepts "BTC", "BTC-USD", "btc/usd"… normalises to
+// Coinbase's BASE-QUOTE form (defaulting quote to USD) and ratio A/B form.
+function normSym(input){
+  let s = (input||"").trim().toUpperCase();
+  if(!s) return null;
+  if(s.includes("/")){
+    const parts = s.split("/").map(p=>normSym(p));
+    return parts.every(Boolean) ? parts.join("/") : null;
+  }
+  if(!s.includes("-")) s = s + "-USD";       // bare base → assume USD quote
+  return s;
+}
+function addSymbolToGroup(name){
+  const g = GROUPS.find(x=>x.name===name); if(!g) return;
+  const raw = prompt(`Add symbol to "${g.name}"  (e.g. BTC, SOL-USD, ETH/BTC):`, "");
+  if(raw==null) return;
+  const sym = normSym(raw);
+  if(!sym) return;
+  if(g.symbols.includes(sym)){ alert(`${sym} is already in ${g.name}.`); return; }
+  g.symbols.push(sym);
+  saveGroups();
+  buildWatchlist();
+  refreshPrices();
+}
+
+function showSectionMenu(name, x, y){
+  showCtx(x, y, [
+    mi("✎ Rename",          ()=>renameGroup(name)),
+    mi("🗑 Remove section",  ()=>removeGroup(name)),
+    msep(),
+    mi("＋ Add symbol",      ()=>addSymbolToGroup(name)),
+    mi("＋ Add section",     ()=>addGroup(name)),
+  ]);
+}
+
+// Let a dragged symbol be dropped onto a section header (appends to that group).
+function sectionDropWire(el, name){
+  el.addEventListener("dragover", e=>{
+    if(!wlDrag) return;
+    e.preventDefault(); e.dataTransfer.dropEffect="move";
+    el.classList.add("drop-into");
+  });
+  el.addEventListener("dragleave", ()=>el.classList.remove("drop-into"));
+  el.addEventListener("drop", e=>{
+    if(!wlDrag) return;
+    e.preventDefault(); el.classList.remove("drop-into");
+    // append to end of this group: target the last symbol "after", or empty → moveSymbol appends
+    const g = GROUPS.find(x=>x.name===name);
+    const lastSym = g && g.symbols.length ? g.symbols[g.symbols.length-1] : null;
+    moveSymbol(wlDrag.group, wlDrag.sym, name, lastSym, /*before=*/false);
   });
 }
 
@@ -593,14 +974,32 @@ async function fetchStats(product){
   }catch{ return null; }
 }
 
+// Run async tasks with a concurrency cap. The watchlist has ~40 legs; firing
+// them all at once saturates the browser's 6-connections-per-host limit and
+// starves the chart's own fetches (that was the ~30s blank-chart stall). A
+// small cap keeps a few connections free for the chart.
+async function mapLimit(items, limit, fn){
+  const out = new Array(items.length);
+  let i = 0;
+  async function worker(){
+    while(i < items.length){
+      const idx = i++;
+      out[idx] = await fn(items[idx], idx);
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(limit, items.length)}, worker));
+  return out;
+}
+
 async function refreshPrices(){
   // resolve every leg we need (plain symbols + both sides of any ratio)
+  const all = allSymbols();
   const legs = new Set();
-  ALL.forEach(sym=> sym.split("/").forEach(s=>legs.add(s)) );
-  const entries = await Promise.all([...legs].map(async p=>[p, await fetchStats(p)]));
+  all.forEach(sym=> sym.split("/").forEach(s=>legs.add(s)) );
+  const entries = await mapLimit([...legs], 4, async p=>[p, await fetchStats(p)]);
   const stats = Object.fromEntries(entries);
 
-  ALL.forEach(sym=>{
+  all.forEach(sym=>{
     let price, prev;
     if(sym.includes("/")){
       const [a,b] = sym.split("/");
@@ -648,15 +1047,61 @@ function fmtPrice(v){
   return v.toFixed(8).replace(/0+$/,"");
 }
 
-// ── Timeframe buttons ──
-document.getElementById("tfGroup").addEventListener("click", e=>{
-  const t = e.target.closest(".tf"); if(!t) return;
-  document.querySelectorAll(".tf").forEach(x=>x.classList.remove("active"));
-  t.classList.add("active");
-  activeTF = t.dataset.i;
+// ── Timeframe selector (TradingView-style sectioned dropdown) ──
+const tfSel      = document.getElementById("tfSel");
+const tfSelBtn   = document.getElementById("tfSelBtn");
+const tfSelLabel = document.getElementById("tfSelLabel");
+const tfMenu     = document.getElementById("tfMenu");
+
+// Build the menu from TF{}: a section header per group, then one option per timeframe in TF order.
+(function buildTfMenu(){
+  let html = "", lastSec = null;
+  for(const key in TF){
+    const t = TF[key];
+    if(t.sec !== lastSec){ html += `<div class="tf-sec">${t.sec}</div>`; lastSec = t.sec; }
+    html += `<div class="tf-opt" data-i="${key}">${t.menu}</div>`;
+  }
+  tfMenu.innerHTML = html;
+})();
+
+// Reflect activeTF in the button label and the highlighted menu option.
+function syncTfUI(){
+  tfSelLabel.textContent = (TF[activeTF]||{}).label || activeTF;
+  tfMenu.querySelectorAll(".tf-opt").forEach(o=>
+    o.classList.toggle("active", o.dataset.i === activeTF));
+}
+
+function selectTF(key){
+  if(!TF[key]) return;
+  activeTF = key;
+  syncTfUI();
   if(typeof loadPersisted==="function") loadPersisted();   // drawings are per symbol+tf
   loadChart(activeSymbol, activeTF);
+}
+
+function openTfMenu(){
+  tfSel.classList.add("open");
+  const act = tfMenu.querySelector(".tf-opt.active");
+  if(act) act.scrollIntoView({block:"nearest"});   // bring the current TF into view
+}
+
+tfSelBtn.addEventListener("click", e=>{
+  e.stopPropagation();
+  tfSel.classList.contains("open") ? tfSel.classList.remove("open") : openTfMenu();
 });
+
+tfMenu.addEventListener("click", e=>{
+  const opt = e.target.closest(".tf-opt"); if(!opt) return;
+  tfSel.classList.remove("open");
+  selectTF(opt.dataset.i);
+});
+
+// Close the menu on any click outside the selector.
+document.addEventListener("click", e=>{
+  if(!e.target.closest("#tfSel")) tfSel.classList.remove("open");
+});
+
+syncTfUI();  // initialise label + highlight to the default activeTF
 
 
 // ════════════════════════════════════════════════════════════════════
@@ -735,6 +1180,7 @@ const draw = {
   pendingClickMode:false, // true once a press without drag puts us in click-click mode
   sel:null,           // selected shape id
   hover:null,         // hovered shape id
+  alertHover:null,    // id of alert line currently hovered (shows its delete icon)
   drag:null,          // {id, handle:int|'body', last:{time,price}}
   mouse:{x:0,y:0},
 };
@@ -791,7 +1237,9 @@ function selectTool(key){
   // empty-space drags to the chart manually (see the pan logic in mousedown/move).
   const drawing=(key!=="cross");
   dcanvas.style.cursor = drawing ? "crosshair" : "default";
-  chart.applyOptions({ handleScroll:false, handleScale:!drawing });   // wheel-zoom stays in cross mode
+  // We handle pan (dcanvas mousedown) and zoom (dcanvas wheel) manually because
+  // the overlay canvas hides these gestures from the chart's own handlers.
+  chart.applyOptions({ handleScroll:false, handleScale:false });
   redraw();
 }
 
@@ -824,29 +1272,82 @@ function currentBarSpacing(){
 
 // ─────────────────────────────────────────────────────────────────────
 //  COORDINATE CONVERSION  (price/time ⇄ pixels)
+//
+//  These MUST be total functions: every drawing point has to resolve to a pixel
+//  even when it sits past the last bar (future) or outside the visible price
+//  band — otherwise an endpoint vanishes or the line gets clipped ("eaten") the
+//  instant it crosses the edge. We always fall back to a linear extrapolation
+//  built from two reference points we know map cleanly.
 // ─────────────────────────────────────────────────────────────────────
+
+// Two bars whose time maps to a real (non-null) x. Prefer the tail, but scan
+// inward so an anchor still exists when the last bars are scrolled off-screen
+// (precisely the case where the old last-two-bars code returned null → "wall").
+function timeAnchors(){
+  const ts=chart.timeScale();
+  // Collect every bar that currently maps to a real pixel.
+  const pts=[];
+  for(let i=0;i<lastData.length;i++){
+    const x=ts.timeToCoordinate(lastData[i].time);
+    if(x!=null) pts.push({time:lastData[i].time, x});
+  }
+  if(pts.length<2) return null;
+  // CRITICAL: use anchors that are FAR APART in pixels, not the last two bars.
+  // Adjacent bars near the right edge are often <3px apart; extrapolating 100px+
+  // into the future off a 3px baseline amplifies sub-pixel error into a huge gap
+  // (the line endpoint drifting away from its handle). The first + last visible
+  // bars give the widest, most stable baseline.
+  const a=pts[0], b=pts[pts.length-1];
+  return (a.x!==b.x && a.time!==b.time) ? {a,b} : null;
+}
+
 function timeToX(time){
   const c=chart.timeScale().timeToCoordinate(time);
   if(c!=null) return c;
-  if(lastData.length<2) return null;
-  const a=lastData[lastData.length-2], b=lastData[lastData.length-1];
-  const xa=chart.timeScale().timeToCoordinate(a.time), xb=chart.timeScale().timeToCoordinate(b.time);
-  if(xa==null||xb==null||b.time===a.time) return null;
-  return xb + (time-b.time)*(xb-xa)/(b.time-a.time);
+  const an=timeAnchors();
+  if(!an) return lastData.length ? chart.timeScale().timeToCoordinate(lastData[lastData.length-1].time) : null;
+  const {a,b}=an;
+  return b.x + (time-b.time)*(b.x-a.x)/(b.time-a.time);
 }
-function priceToY(price){ return candle.priceToCoordinate(price); }
 function xToTime(x){
   const t=chart.timeScale().coordinateToTime(x);
   if(t!=null) return t;
   // Past the last bar coordinateToTime returns null. Extrapolate WITHOUT rounding
   // so the value round-trips exactly through timeToX (otherwise the handle "sticks").
-  if(lastData.length<2) return lastData.length?lastData[lastData.length-1].time:0;
-  const a=lastData[lastData.length-2], b=lastData[lastData.length-1];
-  const xa=chart.timeScale().timeToCoordinate(a.time), xb=chart.timeScale().timeToCoordinate(b.time);
-  if(xa==null||xb==null||xa===xb) return b.time;
-  return b.time + (x-xb)*(b.time-a.time)/(xb-xa);   // fractional time, no Math.round
+  const an=timeAnchors();
+  if(!an) return lastData.length?lastData[lastData.length-1].time:0;
+  const {a,b}=an;
+  return b.time + (x-b.x)*(b.time-a.time)/(b.x-a.x);   // fractional time, no Math.round
 }
-function yToPrice(y){ return candle.coordinateToPrice(y); }
+
+// Price ⇄ y. coordinateToPrice / priceToCoordinate return null outside the
+// visible price band; fit a line through two probe coordinates so off-band
+// endpoints still resolve instead of nuking the whole shape.
+function priceFit(){
+  const H=dcanvas.clientHeight||1;
+  const y1=Math.round(H*0.25), y2=Math.round(H*0.75);
+  const p1=candle.coordinateToPrice(y1), p2=candle.coordinateToPrice(y2);
+  if(p1==null||p2==null||p1===p2||y1===y2) return null;
+  return {y1, p1, slope:(p2-p1)/(y2-y1)};            // price = p1 + (y-y1)*slope
+}
+function priceToY(price){
+  const y=candle.priceToCoordinate(price);
+  if(y!=null) return y;
+  const f=priceFit(); if(!f) return null;
+  return f.y1 + (price-f.p1)/f.slope;
+}
+function yToPrice(y){
+  const p=candle.coordinateToPrice(y);
+  if(p!=null) return p;
+  const f=priceFit(); if(!f) return null;
+  return f.p1 + (y-f.y1)*f.slope;
+}
+// Width (px) of the right price-axis gutter — the strip past the plot where the
+// candles don't render. Used to keep ray arrowheads off the axis price tag.
+function axisW(){
+  try{ const w=chart.priceScale("right").width(); if(w>0) return w; }catch(e){}
+  return 64;   // sane default if the API is unavailable
+}
 
 function snap(time,price){
   if(!draw.magnet || !lastData.length) return {time,price};
@@ -878,8 +1379,13 @@ let downPt=null, downMoved=false;
 dcanvas.addEventListener("mousedown", e=>{
   if(e.button!==0) return;                 // left only; right handled by contextmenu
   e.preventDefault();
+  stopAutoSnap();                          // a real pan gesture → stop auto-snapping to latest
   const p=evtPt(e), c=ptToCoord(p);
   downPt=p; downMoved=false;
+
+  // ── Alert delete icon takes priority in any mode (it's only shown on hover). ──
+  const trashId=alertTrashHit(p);
+  if(trashId){ removeAlert(trashId); draw.alertHover=null; downPt=null; return; }
 
   // ── CROSSHAIR mode: click a shape → select/drag it; click empty → pan the chart ──
   if(draw.tool==="cross"){
@@ -906,6 +1412,42 @@ dcanvas.addEventListener("mousedown", e=>{
   // until the next click (click-click), whichever the user does.
   if(!draw.pending) startPending(c);
 });
+
+// ── Wheel zoom (and shift+wheel pan) ──
+// The drawing canvas sits on top of the chart with pointer-events:auto, so the
+// chart's own built-in wheel-zoom never sees the gesture. We implement it here:
+// scroll = zoom in/out anchored under the cursor; shift+scroll = pan sideways.
+dcanvas.addEventListener("wheel", e=>{
+  e.preventDefault();
+  stopAutoSnap();                                  // user is driving the view now
+  const ts = chart.timeScale();
+  const range = ts.getVisibleLogicalRange();
+  if(!range) return;
+  const { from, to } = range;
+  const span = to - from;
+
+  // Shift (or horizontal-dominant trackpad) → pan instead of zoom.
+  if(e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)){
+    const delta = (e.shiftKey ? e.deltaY : e.deltaX);
+    const shift = (delta / 100) * span * 0.1;       // gentle horizontal pan
+    ts.setVisibleLogicalRange({ from: from + shift, to: to + shift });
+    redraw();
+    return;
+  }
+
+  // Zoom anchored at the cursor: keep the bar under the pointer fixed.
+  const p = evtPt(e);
+  const w = dcanvas.clientWidth || 1;
+  const frac = Math.min(1, Math.max(0, p.x / w));   // 0=left edge, 1=right edge
+  const anchor = from + span * frac;                // logical index under cursor
+  const factor = e.deltaY > 0 ? 1.1 : 1/1.1;        // wheel down = zoom out
+  const newSpan = Math.max(8, span * factor);       // never fewer than ~8 bars
+  ts.setVisibleLogicalRange({
+    from: anchor - (anchor - from) * (newSpan/span),
+    to:   anchor + (to - anchor) * (newSpan/span),
+  });
+  redraw();
+}, {passive:false});
 
 function startPending(c){
   const tool=draw.tool;
@@ -972,8 +1514,14 @@ dcanvas.addEventListener("mousemove", e=>{
   // hover feedback
   const hit=hitTest(p);
   const nh=hit?hit.id:null;
-  if(nh!==draw.hover){ draw.hover=nh; redraw(); }
-  dcanvas.style.cursor = hit ? (hit.handle==="body"?"move":"pointer")
+  // alert-line hover (shows its delete icon). A shape hover wins over it.
+  const na = (!hit && draw.tool==="cross") ? alertHit(p) : null;
+  let changed=false;
+  if(nh!==draw.hover){ draw.hover=nh; changed=true; }
+  if(na!==draw.alertHover){ draw.alertHover=na; changed=true; }
+  if(changed) redraw();
+  const overTrash=alertTrashHit(p);
+  dcanvas.style.cursor = (hit || overTrash || na) ? (hit&&hit.handle==="body"?"move":"pointer")
                        : (draw.tool==="cross"?(panState?"grabbing":"crosshair"):"crosshair");
 });
 
@@ -1102,9 +1650,20 @@ const ctxMenu=document.getElementById("ctxMenu");
 dcanvas.addEventListener("contextmenu", e=>{
   e.preventDefault();
   const p=evtPt(e), hit=hitTest(p);
+  const aid = !hit ? alertHit(p) : null;
   if(hit){ draw.sel=hit.id; redraw(); showShapeMenu(hit.id, e.clientX, e.clientY); }
+  else if(aid){ showAlertMenu(aid, e.clientX, e.clientY); }
   else { showChartMenu(e.clientX, e.clientY, p); }
 });
+function showAlertMenu(id,x,y){
+  const a=alerts.find(z=>z.id===id);
+  showCtx(x,y,[
+    mi(`🔔 Alert at ${a?fmt(a.value):"—"}`, ()=>{}),
+    msep(),
+    mi(a&&a.active?"Disable alert":"Enable alert", ()=>{ if(a){ a.active=!a.active; saveAlerts(); redraw(); renderAlertsPanel(); } }),
+    mi("🗑 Delete alert", ()=>removeAlert(id)),
+  ]);
+}
 function mi(label, fn, swatch){
   const d=document.createElement("div"); d.className="mi";
   d.innerHTML=(swatch?`<span class="sw" style="background:${swatch}"></span>`:"")+label;
@@ -1139,7 +1698,7 @@ function showShapeMenu(id,x,y){
 function showChartMenu(x,y,p){
   const price=yToPrice(p.y);
   showCtx(x,y,[
-    mi(`🔔 Add alert at ${price!=null?fmt(price):"—"}`, ()=>addAlertAt(price)),
+    mi(`🔔 Add alert${price!=null?" at "+fmt(price):""}…`, ()=>openAlertDialog({price})),
     msep(),
     mi("⊞ Add indicator…", ()=>toggleIndicatorsMenu(true)),
     mi("Reset chart view", ()=>chart.timeScale().fitContent()),
@@ -1192,7 +1751,103 @@ function openSettings(id){
   document.getElementById("dlgDel").onclick=()=>{ deleteShape(id); closeDlg(); };
 }
 function closeDlg(){ dlg.classList.remove("open"); backdrop.classList.remove("open"); }
-backdrop.onclick=()=>{ closeDlg(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); };
+backdrop.onclick=()=>{ closeDlg(); closeAlertDlg(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); };
+
+// ─────────────────────────────────────────────────────────────────────
+//  CREATE / EDIT ALERT DIALOG  (TradingView-style)
+// ─────────────────────────────────────────────────────────────────────
+const alertDlg=document.getElementById("alertDlg");
+function closeAlertDlg(){ alertDlg.classList.remove("open"); backdrop.classList.remove("open"); }
+
+// Open the dialog. existing = an alert object to edit; price = pre-fill value for
+// a brand-new alert created by right-clicking the chart.
+function openAlertDialog(opts={}){
+  const editing = opts.existing || null;
+  const cur = lastData.length ? lastData[lastData.length-1].close : 0;
+  // working copy (committed to `alerts` only on Create/Save)
+  const a = editing ? {...editing, notify:{...editing.notify}} : {
+    id:"a"+(alertUid++), source:"price", op:"crossing", target:"value",
+    value: opts.price!=null ? opts.price : cur,
+    trigger:"once", expiry:defaultExpiry(), message:"", notify:{...ALERT_DEFAULT_NOTIFY}, active:true, _last:null,
+  };
+  const srcOpts = ALERT_SOURCES.map(s=>`<option value="${s.key}" ${s.key===a.source?"selected":""}>${s.label}</option>`).join("");
+  const opOpts = [["crossing","Crossing"],["crossUp","Crossing Up"],["crossDown","Crossing Down"],["gt","Greater Than"],["lt","Less Than"]]
+    .map(([v,l])=>`<option value="${v}" ${v===a.op?"selected":""}>${l}</option>`).join("");
+  // target = "Value" + every series (so price-vs-MA, MA-vs-MA, etc. all work)
+  const tgtOpts = `<option value="value" ${a.target==="value"?"selected":""}>Value</option>`+
+    ALERT_SOURCES.map(s=>`<option value="${s.key}" ${s.key===a.target?"selected":""}>${s.label}</option>`).join("");
+  const expVal = a.expiry ? toLocalInput(a.expiry) : "";
+
+  alertDlg.innerHTML=`
+    <div class="dh"><span class="sym">Create alert on <span style="color:var(--accent)">${activeSymbol}</span></span><span class="cl" id="adClose">×</span></div>
+    <div class="db">
+      <div class="arow"><div class="alabel">Condition</div><div class="actl">
+        <select id="ad_source">${srcOpts}</select>
+        <select id="ad_op">${opOpts}</select>
+        <div class="twocol">
+          <select id="ad_target">${tgtOpts}</select>
+          <input type="number" id="ad_value" step="any" value="${a.value??""}" placeholder="Value">
+        </div>
+      </div></div>
+      <div class="asep"></div>
+      <div class="arow"><div class="alabel">Trigger</div><div class="actl">
+        <select id="ad_trigger">
+          <option value="once" ${a.trigger==="once"?"selected":""}>Once only</option>
+          <option value="every" ${a.trigger==="every"?"selected":""}>Every time</option>
+        </select>
+      </div></div>
+      <div class="arow"><div class="alabel">Expiration</div><div class="actl">
+        <input type="datetime-local" id="ad_expiry" value="${expVal}">
+        <div class="hint">Leave blank for no expiration.</div>
+      </div></div>
+      <div class="arow"><div class="alabel">Message</div><div class="actl">
+        <input type="text" id="ad_message" value="${(a.message||"").replace(/"/g,'&quot;')}" placeholder="${defaultAlertMessage(a).replace(/"/g,'&quot;')}">
+      </div></div>
+      <div class="arow"><div class="alabel">Notifications</div><div class="actl">
+        <div class="notif">
+          <label><input type="checkbox" id="ad_n_popup" ${a.notify.popup?"checked":""}> App popup</label>
+          <label><input type="checkbox" id="ad_n_sound" ${a.notify.sound?"checked":""}> Sound</label>
+          <label><input type="checkbox" id="ad_n_browser" ${a.notify.browser?"checked":""}> Browser</label>
+          <label title="Requires a backend — not available on a local file"><input type="checkbox" id="ad_n_email" ${a.notify.email?"checked":""}> Email</label>
+        </div>
+        <div class="hint" id="ad_email_hint" style="display:${a.notify.email?"block":"none"}">Email needs a server; it won't send from a local file.</div>
+      </div></div>
+    </div>
+    <div class="df">
+      <button class="btn ghost" id="adCancel">Cancel</button>
+      <button class="btn primary" id="adOk">${editing?"Save":"Create"}</button>
+    </div>`;
+  alertDlg.classList.add("open"); backdrop.classList.add("open");
+
+  const $=id=>alertDlg.querySelector("#"+id);
+  // Value input only applies when target = "Value"; disable it otherwise.
+  const syncTargetUI=()=>{ const isVal=$("ad_target").value==="value"; $("ad_value").style.display=isVal?"":"none"; };
+  syncTargetUI();
+  $("ad_target").onchange=syncTargetUI;
+  $("ad_n_email").onchange=e=>{ $("ad_email_hint").style.display=e.target.checked?"block":"none"; };
+
+  $("adClose").onclick=closeAlertDlg;
+  $("adCancel").onclick=closeAlertDlg;
+  $("adOk").onclick=()=>{
+    a.source=$("ad_source").value;
+    a.op=$("ad_op").value;
+    a.target=$("ad_target").value;
+    a.value=a.target==="value" ? parseFloat($("ad_value").value) : null;
+    if(a.target==="value" && isNaN(a.value)){ $("ad_value").focus(); return; }
+    a.trigger=$("ad_trigger").value;
+    const ev=$("ad_expiry").value; a.expiry=ev ? new Date(ev).getTime() : null;
+    a.message=$("ad_message").value.trim();
+    a.notify={ popup:$("ad_n_popup").checked, sound:$("ad_n_sound").checked, browser:$("ad_n_browser").checked, email:$("ad_n_email").checked };
+    a.active=true; a._last=null;
+    if(editing){ Object.assign(editing, a); }
+    else { alerts.push(a); }
+    if(a.notify.browser) requestNotifPermission();
+    saveAlerts(); redraw(); renderAlertsPanel(); closeAlertDlg();
+  };
+}
+// Default expiration = 30 days out, like TradingView's default.
+function defaultExpiry(){ return Date.now() + 30*24*3600*1000; }
+function toLocalInput(ms){ const d=new Date(ms - new Date(ms).getTimezoneOffset()*60000); return d.toISOString().slice(0,16); }
 
 // ─────────────────────────────────────────────────────────────────────
 //  PERSISTENCE (localStorage, per symbol+timeframe)
@@ -1243,8 +1898,8 @@ function drawShape(s, selected, hovered){
     case "trend": if(b)strokeLine(a.x,a.y,b.x,b.y,st); break;
     case "ray": if(b){ const[ex,ey]=extend(a.x,a.y,b.x,b.y,W,H); strokeLine(a.x,a.y,ex,ey,st);} break;
     case "ext": if(b){ const[sx,sy]=extend(b.x,b.y,a.x,a.y,W,H),[ex,ey]=extend(a.x,a.y,b.x,b.y,W,H); strokeLine(sx,sy,ex,ey,st);} break;
-    case "hline": strokeLine(0,a.y,W,a.y,st); if(st.showLabel) labelPrice(s.pts[0].price,a.y,st.color); break;
-    case "hray": strokeLine(a.x,a.y,W,a.y,st); if(st.showLabel) labelPrice(s.pts[0].price,a.y,st.color); break;
+    case "hline": strokeLine(0,a.y,W,a.y,st); if(st.showLabel) priceTag(s.pts[0].price,a.y,st.color,W); break;
+    case "hray":  strokeLine(a.x,a.y,W,a.y,st); arrowHead(W-axisW(),a.y,1,st.color); if(st.showLabel) priceTag(s.pts[0].price,a.y,st.color,W); break;
     case "vline": strokeLine(a.x,0,a.x,H,st); break;
     case "rect": if(b)drawRect(a,b,st); break;
     case "ellipse": if(b)drawEllipse(a,b,st); break;
@@ -1368,6 +2023,26 @@ function drawText(s,a){
 }
 function labelPrice(price,y,color){
   dctx.save(); dctx.fillStyle=color; dctx.font="10px sans-serif"; dctx.fillText(fmt(price),4,y-3); dctx.restore();
+}
+// Small triangle marking the end of a ray (points in direction dir: +1 = right).
+function arrowHead(x,y,dir,color){
+  const s=6;
+  dctx.save(); dctx.fillStyle=color; dctx.beginPath();
+  dctx.moveTo(x,y); dctx.lineTo(x-dir*s, y-s*0.7); dctx.lineTo(x-dir*s, y+s*0.7);
+  dctx.closePath(); dctx.fill(); dctx.restore();
+}
+// Colored price pill pinned to the right axis, like TradingView's horizontal line tag.
+function priceTag(price,y,color,W){
+  if(price==null) return;
+  const txt=fmt(price);
+  dctx.save(); dctx.font="11px sans-serif";
+  const w=dctx.measureText(txt).width+10, h=16, x=W-w-2;
+  dctx.fillStyle=color;
+  dctx.beginPath();
+  if(dctx.roundRect) dctx.roundRect(x,y-h/2,w,h,3); else dctx.rect(x,y-h/2,w,h);
+  dctx.fill();
+  dctx.fillStyle="#fff"; dctx.textBaseline="middle"; dctx.fillText(txt,x+5,y+0.5);
+  dctx.restore();
 }
 
 // helpers for style
@@ -1564,40 +2239,183 @@ function openIndicatorSettings(id){
 const alerts=[];
 let alertUid=1;
 function alertsKey(){ return "fv_alerts_"+activeSymbol; }
-function saveAlerts(){ try{ localStorage.setItem(alertsKey(), JSON.stringify(alerts.map(a=>({id:a.id,price:a.price,dir:a.dir,active:a.active})))); }catch(e){} }
+
+// Persisted alert fields (TradingView-style). Backward compatible: old alerts
+// only had {price,dir} — migrateAlert() upgrades them on load.
+//   source : "price" | "ma7" | "ma25" | ... | "rsi"   (the LHS series)
+//   op     : "crossing" | "crossUp" | "crossDown" | "gt" | "lt"
+//   target : "value" | "ma7" | ... | "rsi"             (RHS: a number or a series)
+//   value  : number (used when target === "value")
+//   trigger: "once" | "every"
+//   expiry : epoch ms (or null = never)
+//   message: string
+//   notify : { popup, sound, browser, email }
+const ALERT_DEFAULT_NOTIFY = { popup:true, sound:true, browser:false, email:false };
+function migrateAlert(a){
+  if(a.source) return a;                       // already new-format
+  // legacy {price,dir,active}
+  return {
+    id:a.id||("a"+(alertUid++)), source:"price", op:"crossing",
+    target:"value", value:a.price,
+    trigger:"once", expiry:null,
+    message:"", notify:{...ALERT_DEFAULT_NOTIFY},
+    active:a.active!==false, _last:null,
+  };
+}
+function saveAlerts(){
+  try{ localStorage.setItem(alertsKey(), JSON.stringify(alerts.map(a=>({
+    id:a.id, source:a.source, op:a.op, target:a.target, value:a.value,
+    trigger:a.trigger, expiry:a.expiry, message:a.message, notify:a.notify, active:a.active,
+  })))); }catch(e){}
+}
 function loadAlerts(){ alerts.length=0;
-  try{ const raw=localStorage.getItem(alertsKey()); if(raw) JSON.parse(raw).forEach(a=>alerts.push(Object.assign({},a,{_last:null}))); }catch(e){}
+  try{ const raw=localStorage.getItem(alertsKey()); if(raw) JSON.parse(raw).forEach(a=>alerts.push(Object.assign(migrateAlert(a),{_last:null}))); }catch(e){}
   redraw(); renderAlertsPanel();
 }
-function addAlertAt(price){ if(price==null) return;
-  const cur=lastData.length?lastData[lastData.length-1].close:price;
-  alerts.push({ id:"a"+(alertUid++), price, dir: price>=cur?"above":"below", active:true, _last:cur });
-  saveAlerts(); redraw(); renderAlertsPanel(); requestNotifPermission();
+
+// Series sources available as alert operands, computed from lastData.
+const ALERT_SOURCES = [
+  { key:"price", label:"Price" },
+  ...MAS.map(m=>({ key:"ma"+m.p, label:"MA "+m.p })),
+  { key:"rsi", label:"RSI 14" },
+];
+function sourceLabel(k){ const s=ALERT_SOURCES.find(s=>s.key===k); return s?s.label:k; }
+// Latest value of a source (null if not enough data).
+function sourceValue(key){
+  if(!lastData.length) return null;
+  if(key==="price") return lastData[lastData.length-1].close;
+  if(key==="rsi"){ const r=rsiSeries(lastData,14); return r.length?r[r.length-1].value:null; }
+  const m=MAS.find(m=>("ma"+m.p)===key);
+  if(m){ const sd=smaSeries(lastData,m.p); return sd.length?sd[sd.length-1].value:null; }
+  return null;
 }
+// The RHS scalar an alert compares against right now.
+function alertTargetValue(a){ return a.target==="value" ? a.value : sourceValue(a.target); }
+function opLabel(op){ return ({crossing:"Crossing", crossUp:"Crossing Up", crossDown:"Crossing Down", gt:"Greater Than", lt:"Less Than"})[op]||op; }
+
+function defaultAlertMessage(a){
+  const lhs=sourceLabel(a.source);
+  const rhs=a.target==="value" ? fmt(a.value) : sourceLabel(a.target);
+  return `${activeSymbol} ${lhs} ${opLabel(a.op)} ${rhs}`;
+}
+
 function removeAlert(id){ const i=alerts.findIndex(a=>a.id===id); if(i>=0){ alerts.splice(i,1); saveAlerts(); redraw(); renderAlertsPanel(); } }
+
+// Pixel hitboxes for the alert lines + their delete icons, rebuilt every draw.
+// Used by mouse handlers so the user can hover a line and click the 🗑 to delete it.
+let alertHitboxes=[];
 function drawAlertLines(){
-  alerts.forEach(a=>{ const y=priceToY(a.price); if(y==null) return; const W=dcanvas.clientWidth;
-    dctx.save(); dctx.strokeStyle=a.active?"#f7525f":"#555"; dctx.setLineDash([6,4]); dctx.lineWidth=1;
+  alertHitboxes=[];
+  alerts.forEach(a=>{
+    // Only price-vs-value alerts map to a fixed horizontal line.
+    if(a.source!=="price" || a.target!=="value") return;
+    const y=priceToY(a.value); if(y==null) return; const W=dcanvas.clientWidth;
+    const col=a.active?"#f7525f":"#555";
+    dctx.save(); dctx.strokeStyle=col; dctx.setLineDash([6,4]); dctx.lineWidth=1;
     dctx.beginPath(); dctx.moveTo(0,y); dctx.lineTo(W,y); dctx.stroke(); dctx.setLineDash([]);
-    const txt="🔔 "+fmt(a.price); dctx.font="10px sans-serif"; const w=dctx.measureText(txt).width+10;
-    dctx.fillStyle=a.active?"#f7525f":"#555"; dctx.fillRect(W-w-2,y-8,w,16); dctx.fillStyle="#fff"; dctx.fillText(txt,W-w+2,y+3); dctx.restore();
+    // right-edge price tag (over the axis)
+    const txt="🔔 "+fmt(a.value); dctx.font="10px sans-serif"; const w=dctx.measureText(txt).width+10;
+    dctx.fillStyle=col; dctx.fillRect(W-w-2,y-8,w,16); dctx.fillStyle="#fff"; dctx.fillText(txt,W-w+2,y+3);
+
+    let trash=null;
+    if(draw.alertHover===a.id){
+      // TradingView-style hover pill on the line with a clickable trash icon.
+      const label=fmt(a.value); dctx.font="11px sans-serif";
+      const lw=dctx.measureText(label).width;
+      const padL=10, gap=8, iconW=16, boxH=20;
+      const boxW=padL+lw+gap+iconW+padL;
+      const bx=70, by=y-boxH/2;
+      dctx.fillStyle="#1e222d"; dctx.strokeStyle=col; dctx.lineWidth=1;
+      if(dctx.roundRect){ dctx.beginPath(); dctx.roundRect(bx,by,boxW,boxH,4); dctx.fill(); dctx.stroke(); }
+      else { dctx.fillRect(bx,by,boxW,boxH); dctx.strokeRect(bx,by,boxW,boxH); }
+      dctx.fillStyle="#d1d4dc"; dctx.textBaseline="middle"; dctx.fillText(label,bx+padL,y+0.5);
+      dctx.textBaseline="alphabetic";
+      // crisp vector trash icon inside a circular hit area
+      const tcx=bx+padL+lw+gap+iconW/2;
+      const onIcon = draw.mouse && Math.hypot(draw.mouse.x-tcx, draw.mouse.y-y)<=11;
+      drawTrashIcon(tcx, y, onIcon?"#ff6b6b":"#ef5350", onIcon);
+      trash={ x:tcx, y:y, r:11 };
+    }
+    dctx.restore();
+    alertHitboxes.push({ id:a.id, y, trash });
   });
+}
+// A small vector trash-can glyph centered at (cx,cy). Drawn instead of the 🗑
+// emoji so it renders crisply and identically across platforms.
+function drawTrashIcon(cx, cy, color, highlight){
+  dctx.save();
+  if(highlight){ dctx.fillStyle="rgba(239,83,80,0.18)"; dctx.beginPath(); dctx.arc(cx,cy,10,0,7); dctx.fill(); }
+  dctx.strokeStyle=color; dctx.fillStyle=color; dctx.lineWidth=1.4;
+  dctx.lineCap="round"; dctx.lineJoin="round";
+  const w=8, h=9, top=cy-4;
+  // lid
+  dctx.beginPath(); dctx.moveTo(cx-w/2-1, top); dctx.lineTo(cx+w/2+1, top); dctx.stroke();
+  // handle
+  dctx.beginPath(); dctx.moveTo(cx-2, top); dctx.lineTo(cx-2, top-2); dctx.lineTo(cx+2, top-2); dctx.lineTo(cx+2, top); dctx.stroke();
+  // can body
+  dctx.beginPath();
+  dctx.moveTo(cx-w/2+1, top+1.5); dctx.lineTo(cx-w/2+2, top+h);
+  dctx.lineTo(cx+w/2-2, top+h);   dctx.lineTo(cx+w/2-1, top+1.5);
+  dctx.stroke();
+  // ribs
+  dctx.lineWidth=1;
+  for(const dx of [-2,0,2]){ dctx.beginPath(); dctx.moveTo(cx+dx, top+3); dctx.lineTo(cx+dx, top+h-1.5); dctx.stroke(); }
+  dctx.restore();
+}
+// Is point p on an alert line? Returns the alert id or null.
+function alertHit(p){
+  for(const h of alertHitboxes){ if(Math.abs(p.y-h.y)<6) return h.id; }
+  return null;
+}
+// Is point p on a (currently shown) alert delete icon? Returns id or null.
+function alertTrashHit(p){
+  for(const h of alertHitboxes){ if(h.trash && Math.hypot(p.x-h.trash.x,p.y-h.trash.y)<=h.trash.r) return h.id; }
+  return null;
+}
+
+// Evaluate one alert against the latest tick. Uses the previous LHS-vs-RHS
+// difference (a._last) to detect crossings; level ops (gt/lt) fire on state.
+function alertTriggered(a, lhs, rhs){
+  if(lhs==null || rhs==null) return false;
+  const diff = lhs - rhs;                       // sign tells us which side we're on
+  const prevDiff = a._last;                     // null on first eval → no cross yet
+  switch(a.op){
+    case "gt": return lhs > rhs;
+    case "lt": return lhs < rhs;
+    case "crossUp":   return prevDiff!=null && prevDiff < 0 && diff >= 0;
+    case "crossDown": return prevDiff!=null && prevDiff > 0 && diff <= 0;
+    case "crossing":  return prevDiff!=null && ((prevDiff < 0 && diff >= 0) || (prevDiff > 0 && diff <= 0));
+    default: return false;
+  }
 }
 function checkAlerts(){
-  if(!lastData.length) return; const cur=lastData[lastData.length-1].close;
-  alerts.forEach(a=>{ if(!a.active) return; const prev=a._last==null?cur:a._last;
-    const crossed=(a.dir==="above"&&prev<a.price&&cur>=a.price)||(a.dir==="below"&&prev>a.price&&cur<=a.price);
-    if(crossed){ fireAlert(a,cur); a.active=false; saveAlerts(); renderAlertsPanel(); redraw(); }
-    a._last=cur;
+  if(!lastData.length) return;
+  const now = Date.now();
+  alerts.forEach(a=>{
+    if(!a.active) return;
+    if(a.expiry && now > a.expiry){ a.active=false; saveAlerts(); renderAlertsPanel(); redraw(); return; }
+    const lhs = sourceValue(a.source), rhs = alertTargetValue(a);
+    if(alertTriggered(a, lhs, rhs)){
+      fireAlert(a, lhs, rhs);
+      if(a.trigger==="once"){ a.active=false; }
+      saveAlerts(); renderAlertsPanel(); redraw();
+    }
+    if(lhs!=null && rhs!=null) a._last = lhs - rhs;   // remember side for next cross test
   });
 }
-function fireAlert(a,price){
-  const msg=activeSymbol+" crossed "+fmt(a.price)+" (now "+fmt(price)+")";
-  if(window.Notification && Notification.permission==="granted"){ try{ new Notification("Freeview Alert",{body:msg}); }catch(e){} }
-  const t=document.createElement("div"); t.textContent="🔔 "+msg;
-  t.style.cssText="position:fixed;top:60px;right:320px;z-index:500;background:#f7525f;color:#fff;padding:10px 16px;border-radius:6px;box-shadow:0 4px 16px #0008;font-size:13px;";
-  document.body.appendChild(t); setTimeout(()=>t.remove(),6000);
-  try{ beep(); }catch(e){}
+function fireAlert(a, lhs, rhs){
+  const base = a.message && a.message.trim() ? a.message : defaultAlertMessage(a);
+  const msg = `${base} — now ${fmt(lhs)}`;
+  const n = a.notify || ALERT_DEFAULT_NOTIFY;
+  if(n.browser && window.Notification && Notification.permission==="granted"){ try{ new Notification("Freeview Alert",{body:msg}); }catch(e){} }
+  if(n.popup){
+    const t=document.createElement("div"); t.textContent="🔔 "+msg;
+    t.style.cssText="position:fixed;top:60px;right:320px;z-index:500;background:#f7525f;color:#fff;padding:10px 16px;border-radius:6px;box-shadow:0 4px 16px #0008;font-size:13px;max-width:320px;";
+    document.body.appendChild(t); setTimeout(()=>t.remove(),6000);
+  }
+  if(n.sound){ try{ beep(); }catch(e){} }
+  // Email/external needs a backend; a local file:// page can't send it. The UI
+  // toggle is kept for parity but does nothing here.
 }
 function beep(){ const ac=new (window.AudioContext||window.webkitAudioContext)(); const o=ac.createOscillator(),g=ac.createGain(); o.connect(g); g.connect(ac.destination); o.frequency.value=880; g.gain.value=0.08; o.start(); setTimeout(()=>{o.stop();ac.close();},220); }
 function requestNotifPermission(){ if(window.Notification && Notification.permission==="default") Notification.requestPermission(); }
@@ -1608,20 +2426,35 @@ function toggleAlertsPanel(force){
 }
 function renderAlertsPanel(){
   const m=document.getElementById("alertsPanel");
-  m.innerHTML='<div class="ph">Alerts <span class="cl" id="alClose">×</span></div><div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:6px;"><input class="search" id="alPrice" style="margin:0;flex:1;" placeholder="Price" type="number" step="any"><button class="btn primary" id="alAdd" style="padding:7px 12px;">Add</button></div><div class="pb" id="alList"></div>';
+  m.innerHTML='<div class="ph">Alerts <span class="cl" id="alClose">×</span></div>'+
+    '<div style="padding:10px 14px;border-bottom:1px solid var(--border);"><button class="btn primary" id="alCreate" style="width:100%;padding:8px 12px;">＋ Create alert</button></div>'+
+    '<div class="pb" id="alList"></div>';
   const list=m.querySelector("#alList");
-  if(!alerts.length) list.innerHTML='<div class="pi" style="color:var(--muted)">No alerts. Right-click the chart or add a price above.</div>';
-  alerts.forEach(a=>{ const it=document.createElement("div"); it.className="pi";
-    it.innerHTML='<span>'+fmt(a.price)+' <span class="meta">('+a.dir+(a.active?"":" · triggered")+')</span></span><span class="x" style="cursor:pointer;color:var(--muted)">×</span>';
-    it.querySelector(".x").onclick=()=>removeAlert(a.id); list.appendChild(it);
+  if(!alerts.length) list.innerHTML='<div class="pi" style="color:var(--muted)">No alerts. Click “Create alert” or right-click the chart.</div>';
+  alerts.forEach(a=>{ const it=document.createElement("div"); it.className="pi"; it.style.cursor="pointer";
+    const desc=defaultAlertMessage(a);
+    it.innerHTML='<span>'+desc+' <span class="meta">('+(a.trigger==="every"?"every":"once")+(a.active?"":" · triggered")+')</span></span><span class="x" style="cursor:pointer;color:var(--muted)">×</span>';
+    it.onclick=e=>{ if(e.target.classList.contains("x")) return; openAlertDialog({existing:a}); };
+    it.querySelector(".x").onclick=e=>{ e.stopPropagation(); removeAlert(a.id); };
+    list.appendChild(it);
   });
   m.querySelector("#alClose").onclick=()=>toggleAlertsPanel(false);
-  m.querySelector("#alAdd").onclick=()=>{ const v=parseFloat(m.querySelector("#alPrice").value); if(!isNaN(v)) addAlertAt(v); };
+  m.querySelector("#alCreate").onclick=()=>openAlertDialog({});
 }
 
 document.getElementById("btnIndicators").onclick=()=>toggleIndicatorsMenu();
-document.getElementById("btnAlert").onclick=()=>toggleAlertsPanel();
-function closeAllPopups(){ hideCtx(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); closeDlg(); }
+document.getElementById("btnAlert").onclick=()=>openAlertDialog({});                  // bell → create alert (TradingView)
+document.getElementById("btnAlert").addEventListener("contextmenu", e=>{ e.preventDefault(); toggleAlertsPanel(); });  // right-click → manage list
+function closeAllPopups(){ hideCtx(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); closeDlg(); closeAlertDlg(); }
+
+// ── Watchlist: add-section affordances ──
+document.getElementById("wlAdd").onclick = ()=>addGroup(null);
+// right-click empty space in the list (not on a section/row) → Add section
+document.getElementById("wlBody").addEventListener("contextmenu", e=>{
+  if(e.target.closest(".section") || e.target.closest(".row")) return;  // those have their own menus
+  e.preventDefault();
+  showCtx(e.clientX, e.clientY, [ mi("＋ Add section", ()=>addGroup(null)) ]);
+});
 
 // ── Boot ──
 buildWatchlist();
@@ -1629,9 +2462,12 @@ installHoverTracker();     // lets crosshair mode select/edit shapes while still
 loadPersisted();           // restore saved drawings for current symbol+tf
 loadAlerts();              // restore saved alerts for current symbol
 loadChart(activeSymbol, activeTF);
-refreshPrices();
 resize();
 sizeCanvas();
+// Hold the watchlist price sweep until the chart has had a head start on the
+// connection pool — otherwise ~40 /stats calls queue ahead of the chart fetch
+// and the chart sits blank for ~30s waiting for a free connection.
+setTimeout(refreshPrices, 1200);
 window.addEventListener("resize", ()=>{ resize(); sizeCanvas(); });
 setInterval(refreshPrices, 6000);
 setInterval(()=>loadChart(activeSymbol, activeTF, true), 20000);  // keepView: don't snap the chart
