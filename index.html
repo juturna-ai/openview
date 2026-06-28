@@ -122,6 +122,8 @@
     stroke-linecap:round; stroke-linejoin:round;}
   .row .sym{flex:1; display:flex; align-items:center; gap:9px; min-width:0;}
   .row .sym .nm{font-size:13px; font-weight:500; color:#d1d4dc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .row .sym .exbadge{flex:none; font-size:9px; font-weight:600; letter-spacing:.3px; color:var(--muted);
+    background:#2a2e39; border-radius:3px; padding:1px 4px; text-transform:uppercase;}
   .row .ic{width:20px; height:20px; border-radius:50%; flex-shrink:0; object-fit:contain;
     background:#2a2e39; color:#fff; font-size:9px; display:flex; align-items:center;
     justify-content:center; font-weight:700;}
@@ -232,6 +234,50 @@
   .alertdlg .notif input[type=checkbox]{width:auto;}
   .alertdlg .hint{font-size:11px;color:var(--muted);}
 
+  /* ── Add-symbol search dialog (TradingView-style) ── */
+  .symdlg{width:500px;}
+  .symdlg .db{padding:12px 14px 6px;}
+  .symdlg .symsearch{display:flex;align-items:center;gap:8px;background:#131722;border:1px solid var(--border);
+    border-radius:8px;padding:0 10px;}
+  .symdlg .symsearch:focus-within{border-color:var(--accent);}
+  .symdlg .symsearch svg{width:15px;height:15px;flex:none;fill:none;stroke:var(--muted);stroke-width:1.8;}
+  .symdlg .symsearch input{flex:1;background:transparent;border:none;outline:none;color:#d1d4dc;
+    font-size:14px;padding:10px 0;}
+  .symdlg .symsearch input::placeholder{color:var(--muted);}
+  .symdlg .symtabs{display:flex;gap:2px;margin-top:10px;border-bottom:1px solid var(--border);}
+  .symdlg .symtab{appearance:none;background:transparent;border:none;cursor:pointer;color:var(--muted);
+    font-size:12px;font-weight:500;padding:7px 9px;border-bottom:2px solid transparent;margin-bottom:-1px;
+    border-radius:4px 4px 0 0;white-space:nowrap;}
+  .symdlg .symstatus{margin-top:8px;font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px;}
+  .symdlg .symstatus::before{content:"";width:10px;height:10px;border:2px solid var(--border);
+    border-top-color:var(--accent);border-radius:50%;animation:symspin .7s linear infinite;}
+  @keyframes symspin{to{transform:rotate(360deg);}}
+  .symdlg .symtab:hover{color:#d1d4dc;background:var(--hover);}
+  .symdlg .symtab.cur{color:#fff;border-bottom-color:var(--accent);}
+  .symdlg .symlist{margin-top:10px;max-height:46vh;overflow-y:auto;display:flex;flex-direction:column;}
+  .symdlg .symlist::-webkit-scrollbar{width:8px;}
+  .symdlg .symlist::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+  .symdlg .symrow{display:flex;align-items:center;gap:10px;padding:8px 8px;border-radius:6px;cursor:pointer;}
+  .symdlg .symrow:hover,.symdlg .symrow.cur{background:var(--hover);}
+  .symdlg .symrow .ic{width:24px;height:24px;border-radius:50%;flex:none;object-fit:cover;
+    display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;}
+  .symdlg .symrow .meta{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .symdlg .symrow .meta .id{font-size:13px;font-weight:600;color:#d1d4dc;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;}
+  .symdlg .symrow .meta .nm{font-size:11px;color:var(--muted);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;}
+  .symdlg .symrow .exch{font-size:11px;color:var(--muted);flex:none;}
+  .symdlg .symrow .plus{flex:none;width:22px;height:22px;border-radius:5px;display:inline-flex;
+    align-items:center;justify-content:center;color:var(--muted);font-size:16px;}
+  .symdlg .symrow:hover .plus{color:#fff;background:var(--panel);}
+  .symdlg .symrow.added{cursor:default;}
+  .symdlg .symrow.added .plus{color:var(--green);}
+  .symdlg .symempty{padding:24px 8px;text-align:center;color:var(--muted);font-size:13px;}
+  .symdlg .symfoot{padding:8px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);
+    display:flex;justify-content:center;gap:6px;flex-wrap:wrap;}
+  .symdlg .symfoot kbd{background:#131722;border:1px solid var(--border);border-radius:4px;
+    padding:1px 6px;font-size:10px;color:#d1d4dc;font-family:inherit;}
+
   /* alert price lines drawn by lightweight-charts createPriceLine - styled inline */
 </style>
 </head>
@@ -240,7 +286,7 @@
   <div id="toolbar"></div>
   <div id="main">
     <div id="topbar">
-      <span id="symbolBox"><span id="symName">NEAR-USD/INJ-USD</span><span class="exch">· Coinbase · <span id="tfName">1D</span></span></span>
+      <span id="symbolBox"><span id="symName">NEAR-USD/INJ-USD</span><span class="exch">· <span id="exName">Coinbase</span> · <span id="tfName">1D</span></span></span>
       <div class="tf-group" id="tfGroup">
         <div class="tf-sel" id="tfSel">
           <div class="tf-sel-btn" id="tfSelBtn">
@@ -286,10 +332,11 @@
   <div id="settingsDlg" class="dialog"></div>
   <div id="alertDlg" class="dialog alertdlg"></div>
   <div id="scriptDlg" class="dialog scriptdlg"></div>
+  <div id="symDlg" class="dialog symdlg"></div>
   <div id="dlgBackdrop"></div>
 
   <div id="watchlist">
-    <div id="wlHead"><span>comeback <span class="sub">▾</span></span><span id="wlAdd" title="Add section">＋</span></div>
+    <div id="wlHead"><span>comeback <span class="sub">▾</span></span><span id="wlAdd" title="Add symbol">＋</span></div>
     <div id="wlCols"><span class="c1">Symbol</span><span class="c2">Last</span><span class="c3">Chg</span><span class="c4">Chg%</span></div>
     <div id="wlBody"></div>
   </div>
@@ -298,6 +345,115 @@
 <script>
 // ── Coinbase Exchange public API (no key, no paywall) ──
 const API = "https://api.exchange.coinbase.com";
+
+// ── CORS proxy ──────────────────────────────────────────────────────────
+// Crypto exchange APIs (Coinbase/Binance/Bybit) send permissive CORS headers,
+// so the browser calls them directly. Yahoo Finance (stocks/ETFs/forex/metals/
+// indices — the global-market search and charting) does NOT — a static page
+// can't fetch it cross-origin. We relay just those calls through a public CORS
+// proxy. These free relays flake intermittently (occasional 403/500), so we try
+// each proxy, then make a second pass after a short pause before giving up.
+const CORS_PROXIES = [
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
+];
+const sleep = ms => new Promise(r=>setTimeout(r, ms));
+// Fetch `url` through whichever proxy first returns parseable JSON. Some proxies
+// answer 200 with an HTML landing/error page — we parse the body ourselves and
+// fall through on anything that isn't JSON, rather than trusting status alone.
+// Two passes total so a transient proxy hiccup doesn't fail an otherwise-good call.
+async function proxyJSON(url){
+  let lastErr;
+  for(let pass=0; pass<2; pass++){
+   if(pass) await sleep(500);
+   for(const wrap of CORS_PROXIES){
+    try{
+      const r = await fetch(wrap(url));
+      if(!r.ok){ lastErr = new Error("proxy "+r.status); continue; }
+      const text = await r.text();
+      try{ return JSON.parse(text); }
+      catch{ lastErr = new Error("non-JSON from proxy"); continue; }   // HTML page → try next
+    }catch(e){ lastErr = e; }
+   }
+  }
+  throw lastErr || new Error("all proxies failed");
+}
+
+// ── Multi-exchange routing ──────────────────────────────────────────────
+// A watchlist "leg" is the string stored in GROUPS[].symbols. Historically every
+// leg was a Coinbase product id (BTC-USD), with ratios written A/B. We keep that
+// as the default, and add an exchange prefix for the new venues:
+//
+//   BTC-USD              → Coinbase spot           (unchanged, back-compat)
+//   BINANCE:BTCUSDT      → Binance spot
+//   BINANCE:BTCUSDT.P    → Binance USDⓈ-M perpetual
+//   BYBIT:BTCUSDT        → Bybit spot
+//   BYBIT:BTCUSDT.P      → Bybit linear perpetual
+//
+// resolveLeg() turns any leg into a descriptor the data layer routes on. The
+// candle + stats fetchers each normalise their exchange's payload to the common
+// Coinbase shape ({time(sec), low, high, open, close, volume}) so the rest of the
+// pipeline (sanitize/aggregate/makeRatio/render) is untouched.
+const EX = {
+  COINBASE: { id:"COINBASE", label:"Coinbase" },
+  BINANCE:  { id:"BINANCE",  label:"Binance"  },
+  BYBIT:    { id:"BYBIT",    label:"Bybit"    },
+  // Yahoo Finance covers everything else TradingView lists: stocks, ETFs, forex,
+  // commodities/metals, indices. Leg form is YF:<yahooSymbol> (YF:AAPL, YF:GC=F,
+  // YF:EURUSD=X, YF:^GSPC). Routed through the CORS proxy.
+  YAHOO:    { id:"YAHOO",    label:"TradingView" },
+};
+// Per-exchange interval strings keyed by our TF base granularity (seconds).
+const BINANCE_IV = {60:"1m",300:"5m",900:"15m",3600:"1h",21600:"6h",86400:"1d"};
+const BYBIT_IV   = {60:"1",  300:"5", 900:"15", 3600:"60",21600:"360",86400:"D"};
+// Yahoo chart endpoint: {interval, range}. Range is capped per interval to the
+// deepest window Yahoo serves at THAT resolution — asking range=max with a daily
+// interval silently downsamples to quarterly bars, so we cap daily at 10y (true
+// daily) and let the app's aggregate() roll daily up to the 6h/12h/1w buckets.
+const YAHOO_IV = {
+  60:    {iv:"1m",  range:"7d"},   300:  {iv:"5m",  range:"60d"},
+  900:   {iv:"15m", range:"60d"},  3600: {iv:"60m", range:"730d"},
+  21600: {iv:"1d",  range:"10y"},  86400:{iv:"1d",  range:"10y"},
+};
+
+function resolveLeg(leg){
+  if(leg.includes(":")){
+    const ci = leg.indexOf(":");
+    const exRaw = leg.slice(0, ci), restRaw = leg.slice(ci+1);    // Yahoo syms may hold ":"? none do, but be safe
+    const ex = exRaw.toUpperCase();
+    if(ex==="YF" || ex==="YAHOO") return { exchange:EX.YAHOO, rest:restRaw, isPerp:false, leg };
+    const isPerp = restRaw.endsWith(".P");
+    const rest = isPerp ? restRaw.slice(0,-2) : restRaw;          // BTCUSDT
+    if(ex==="BINANCE") return { exchange:EX.BINANCE, rest, isPerp, leg };
+    if(ex==="BYBIT")   return { exchange:EX.BYBIT,   rest, isPerp, leg };
+  }
+  // default: Coinbase spot product id (BTC-USD)
+  return { exchange:EX.COINBASE, rest:leg, isPerp:false, leg };
+}
+// Base ticker for logo / display (BTC from any venue's leg).
+function legBase(leg){
+  const r = resolveLeg(leg);
+  if(r.exchange.id==="COINBASE") return r.rest.split("-")[0];
+  // Yahoo symbol IS the ticker (AAPL, SPY); strip Yahoo's class suffixes for logos
+  if(r.exchange.id==="YAHOO") return r.rest.replace(/[=^].*$/,"").split(".")[0] || r.rest;
+  // BINANCE/BYBIT rest is BASEQUOTE; strip a known quote suffix
+  const m = r.rest.match(/^(.*?)(USDT|USDC|USD|BTC|ETH|EUR|TRY|FDUSD|DAI)$/);
+  return m ? m[1] : r.rest;
+}
+// Human label for a leg, e.g. "BTCUSDT.P", "BTC-USD", or "AAPL".
+function legShort(leg){
+  const r=resolveLeg(leg);
+  if(r.exchange.id==="COINBASE") return r.rest;
+  if(r.exchange.id==="YAHOO")    return r.rest;
+  return r.rest+(r.isPerp?".P":"");
+}
+// Venue label for the live-status line, derived from the active symbol (handles ratios).
+function activeVenueLabel(){
+  const sym = (typeof activeSymbol!=="undefined") ? activeSymbol : "";
+  const exs = [...new Set(String(sym).split("/").map(s=>resolveLeg(s).exchange.label))];
+  return (exs.length ? exs.join(" / ") : "Coinbase") + " API";
+}
 
 // Coinbase uses BASE-USD. Watchlist mirrors the TradingView "comeback" layout.
 // Symbols Coinbase doesn't list (XVG, XMR, NIL, DUSK) still appear but show "—".
@@ -333,8 +489,9 @@ function allSymbols(){ return [...new Set(GROUPS.flatMap(g=>g.symbols))]; }
 // Coin logos from CoinCap's free icon CDN (BASE symbol, lowercased).
 // ASTER isn't on CoinCap → falls back to a letter circle.
 const NO_LOGO = new Set(["ASTER","NIL"]);
+function logoForBase(base){ return `https://assets.coincap.io/assets/icons/${String(base).toLowerCase()}@2x.png`; }
 function logoUrl(sym){
-  const base = sym.split("/")[0].split("-")[0].toLowerCase();
+  const base = legBase(sym).toLowerCase();
   return `https://assets.coincap.io/assets/icons/${base}@2x.png`;
 }
 
@@ -344,20 +501,59 @@ let activeTF = "1d";  // timeframe key into TF{}
 // ── Chart setup ──
 const chartEl = document.getElementById("chart");
 const rsiEl   = document.getElementById("rsi");
+// Fixed right-axis gutter width shared by every pane so their plot areas align
+// horizontally (wide enough for "110,000.00"-class price labels).
+const PRICE_AXIS_W = 72;
+
+// Time-axis tick label, derived purely from the tick's UTC date so labels stay
+// clean across the padded future region (no skipped months / stray day numbers).
+// tickMarkType: 0 Year · 1 Month · 2 DayOfMonth · 3 Time · 4 TimeWithSeconds.
+const _MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function tickLabel(t, type){
+  // Numeric times are UNIX seconds; {year,month,day} business-days come through as objects.
+  const d = (typeof t === "object")
+    ? new Date(Date.UTC(t.year, t.month-1, t.day))
+    : new Date(t*1000);
+  switch(type){
+    case 0:  return String(d.getUTCFullYear());                       // year boundary
+    case 1:  return _MONTHS[d.getUTCMonth()];                         // month boundary
+    case 2:  return String(d.getUTCDate());                           // day within month
+    default: return String(d.getUTCHours()).padStart(2,"0") + ":" +   // intraday
+                    String(d.getUTCMinutes()).padStart(2,"0");
+  }
+}
+
 const common = {
   layout:{ background:{color:"#131722"}, textColor:"#d1d4dc" },
   grid:{ vertLines:{color:"#1e222d"}, horzLines:{color:"#1e222d"} },
-  rightPriceScale:{ borderColor:"#2a2e39" },
-  timeScale:{ borderColor:"#2a2e39", timeVisible:true, secondsVisible:false, rightOffset:12 },
+  // Pin the right-axis gutter to a fixed width so every pane (main, RSI, indicator
+  // sub-charts) reserves the same space and their plot areas line up horizontally —
+  // otherwise each auto-sizes to its own labels ("0.42" vs "98.51") and a candle
+  // ends up at a different x than its RSI bar.
+  rightPriceScale:{ borderColor:"#2a2e39", minimumWidth:PRICE_AXIS_W },
+  timeScale:{ borderColor:"#2a2e39", timeVisible:true, secondsVisible:false, rightOffset:12,
+    // Label each tick from its OWN date (UTC), independent of where bars fall. The
+    // default formatter labels the month only on the first BAR of a month; once the
+    // future region is padded with whitespace, ticks can land mid-month and months
+    // get skipped or print a stray day number. Deriving the label from the tick date
+    // gives clean, TradingView-style month/day/year labels across the future region.
+    tickMarkFormatter:(t,type)=>tickLabel(t,type) },
   crosshair:{ mode:0 },
   // Pan + zoom are handled manually on the overlay canvas (dcanvas), which hides
   // these gestures from the chart's built-in handlers, so disable them here.
   handleScroll:false, handleScale:false,
 };
 const chart = LightweightCharts.createChart(chartEl, common);
+// Manual price-scale range, set by dragging the right axis (TradingView-style).
+// null ⇒ auto-scale (the default). When set, candle.autoscaleInfoProvider pins the
+// scale to it so the whole price axis (candles + MAs + aux series) honors the drag.
+let manualPriceRange = null;
 const candle = chart.addCandlestickSeries({
   upColor:"#26a69a", downColor:"#ef5350", borderVisible:false,
   wickUpColor:"#26a69a", wickDownColor:"#ef5350",
+  autoscaleInfoProvider: orig => manualPriceRange
+    ? { priceRange:{ minValue:manualPriceRange.min, maxValue:manualPriceRange.max } }
+    : orig(),
 });
 
 // ── Chart type + scale ──────────────────────────────────────────────
@@ -407,18 +603,20 @@ function applyChartType(data){
   candle.applyOptions({ visible:showCandle });
   Object.entries(aux).forEach(([k,s])=> s.applyOptions({ visible: k===chartType }));
   if(!d || !d.length) return;
-  if(chartType==="heikin")      candle.setData(heikinAshi(d));
-  else if(chartType==="hollow") candle.setData(hollowData(d));
-  else if(showCandle)           candle.setData(d);   // plain candles
+  // Pad every style's timeline with ~4 months of future whitespace so the time
+  // scale, grey grid lines and date axis extend past the last real bar.
+  if(chartType==="heikin")      candle.setData(withFuture(d, heikinAshi(d)));
+  else if(chartType==="hollow") candle.setData(withFuture(d, hollowData(d)));
+  else if(showCandle)           candle.setData(withFuture(d, d));   // plain candles
   else {
-    candle.setData(d);  // keep candle data (invisible) so coordinates stay valid
+    candle.setData(withFuture(d, d));  // keep candle data (invisible) so coordinates stay valid
     const s=auxSeries(chartType);
-    if(chartType==="bars") s.setData(d.map(b=>({time:b.time,open:b.open,high:b.high,low:b.low,close:b.close})));
+    if(chartType==="bars") s.setData(withFuture(d, d.map(b=>({time:b.time,open:b.open,high:b.high,low:b.low,close:b.close}))));
     else if(chartType==="baseline"){
       const base=d.length?d[0].close:0;
       s.applyOptions({ baseValue:{type:"price",price:base} });
-      s.setData(d.map(b=>({time:b.time,value:b.close})));
-    } else s.setData(d.map(b=>({time:b.time,value:b.close})));
+      s.setData(withFuture(d, d.map(b=>({time:b.time,value:b.close}))));
+    } else s.setData(withFuture(d, d.map(b=>({time:b.time,value:b.close}))));
   }
 }
 function setChartType(t){ chartType=t; applyChartType(); if(typeof syncChartTypeUI==="function") syncChartTypeUI(); }
@@ -476,11 +674,95 @@ let _rsiSyncing=false;   // reentrancy guard so the two scales don't ping-pong
 chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r&&!_rsiSyncing){ _rsiSyncing=true; try{rsiChart.timeScale().setVisibleLogicalRange(r);}catch(e){} _rsiSyncing=false; } });
 rsiChart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r&&!_rsiSyncing){ _rsiSyncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} _rsiSyncing=false; } });
 
+// ── Crosshair sync hub ──────────────────────────────────────────────
+// TradingView shows one crosshair across every pane: hover an indicator/RSI pane
+// and the vertical line + the main chart's price/time tags + OHLC legend all
+// follow. Each sub-pane is a separate chart instance, so a hover only fires its
+// own crosshairMove — we relay that time to every other pane here.
+// A pane = { chart, series } where `series` is any series on that chart we can
+// anchor setCrosshairPosition() to (only the time/x matters for the vertical line).
+const panes = [];                  // registered sub-panes (RSI + indicator/script charts)
+let _xhairSyncing = false;         // reentrancy guard so relays don't loop forever
+// Draw the shared vertical crosshair at `time` on every pane except `source`.
+// `source===chart` means the hover originated on the main chart.
+function syncCrosshairToPanes(time, source){
+  if(_xhairSyncing) return;
+  _xhairSyncing = true;
+  try{
+    for(const p of panes){
+      if(p.chart === source || !p.series) continue;
+      try{
+        if(time == null) p.chart.clearCrosshairPosition();
+        else p.chart.setCrosshairPosition(0, time, p.series);  // price ignored — vertical line only
+      }catch(e){}
+    }
+    // mirror onto the main chart too (unless the hover came from there)
+    if(source !== chart){
+      try{
+        if(time == null) chart.clearCrosshairPosition();
+        else { chart.setCrosshairPosition(0, time, candle); updateOhlcLegend(time); }
+      }catch(e){}
+    }
+  } finally { _xhairSyncing = false; }
+}
+// Register a sub-pane so hovering it relays the crosshair to all other panes.
+function registerPane(pchart, series){
+  if(panes.some(p=>p.chart===pchart)){ if(series) setPaneSeries(pchart, series); return; }
+  const entry = { chart:pchart, series };
+  panes.push(entry);
+  entry.handler = p=>{ if(_xhairSyncing) return; syncCrosshairToPanes(p && p.time, pchart); };
+  pchart.subscribeCrosshairMove(entry.handler);
+  return entry;
+}
+// Point a registered pane at a current series — the only thing setCrosshairPosition
+// needs to draw the shared vertical line on that pane. (Script panes rebuild their
+// series on every render, so the anchor must be refreshed.)
+function setPaneSeries(pchart, series){
+  const e = panes.find(p=>p.chart===pchart); if(e) e.series = series;
+}
+function unregisterPane(pchart){
+  const i = panes.findIndex(p=>p.chart===pchart);
+  if(i<0) return;
+  try{ panes[i].chart.unsubscribeCrosshairMove(panes[i].handler); }catch(e){}
+  panes.splice(i,1);
+}
+// The static RSI pane is always present.
+registerPane(rsiChart, rsiLine);
+
 function resize(){
   chart.applyOptions({ width:chartEl.clientWidth, height:chartEl.clientHeight });
   rsiChart.applyOptions({ width:rsiEl.clientWidth, height:rsiEl.clientHeight });
+  alignPriceAxes();
 }
-window.addEventListener("resize", resize);
+// resize is wired once at boot (with sizeCanvas) — see the bottom-of-file listener.
+
+// Force every pane's right-axis gutter to the SAME width so the plot areas line
+// up horizontally — a candle sits directly above its RSI/indicator bar. minimumWidth
+// is only a floor, so a pane with wider labels (RSI "98.51" vs price "0.42") would
+// still grow past it; here we measure the widest actual gutter and pin them all to it.
+function allPaneCharts(){
+  const list=[chart, rsiChart];
+  try{ indicators.forEach(i=>{ if(i.subChart) list.push(i.subChart); }); }catch(e){}
+  try{ scripts.forEach(s=>{ if(s.subChart) list.push(s.subChart); }); }catch(e){}
+  return list;
+}
+function alignPriceAxes(){
+  const charts=allPaneCharts();
+  let w=PRICE_AXIS_W;
+  for(const c of charts){ try{ const cw=c.priceScale("right").width(); if(cw>w) w=cw; }catch(e){} }
+  w=Math.ceil(w);
+  for(const c of charts){ try{ c.priceScale("right").applyOptions({ minimumWidth:w }); }catch(e){} }
+  updateTimeAxisVisibility();
+}
+
+// Stacked panes share one synced time scale, but each chart renders its OWN date
+// axis — so the months print once between every pane. TradingView shows them only
+// once, under the bottom-most pane. allPaneCharts() is already in top-to-bottom
+// visual order, so hide the time axis on every pane except the last.
+function updateTimeAxisVisibility(){
+  const charts=allPaneCharts();
+  charts.forEach((c,i)=>{ try{ c.timeScale().applyOptions({ visible: i===charts.length-1 }); }catch(e){} });
+}
 
 // ── Indicator math ──
 function smaSeries(data, period){
@@ -595,9 +877,14 @@ function sanitize(bars){
   return out;
 }
 
-// Fetch one page of newest candles (or the page ending at `end`). Returns the
-// oldest-first parsed page, or [] on error/empty.
-async function fetchPage(product, g, span, end){
+// ── Per-exchange candle pages ──────────────────────────────────────────
+// Each returns an oldest-first page in the common shape
+// {time(sec), low, high, open, close, volume}, or [] on error/empty. `end` is an
+// epoch-seconds upper bound (exclusive-ish) to page backward through history;
+// `end===null` means "newest".
+
+// Coinbase: [time(s), low, high, open, close, volume], ≤300/page.
+async function fetchPageCoinbase(product, g, span, end){
   const qs = end===null
     ? `granularity=${g}`
     : `granularity=${g}&start=${end-span}&end=${end}`;
@@ -605,6 +892,70 @@ async function fetchPage(product, g, span, end){
     const res = await fetch(`${API}/products/${product}/candles?${qs}`);
     return parseCandlesAgg(await res.json());
   }catch{ return []; }
+}
+
+// Binance spot (api) or USDⓈ-M futures (fapi): kline =
+// [openTime(ms), open, high, low, close, volume, …], ≤1000/page, oldest-first.
+async function fetchPageBinance(rest, g, span, end, isPerp){
+  const host = isPerp ? "https://fapi.binance.com/fapi/v1" : "https://api.binance.com/api/v3";
+  const iv = BINANCE_IV[g] || "1d";
+  let url = `${host}/klines?symbol=${rest}&interval=${iv}&limit=1000`;
+  if(end!==null) url += `&endTime=${end*1000}`;
+  try{
+    const res = await fetch(url);
+    const raw = await res.json();
+    if(!Array.isArray(raw)) return [];
+    return raw.map(k=>({ time:Math.floor(k[0]/1000), open:+k[1], high:+k[2], low:+k[3], close:+k[4], volume:+k[5]||0 }));
+  }catch{ return []; }
+}
+
+// Bybit v5 kline: result.list = [[start(ms), open, high, low, close, volume, turnover], …]
+// newest-first, ≤1000/page. category linear (perp) or spot.
+async function fetchPageBybit(rest, g, span, end, isPerp){
+  const cat = isPerp ? "linear" : "spot";
+  const iv = BYBIT_IV[g] || "D";
+  let url = `https://api.bybit.com/v5/market/kline?category=${cat}&symbol=${rest}&interval=${iv}&limit=1000`;
+  if(end!==null) url += `&end=${end*1000}`;
+  try{
+    const res = await fetch(url);
+    const d = await res.json();
+    const list = d && d.result && d.result.list;
+    if(!Array.isArray(list)) return [];
+    return list.map(k=>({ time:Math.floor(+k[0]/1000), open:+k[1], high:+k[2], low:+k[3], close:+k[4], volume:+k[5]||0 }));
+  }catch{ return []; }
+}
+
+// Yahoo Finance chart: one call returns the whole series for the (interval,range)
+// — there's no backward paging cursor, so we serve the full series on the first
+// page (end===null) and return [] for any deeper page request. Result shape:
+// chart.result[0].{timestamp[], indicators.quote[0].{open,high,low,close,volume}}.
+async function fetchPageYahoo(sym, g, end){
+  if(end!==null) return [];                       // single-shot series; no deeper pages
+  const cfg = YAHOO_IV[g] || YAHOO_IV[86400];
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=${cfg.iv}&range=${cfg.range}`;
+  try{
+    const d = await proxyJSON(url);
+    const res = d && d.chart && d.chart.result && d.chart.result[0];
+    const ts = res && res.timestamp;
+    const q  = res && res.indicators && res.indicators.quote && res.indicators.quote[0];
+    if(!Array.isArray(ts) || !q) return [];
+    const out = [];
+    for(let i=0;i<ts.length;i++){
+      const o=q.open[i], h=q.high[i], l=q.low[i], c=q.close[i];
+      if(o==null||h==null||l==null||c==null) continue;   // Yahoo emits null gaps (holidays/halts)
+      out.push({ time:ts[i], open:+o, high:+h, low:+l, close:+c, volume:+(q.volume[i]||0) });
+    }
+    return out;
+  }catch{ return []; }
+}
+
+// Route one page fetch to the right exchange for this leg.
+async function fetchPage(leg, g, span, end){
+  const r = resolveLeg(leg);
+  if(r.exchange.id==="BINANCE") return fetchPageBinance(r.rest, g, span, end, r.isPerp);
+  if(r.exchange.id==="BYBIT")   return fetchPageBybit(r.rest, g, span, end, r.isPerp);
+  if(r.exchange.id==="YAHOO")   return fetchPageYahoo(r.rest, g, end);
+  return fetchPageCoinbase(r.rest, g, span, end);
 }
 
 // Clean + roll up an oldest-first bar list to the target bucket. Shared by the
@@ -622,21 +973,27 @@ function finalizeBars(all, tf){
 // chart can paint the newest candles immediately, then keeps deepening history
 // in the background. Pages were previously fetched all-then-render, which meant
 // up to 36 sequential round-trips before anything appeared on screen.
-async function fetchKlinesProgressive(product, tfKey, onPage){
+async function fetchKlinesProgressive(leg, tfKey, onPage){
   const tf = TF[tfKey] || TF["1d"];
   const g = tf.base;
-  const span = 300 * g;                 // seconds covered by one full page
-  let end = null;                       // null = newest; Coinbase returns latest
+  const ex = resolveLeg(leg).exchange.id;
+  // Coinbase caps pages at ≤300 bars and needs many pages for depth; Binance/Bybit
+  // return ≤1000 per page, so far fewer round-trips reach the same history.
+  const pageMax = ex==="COINBASE" ? 300 : 1000;
+  const span = pageMax * g;             // seconds covered by one full page
+  const maxPages = ex==="COINBASE" ? tf.pages : Math.max(2, Math.ceil(tf.pages*300/1000)+1);
+  let end = null;                       // null = newest
   const all = [];
-  for(let i=0; i<tf.pages; i++){
-    const page = await fetchPage(product, g, span, end);
+  for(let i=0; i<maxPages; i++){
+    const page = await fetchPage(leg, g, span, end);
     if(!page.length) break;
     all.push(...page);
     if(onPage) onPage(all);                        // render what we have so far
+    if(ex==="YAHOO") break;                         // Yahoo returns the whole series in one page
     end = Math.min(...page.map(k=>k.time)) - g;   // step strictly before the oldest bar we got
-    if(page.length < 200) break;                  // short page = reached start of history; stop early
+    if(page.length < pageMax*0.66) break;          // short page = reached start of history; stop early
   }
-  if(!all.length) throw new Error("No data for "+product);
+  if(!all.length) throw new Error("No data for "+legShort(leg));
   return finalizeBars(all, tf);
 }
 
@@ -670,6 +1027,41 @@ function makeRatio(a, b){
 
 function fmt(v){ return v>=100 ? v.toFixed(2) : v>=1 ? v.toFixed(3) : v.toPrecision(4); }
 
+// How far the empty "future" region extends to the right of the last real bar.
+// ~4 months — the user wants room to draw/project well past the latest candle.
+const FUTURE_DAYS = 120;
+
+// Per-bar spacing (seconds) for the active timeframe. `bucket` is the rolled-up
+// granularity, so e.g. 4h = 14400, 1w = 604800.
+function tfStepSec(){ return (TF[activeTF] || TF["1d"]).bucket || 86400; }
+
+// Build whitespace bars ({time} only — no OHLC) stepping from just after the last
+// real bar out to ~FUTURE_DAYS ahead. Whitespace extends the time scale so the
+// grey grid lines, date-axis labels and the future region all render, and drawings
+// (rays / horizontal lines) have somewhere to project into — without painting
+// fake candles. Capped so an intraday TF can't emit a runaway number of slots.
+// Memoized: renderData fans the same tail out to ~10 series (candle, RSI x7, every
+// sub-pane indicator) per paint. The tail only changes when the last bar's time,
+// the step (timeframe) or the bar count changes — so cache on those and rebuild
+// only then, instead of allocating an identical ≤2000-element array per series.
+let _fwCache = { key:null, tail:[] };
+function futureWhitespace(data){
+  if(!data || !data.length) return [];
+  const step = tfStepSec();
+  const last = data[data.length-1].time;
+  const key  = last + "/" + step + "/" + data.length;
+  if(_fwCache.key === key) return _fwCache.tail;
+  const end  = last + FUTURE_DAYS*86400;
+  const out=[]; let t=last+step;
+  while(t<=end && out.length<2000){ out.push({time:t}); t+=step; }
+  _fwCache = { key, tail:out };
+  return out;
+}
+
+// Append the future-whitespace tail to a real series so its timeline reaches
+// ~4 months ahead in lockstep with the candle series.
+function withFuture(data, pts){ return pts.concat(futureWhitespace(data)); }
+
 // Push a finished bar series into every series + indicator. Called on each
 // progressive page as well as on the final result, so the chart stays live
 // while history keeps deepening underneath it.
@@ -688,16 +1080,28 @@ function renderData(data, keepView){
   });
   document.getElementById("maLegend").innerHTML = legend.slice(0,6).join("");
 
-  // RSI + smoothing MA + TradingView-style fills
+  // RSI + smoothing MA + TradingView-style fills.
+  // rsiSeries/maOfSeries drop the warmup bars, so they're SHORTER than `data`.
+  // The RSI pane is logical-range-synced to the main chart by bar INDEX, so a
+  // shorter series lands at a different index than the candle of the same time —
+  // shifting the whole RSI plot left. Re-key every RSI series onto the full `data`
+  // timeline, emitting whitespace ({time} only) for the warmup gap so each bar
+  // keeps its index and the panes stay aligned.
   const r = rsiSeries(data, 14);
   const rm = maOfSeries(r, 14);
-  rsiOver.setData(r);                                  // green fill where RSI>70
-  rsiUnder.setData(r);                                 // red fill where RSI<30
-  band70.setData(r.map(d=>({time:d.time, value:70})));
-  band50.setData(r.map(d=>({time:d.time, value:50})));
-  band30.setData(r.map(d=>({time:d.time, value:30})));
-  rsiLine.setData(r);
-  rsiMa.setData(rm);
+  const rMap = new Map(r.map(d=>[d.time, d.value]));
+  const rmMap = new Map(rm.map(d=>[d.time, d.value]));
+  const rFull  = data.map(b=> rMap.has(b.time)  ? {time:b.time, value:rMap.get(b.time)}  : {time:b.time});
+  const rmFull = data.map(b=> rmMap.has(b.time) ? {time:b.time, value:rmMap.get(b.time)} : {time:b.time});
+  // Extend each RSI series with the same future whitespace so the indicator pane
+  // reaches ~4 months ahead in lockstep with the main chart (kept index-aligned).
+  rsiOver.setData(withFuture(data, rFull));            // green fill where RSI>70
+  rsiUnder.setData(withFuture(data, rFull));           // red fill where RSI<30
+  band70.setData(withFuture(data, data.map(b=>({time:b.time, value:70}))));
+  band50.setData(withFuture(data, data.map(b=>({time:b.time, value:50}))));
+  band30.setData(withFuture(data, data.map(b=>({time:b.time, value:30}))));
+  rsiLine.setData(withFuture(data, rFull));
+  rsiMa.setData(withFuture(data, rmFull));
   if(r.length)  document.getElementById("rsiVal").textContent   = r[r.length-1].value.toFixed(2);
   if(rm.length) document.getElementById("rsiMaVal").textContent = rm[rm.length-1].value.toFixed(2);
 
@@ -712,11 +1116,16 @@ function renderData(data, keepView){
   // 20s background refresh (keepView).
   if(!keepView && _autoSnap){
     const view = Math.min(data.length, 420);
-    // Keep ~12 bars of empty room on the right (matches timeScale.rightOffset) so
-    // horizontal lines/rays have a visible "future" region to extend into.
-    chart.timeScale().setVisibleLogicalRange({ from: data.length-view, to: data.length+12 });
+    // Show a slice of the new ~4-month future region on the right (about a third of
+    // the visible width) so the user can see it exists, while keeping the recent
+    // candles readable. The full future tail is still pannable beyond this.
+    const future = Math.min(futureWhitespace(data).length, Math.round(view*0.35));
+    chart.timeScale().setVisibleLogicalRange({ from: data.length-view, to: data.length+future });
   }
-  document.getElementById("status").innerHTML = `<span class="dot"></span>Live · Coinbase API · ${data.length} bars`;
+  document.getElementById("status").innerHTML = `<span class="dot"></span>Live · ${activeVenueLabel()} · ${data.length} bars`;
+  // Equalize the right-axis gutters once the new labels have laid out, so the main
+  // chart and every sub-pane keep their candles/bars vertically aligned.
+  setTimeout(alignPriceAxes, 0);
 }
 
 // Token guards against a stale in-flight load clobbering a newer one (e.g. the
@@ -737,12 +1146,29 @@ function stopAutoSnap(){ _autoSnap = false; }
 
 async function loadChart(symbol, tf, keepView){
   const myToken = ++loadToken;
-  document.getElementById("symName").textContent = symbol;
+  // A fresh load (symbol/TF switch) discards any manual axis stretch — a price range
+  // pinned for one asset (e.g. BTC ~60k) is meaningless for the next (NEAR ~0.4).
+  // Also restore the default margins a manual pan/stretch may have zeroed.
+  if(!keepView){ manualPriceRange=null;
+    try{ chart.priceScale("right").applyOptions({ autoScale:true, scaleMargins:{ top:0.2, bottom:0.1 } }); }catch(e){} }
+  activeSymbol = symbol;   // the symbol being charted = the active one (keeps status/venue labels in sync)
+  document.getElementById("symName").textContent = symbol.includes("/") ? symbol : legShort(symbol);
+  // venue label: for a ratio, show both sides' venues if they differ
+  const exEl = document.getElementById("exName");
+  if(exEl){
+    if(symbol.includes("/")){
+      const exs = [...new Set(symbol.split("/").map(s=>resolveLeg(s).exchange.label))];
+      exEl.textContent = exs.join(" / ");
+    } else {
+      const r = resolveLeg(symbol);
+      exEl.textContent = r.exchange.label + (r.isPerp ? " Perp" : "");
+    }
+  }
   document.getElementById("tfName").textContent = (TF[tf]||{}).label || tf;
   // clear any stale "No data" error from the previous symbol and show progress.
   if(!keepView){
     document.getElementById("ohlc").innerHTML = "";
-    document.getElementById("status").innerHTML = `<span class="dot"></span>Loading ${symbol}…`;
+    document.getElementById("status").innerHTML = `<span class="dot"></span>Loading ${escHtml(symbol)}…`;
     _autoSnap = true;   // a fresh load may snap to the latest candle until the user pans/zooms
   }
   const fresh = ()=> myToken===loadToken;       // still the active load?
@@ -779,7 +1205,7 @@ async function loadChart(symbol, tf, keepView){
       paint(data);
     }
   }catch(e){
-    if(fresh()) document.getElementById("ohlc").innerHTML = `<span class="down">⚠ ${e.message}</span>`;
+    if(fresh()) document.getElementById("ohlc").innerHTML = `<span class="down">⚠ ${escHtml(e.message)}</span>`;
   }
 }
 
@@ -820,7 +1246,7 @@ function buildWatchlist(){
       row.className="row"+(sym===activeSymbol?" active":"");
       row.dataset.sym = sym;
       const isRatio = sym.includes("/");
-      const base = sym.split("/")[0].split("-")[0];
+      const base = legBase(sym).toUpperCase();
       // logo: real coin icon, or a letter circle for ratios / coins with no icon
       let icon;
       if(isRatio){
@@ -829,12 +1255,18 @@ function buildWatchlist(){
         icon = `<span class="ic" style="background:#2962ff">${base[0]}</span>`;
       } else {
         // <img>; if it 404s, swap to a letter circle on error
-        icon = `<img class="ic" src="${logoUrl(sym)}" alt="${base}"
+        icon = `<img class="ic" src="${logoForBase(base)}" alt="${base}"
           onerror="this.outerHTML='<span class=\\'ic\\' style=\\'background:#2962ff\\'>${base[0]}</span>'">`;
       }
       row.dataset.group = g.name;           // a symbol may live in >1 group; key edits by group+sym
       row.draggable = true;
-      row.innerHTML = `<span class="sym">${icon}<span class="nm">${sym}</span></span>
+      // Cleaner display: ratios verbatim; otherwise the venue ticker + a small
+      // exchange tag (Binance/Bybit; Coinbase implied so left untagged).
+      const exMeta = isRatio ? null : resolveLeg(sym).exchange;
+      const nmLabel = isRatio ? sym : legShort(sym);
+      const exBadge = (exMeta && exMeta.id!=="COINBASE")
+        ? `<span class="exbadge">${exMeta.label}</span>` : "";
+      row.innerHTML = `<span class="sym">${icon}<span class="nm">${escHtml(nmLabel)}</span>${exBadge}</span>
         <span class="last" data-last>—</span><span class="chgabs" data-chgabs>—</span><span class="chg" data-chg>—</span>
         <span class="del" title="Remove from watchlist">${icTrashWl()}</span>`;
       row.onclick = ()=>{
@@ -1012,18 +1444,363 @@ function normSym(input){
   if(!s.includes("-")) s = s + "-USD";       // bare base → assume USD quote
   return s;
 }
-function addSymbolToGroup(name){
-  const g = GROUPS.find(x=>x.name===name); if(!g) return;
-  const raw = prompt(`Add symbol to "${g.name}"  (e.g. BTC, SOL-USD, ETH/BTC):`, "");
-  if(raw==null) return;
-  const sym = normSym(raw);
-  if(!sym) return;
-  if(g.symbols.includes(sym)){ alert(`${sym} is already in ${g.name}.`); return; }
+// Add a normalised symbol to a group by name. Returns "added" | "dupe" | "nogroup".
+function pushSymbol(groupName, sym){
+  const g = GROUPS.find(x=>x.name===groupName); if(!g) return "nogroup";
+  if(g.symbols.includes(sym)) return "dupe";
   g.symbols.push(sym);
   saveGroups();
   buildWatchlist();
   refreshPrices();
+  return "added";
 }
+
+// ── Add-symbol search dialog (TradingView-style) ──
+// Lazily fetches Coinbase's full product list once and caches it, then live-filters
+// it as you type. Click a row (or press Enter on the highlight) to add it to the
+// target section. The ＋ in the watchlist header opens this against the first
+// section; the section context-menu opens it against that section.
+const symDlg = document.getElementById("symDlg");
+// Cached unified product list across venues. Each record:
+//   { leg, id, base, quote, name, exLabel, isPerp }
+// leg     = string stored in the watchlist (BTC-USD | BINANCE:BTCUSDT | BYBIT:BTCUSDT.P)
+// id      = human display ticker (BTC-USD | BTCUSDT | BTCUSDT.P)
+// exLabel = "Coinbase" | "Binance" | "Bybit"  (perp also flagged via isPerp)
+let PRODUCTS = null;
+let productsLoading = null;   // in-flight promise, so concurrent opens share one fetch
+
+async function fetchCoinbaseProducts(){
+  const r = await fetch(`${API}/products`);
+  if(!r.ok) throw new Error("coinbase "+r.status);
+  const raw = await r.json();
+  return raw
+    .filter(p=>!p.trading_disabled && p.status==="online" && !p.id.includes("delisted"))
+    .map(p=>({ leg:p.id, id:p.id, base:p.base_currency, quote:p.quote_currency,
+               name:(p.display_name||p.id), exLabel:"Coinbase", isPerp:false }));
+}
+async function fetchBinanceProducts(isPerp){
+  const host = isPerp ? "https://fapi.binance.com/fapi/v1" : "https://api.binance.com/api/v3";
+  const r = await fetch(`${host}/exchangeInfo`);
+  if(!r.ok) throw new Error("binance "+r.status);
+  const d = await r.json();
+  return (d.symbols||[])
+    .filter(s=> isPerp ? (s.contractType==="PERPETUAL" && s.status==="TRADING")
+                       : (s.status==="TRADING" && !s.symbol.includes("_")))
+    .map(s=>({ leg:`BINANCE:${s.symbol}${isPerp?".P":""}`, id:`${s.symbol}${isPerp?".P":""}`,
+               base:s.baseAsset, quote:s.quoteAsset,
+               name:`${s.baseAsset} / ${s.quoteAsset}${isPerp?" Perp":""}`,
+               exLabel:"Binance", isPerp }));
+}
+async function fetchBybitProducts(isPerp){
+  const cat = isPerp ? "linear" : "spot";
+  // spot/linear instrument lists are paged (cursor); pull all pages.
+  let cursor = "", out = [], guard = 0;
+  do{
+    const url = `https://api.bybit.com/v5/market/instruments-info?category=${cat}&limit=1000${cursor?`&cursor=${encodeURIComponent(cursor)}`:""}`;
+    const r = await fetch(url);
+    if(!r.ok) throw new Error("bybit "+r.status);
+    const d = await r.json();
+    const list = (d.result && d.result.list) || [];
+    for(const s of list){
+      if(s.status && s.status!=="Trading") continue;
+      if(isPerp && s.contractType && s.contractType!=="LinearPerpetual") continue;
+      out.push({ leg:`BYBIT:${s.symbol}${isPerp?".P":""}`, id:`${s.symbol}${isPerp?".P":""}`,
+                 base:s.baseCoin, quote:s.quoteCoin,
+                 name:`${s.baseCoin} / ${s.quoteCoin}${isPerp?" Perp":""}`,
+                 exLabel:"Bybit", isPerp });
+    }
+    cursor = (d.result && d.result.nextPageCursor) || "";
+  } while(cursor && ++guard < 10);
+  return out;
+}
+
+async function loadProducts(){
+  if(PRODUCTS) return PRODUCTS;
+  if(productsLoading) return productsLoading;
+  productsLoading = (async ()=>{
+    // Fetch every venue in parallel; a venue that fails (geo-block, rate limit)
+    // is skipped, never blocking the others. allSettled → keep what succeeded.
+    const jobs = [
+      fetchCoinbaseProducts(),
+      fetchBinanceProducts(false),
+      fetchBinanceProducts(true),
+      fetchBybitProducts(false),
+      fetchBybitProducts(true),
+    ];
+    const settled = await Promise.allSettled(jobs);
+    const merged = [];
+    for(const s of settled){ if(s.status==="fulfilled") merged.push(...s.value); }
+    if(!merged.length) throw new Error("no products from any venue");
+    merged.sort((a,b)=> a.base.localeCompare(b.base) || a.id.localeCompare(b.id));
+    PRODUCTS = merged;
+    return PRODUCTS;
+  })();
+  try{ return await productsLoading; }
+  finally{ productsLoading = null; }
+}
+
+// ── Global market search (Yahoo Finance) ────────────────────────────────
+// Yahoo's search endpoint returns matches across every non-crypto asset class
+// TradingView lists — stocks, ETFs, forex (CURRENCY), commodities/metals
+// (FUTURE), indices (INDEX) — across global exchanges. Crucially the symbol it
+// returns IS the symbol its chart endpoint charts, so no translation is needed:
+// the leg is simply YF:<symbol>. Routed through the CORS proxy; cached per query.
+const YF_SEARCH = "https://query1.finance.yahoo.com/v1/finance/search?newsCount=0&quotesCount=30&q=";
+const tvCache = new Map();     // query → product[]   (session-lived)
+let tvSeq = 0;                 // guards against out-of-order async renders
+
+// Yahoo quoteType → short asset-class label for the row's right tag.
+const YF_TYPE_LABEL = {
+  EQUITY:"Stock", ETF:"ETF", MUTUALFUND:"Fund", FUTURE:"Futures",
+  CURRENCY:"Forex", INDEX:"Index", CRYPTOCURRENCY:"Crypto", OPTION:"Option",
+};
+// Fetch & normalise Yahoo search matches into our product-record shape. Kept the
+// fetchTVResults/tv* names so the dialog wiring is unchanged; the "TradingView"
+// tab now means "everything beyond the crypto venues", served by Yahoo.
+async function fetchTVResults(q){
+  const key = q.trim().toLowerCase();
+  if(!key) return [];
+  if(tvCache.has(key)) return tvCache.get(key);
+  let raw;
+  try{ raw = await proxyJSON(YF_SEARCH + encodeURIComponent(q.trim())); }
+  catch{ return []; }                                  // proxy/network failure → no remote rows
+  const arr = (raw && Array.isArray(raw.quotes)) ? raw.quotes : [];
+  const out = [];
+  const seen = new Set();
+  for(const h of arr){
+    const sym  = h.symbol;
+    const type = (h.quoteType||"").toUpperCase();
+    if(!sym) continue;
+    if(type==="CRYPTOCURRENCY") continue;              // crypto already covered by exchange tabs
+    if(seen.has(sym)) continue;
+    seen.add(sym);
+    const name  = h.shortname || h.longname || h.shortName || sym;
+    const venue = h.exchDisp || h.exchange || "";
+    out.push({
+      leg:`YF:${sym}`, id:sym, base:sym, quote:"",
+      name, exLabel:"TradingView", isPerp:false,
+      tvType:(YF_TYPE_LABEL[type] || (type ? type[0]+type.slice(1).toLowerCase() : "")),
+      tvVenue:venue,
+    });
+    if(out.length>=40) break;                          // cap remote rows per query
+  }
+  tvCache.set(key, out);
+  return out;
+}
+
+let symDlgState = null;  // {group, results, cur} while open
+
+function openAddSymbolDlg(groupName){
+  // default target = first section; create one if the list is somehow empty
+  if(groupName==null){
+    if(!GROUPS.length){ GROUPS.push({name:uniqueGroupName("SECTION"), symbols:[]}); saveGroups(); }
+    groupName = GROUPS[0].name;
+  }
+  closeAllPopups();
+  symDlgState = { group:groupName, results:[], cur:0, ex:"ALL", tv:[], tvQuery:"", tvLoading:false };
+  const tabs = [["ALL","All"],["Coinbase","Coinbase"],["Binance","Binance"],["Bybit","Bybit"],["TradingView","Stocks & more"]]
+    .map(([id,label])=>`<button class="symtab${id==="ALL"?" cur":""}" data-ex="${id}">${label}</button>`).join("");
+  symDlg.innerHTML =
+    `<div class="dh"><span>Add symbol <span class="exch" style="color:var(--muted);font-weight:400;font-size:12px">· ${escHtml(groupName)}</span></span><span class="cl" id="symClose">×</span></div>`
+   +`<div class="db">`
+   +  `<div class="symsearch">`
+   +    `<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>`
+   +    `<input id="symInput" type="text" placeholder="Search anything — crypto, stocks, ETFs, gold, FX, indices (e.g. AAPL, SPY, XAUUSD, EURUSD, SPX)" autocomplete="off" spellcheck="false">`
+   +  `</div>`
+   +  `<div class="symtabs" id="symTabs">${tabs}</div>`
+   +  `<div class="symlist" id="symList"><div class="symempty">Loading symbols…</div></div>`
+   +`</div>`
+   +`<div class="symfoot"><kbd>↑</kbd><kbd>↓</kbd> navigate <kbd>Enter</kbd> add <kbd>Esc</kbd> close</div>`;
+  symDlg.classList.add("open");
+  document.getElementById("dlgBackdrop").classList.add("open");
+  document.getElementById("symClose").onclick = closeSymDlg;
+
+  const input = document.getElementById("symInput");
+  input.oninput = ()=>renderSymResults(input.value);
+  input.onkeydown = onSymKey;
+  input.focus();
+
+  // Exchange tabs filter the result list to one venue (or All).
+  document.getElementById("symTabs").querySelectorAll(".symtab").forEach(tab=>{
+    tab.onclick = ()=>{
+      symDlgState.ex = tab.dataset.ex;
+      symDlgState.cur = 0;
+      document.querySelectorAll("#symTabs .symtab").forEach(t=>t.classList.toggle("cur", t===tab));
+      renderSymResults(input.value);
+      input.focus();
+    };
+  });
+
+  // first paint once products are ready (or surface an error)
+  loadProducts().then(()=>{ if(symDlg.classList.contains("open")) renderSymResults(input.value); })
+    .catch(()=>{ const l=document.getElementById("symList");
+      if(l) l.innerHTML = `<div class="symempty">Couldn't load symbols. You can still type an exact id (e.g. BTC-USD) and press Enter.</div>`; });
+}
+
+// Venue display order: crypto exchanges first, then TradingView (stocks/etc.)
+// last as a tiebreak so the same ticker clusters predictably.
+const EX_ORDER = { Coinbase:0, Binance:1, Bybit:2, TradingView:3 };
+
+function symMatches(q){
+  const exFilter = symDlgState ? symDlgState.ex : "ALL";
+  // Candidate pool: local crypto products + any TradingView results fetched for
+  // this query. The TradingView tab shows ONLY remote rows; other tabs filter the
+  // crypto pool; All blends both.
+  const tv = (symDlgState && symDlgState.tv) || [];
+  let pool;
+  if(exFilter==="TradingView")      pool = tv;
+  else if(exFilter && exFilter!=="ALL") pool = (PRODUCTS || []).filter(p=>p.exLabel===exFilter);
+  else                              pool = [...(PRODUCTS || []), ...tv];
+
+  q = q.trim().toUpperCase();
+  if(!q){                                          // starter list before typing
+    return [...pool].sort((a,b)=> (EX_ORDER[a.exLabel]-EX_ORDER[b.exLabel]) || a.id.localeCompare(b.id)).slice(0, 80);
+  }
+  const norm = q.replace(/\//g,"-");              // treat ETH/BTC like ETH-BTC for matching
+  const compact = q.replace(/[-/]/g,"");          // BTCUSDT-style query w/o separators
+  const scored = [];
+  for(const p of pool){
+    const id = p.id.toUpperCase(), nm = (p.name||"").toUpperCase(), ex = p.exLabel.toUpperCase();
+    const idc = id.replace(/[-.]/g,"");
+    const base = (p.base||"").toUpperCase();
+    // TradingView already ranked its hits by relevance for this query; give them a
+    // solid baseline so good remote matches aren't buried under loose crypto ones.
+    let score = p.exLabel==="TradingView" ? 50 : -1;
+    if(id===norm || id===q) score = 100;
+    else if(base===q) score = 90;                 // exact base ticker
+    else if(id.startsWith(norm) || idc.startsWith(compact)) score = 80;
+    else if(base.startsWith(q)) score = 70;
+    else if(ex.startsWith(q)) score = 55;         // "binance"/"bybit"/"trading" → that venue
+    else if(nm.includes(q)) score = Math.max(score, 40);   // match on display name
+    else if(id.includes(norm) || idc.includes(compact)) score = Math.max(score, 30);
+    if(score>=0) scored.push([score, p]);
+  }
+  scored.sort((a,b)=> b[0]-a[0]
+                   || (EX_ORDER[a[1].exLabel]-EX_ORDER[b[1].exLabel])
+                   || a[1].id.localeCompare(b[1].id));
+  return scored.slice(0, 80).map(s=>s[1]);
+}
+
+// Kick off (debounced) the remote TradingView search for `q`. When it lands and
+// is still the current query + dialog, merge it into state and re-render. Crypto
+// rows are already on screen, so this just enriches the list with stocks/ETFs/etc.
+let tvDebounce = null;
+function scheduleTVSearch(q){
+  if(!symDlgState) return;
+  const key = q.trim();
+  if(key.length < 1){ symDlgState.tv = []; symDlgState.tvQuery=""; return; }
+  if(symDlgState.tvQuery === key) return;          // already have/fetching this query
+  clearTimeout(tvDebounce);
+  tvDebounce = setTimeout(async ()=>{
+    if(!symDlgState) return;
+    const myKey = key, mySeq = ++tvSeq;
+    symDlgState.tvLoading = true; paintSymStatus();
+    const res = await fetchTVResults(myKey);
+    if(!symDlgState || mySeq!==tvSeq) return;       // dialog closed or newer query won
+    symDlgState.tv = res; symDlgState.tvQuery = myKey; symDlgState.tvLoading = false;
+    const input = document.getElementById("symInput");
+    renderSymResults(input ? input.value : myKey);
+  }, 220);
+}
+// Tiny "searching markets…" hint while the remote call is in flight.
+function paintSymStatus(){
+  const list = document.getElementById("symList"); if(!list || !symDlgState) return;
+  let bar = list.parentNode.querySelector(".symstatus");
+  if(symDlgState.tvLoading){
+    if(!bar){ bar = document.createElement("div"); bar.className="symstatus"; list.parentNode.insertBefore(bar, list); }
+    bar.textContent = "Searching global markets…";
+  } else if(bar){ bar.remove(); }
+}
+
+function renderSymResults(q){
+  if(!symDlgState) return;
+  const list = document.getElementById("symList"); if(!list) return;
+  scheduleTVSearch(q);                              // enrich with global markets (async)
+  paintSymStatus();
+  const g = GROUPS.find(x=>x.name===symDlgState.group);
+  const have = new Set(g ? g.symbols : []);
+  const res = symMatches(q);
+  symDlgState.results = res;
+  if(symDlgState.cur >= res.length) symDlgState.cur = 0;
+
+  if(!res.length){
+    const loading = symDlgState.tvLoading;
+    let msg;
+    if(loading) msg = "Searching global markets…";
+    else if(symDlgState.ex==="TradingView" && !q.trim())
+      msg = "Type to search stocks, ETFs, gold, forex, indices…";
+    else msg = `No matches${q.trim()?` for “${escHtml(q.trim())}”`:""}.`;
+    list.innerHTML = `<div class="symempty">${msg}</div>`;
+    return;
+  }
+  list.innerHTML = res.map((p,i)=>{
+    const added = have.has(p.leg);
+    const base  = (p.base||"?").toUpperCase();
+    const icon  = NO_LOGO.has(base)
+      ? `<span class="ic" style="background:#2962ff">${escHtml(base[0]||"?")}</span>`
+      : `<img class="ic" src="${logoForBase(base)}" alt="${escHtml(base)}" onerror="this.outerHTML='<span class=\\'ic\\' style=\\'background:#2962ff\\'>${escHtml(base[0]||"?")}</span>'">`;
+    const exTag = p.exLabel==="TradingView"
+      ? [p.tvVenue, p.tvType].filter(Boolean).join(" · ") || "TradingView"
+      : p.exLabel + (p.isPerp ? " · Perp" : "");
+    return `<div class="symrow${i===symDlgState.cur?" cur":""}${added?" added":""}" data-i="${i}">`
+         +   icon
+         +   `<span class="meta"><span class="id">${escHtml(p.id)}</span><span class="nm">${escHtml(p.name)}</span></span>`
+         +   `<span class="exch">${escHtml(exTag)}</span>`
+         +   `<span class="plus">${added?"✓":"＋"}</span>`
+         + `</div>`;
+  }).join("");
+
+  list.querySelectorAll(".symrow").forEach(rowEl=>{
+    const i = +rowEl.dataset.i;
+    rowEl.onmouseenter = ()=>{ symDlgState.cur = i; highlightSymRow(); };
+    rowEl.onclick = ()=>chooseSym(i);
+  });
+}
+
+function highlightSymRow(){
+  const list = document.getElementById("symList"); if(!list) return;
+  list.querySelectorAll(".symrow").forEach(r=>r.classList.toggle("cur", +r.dataset.i===symDlgState.cur));
+  const cur = list.querySelector(".symrow.cur");
+  if(cur) cur.scrollIntoView({block:"nearest"});
+}
+
+function chooseSym(i){
+  if(!symDlgState) return;
+  const p = symDlgState.results[i]; if(!p) return;
+  const r = pushSymbol(symDlgState.group, p.leg);
+  if(r==="dupe"){ flashSymRow(i); return; }        // already there → just nudge, keep dialog open
+  renderSymResults(document.getElementById("symInput").value);  // repaint so the ✓ shows
+}
+
+function flashSymRow(i){
+  const row = document.querySelector(`#symList .symrow[data-i="${i}"]`);
+  if(row){ row.classList.add("added"); row.querySelector(".plus").textContent="✓"; }
+}
+
+function onSymKey(e){
+  if(!symDlgState) return;
+  const n = symDlgState.results.length;
+  if(e.key==="ArrowDown"){ e.preventDefault(); if(n){ symDlgState.cur=(symDlgState.cur+1)%n; highlightSymRow(); } }
+  else if(e.key==="ArrowUp"){ e.preventDefault(); if(n){ symDlgState.cur=(symDlgState.cur-1+n)%n; highlightSymRow(); } }
+  else if(e.key==="Enter"){
+    e.preventDefault();
+    if(n){ chooseSym(symDlgState.cur); }
+    else {                                          // no list (e.g. products failed) → accept raw text
+      const sym = normSym(document.getElementById("symInput").value);
+      if(sym){ pushSymbol(symDlgState.group, sym); closeSymDlg(); }
+    }
+  }
+}
+
+function closeSymDlg(){
+  symDlgState = null;
+  symDlg.classList.remove("open");
+  // only drop the backdrop if no other dialog is using it
+  if(!document.querySelector(".dialog.open")) document.getElementById("dlgBackdrop").classList.remove("open");
+}
+
+// Kept for the section context-menu: open the searchable dialog against that section.
+function addSymbolToGroup(name){ openAddSymbolDlg(name); }
 
 function showSectionMenu(name, x, y){
   showCtx(x, y, [
@@ -1063,6 +1840,47 @@ async function fetchStats(product){
   }catch{ return null; }
 }
 
+// Binance/Bybit DO have bulk 24h ticker endpoints — one call covers every leg on
+// that venue. Cache per refresh cycle so spot+perp on the same host share a call.
+// Each returns a { restSymbol: {last, open} } map.
+async function fetchBulkBinance(isPerp){
+  const host = isPerp ? "https://fapi.binance.com/fapi/v1" : "https://api.binance.com/api/v3";
+  try{
+    const r = await fetch(`${host}/ticker/24hr`);
+    const arr = await r.json();
+    if(!Array.isArray(arr)) return {};
+    const m = {};
+    for(const t of arr) m[t.symbol] = { last:+t.lastPrice, open:+t.openPrice };
+    return m;
+  }catch{ return {}; }
+}
+async function fetchBulkBybit(isPerp){
+  const cat = isPerp ? "linear" : "spot";
+  try{
+    const r = await fetch(`https://api.bybit.com/v5/market/tickers?category=${cat}`);
+    const d = await r.json();
+    const list = d && d.result && d.result.list;
+    if(!Array.isArray(list)) return {};
+    const m = {};
+    for(const t of list) m[t.symbol] = { last:+t.lastPrice, open:+t.prevPrice24h };
+    return m;
+  }catch{ return {}; }
+}
+// Yahoo has no bulk endpoint here; a 1d/5d chart call carries meta.regularMarketPrice
+// and meta.chartPreviousClose, giving {last, open} (open = prior close, so Chg% is the
+// daily move — matching how TradingView shows stock change).
+async function fetchStatsYahoo(sym){
+  try{
+    const d = await proxyJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`);
+    const meta = d && d.chart && d.chart.result && d.chart.result[0] && d.chart.result[0].meta;
+    if(!meta || meta.regularMarketPrice==null) return null;
+    const last = +meta.regularMarketPrice;
+    const open = meta.chartPreviousClose!=null ? +meta.chartPreviousClose
+               : (meta.previousClose!=null ? +meta.previousClose : last);
+    return { last, open };
+  }catch{ return null; }
+}
+
 // Run async tasks with a concurrency cap. The watchlist has ~40 legs; firing
 // them all at once saturates the browser's 6-connections-per-host limit and
 // starves the chart's own fetches (that was the ~30s blank-chart stall). A
@@ -1085,8 +1903,31 @@ async function refreshPrices(){
   const all = allSymbols();
   const legs = new Set();
   all.forEach(sym=> sym.split("/").forEach(s=>legs.add(s)) );
-  const entries = await mapLimit([...legs], 4, async p=>[p, await fetchStats(p)]);
-  const stats = Object.fromEntries(entries);
+
+  // Bucket legs by venue: Coinbase legs hit per-product /stats; Binance/Bybit
+  // legs are answered from one bulk ticker call per (venue, market).
+  const cbLegs = [], biSpot = [], biPerp = [], bySpot = [], byPerp = [], yfLegs = [];
+  for(const leg of legs){
+    const r = resolveLeg(leg);
+    if(r.exchange.id==="BINANCE") (r.isPerp?biPerp:biSpot).push(leg);
+    else if(r.exchange.id==="BYBIT") (r.isPerp?byPerp:bySpot).push(leg);
+    else if(r.exchange.id==="YAHOO") yfLegs.push(leg);
+    else cbLegs.push(leg);
+  }
+  const stats = {};
+  // fire the bulk calls (only those actually needed) alongside the Coinbase sweep
+  const bulkJobs = [];
+  if(biSpot.length) bulkJobs.push(fetchBulkBinance(false).then(m=>biSpot.forEach(l=>{ const v=m[resolveLeg(l).rest]; if(v) stats[l]=v; })));
+  if(biPerp.length) bulkJobs.push(fetchBulkBinance(true ).then(m=>biPerp.forEach(l=>{ const v=m[resolveLeg(l).rest]; if(v) stats[l]=v; })));
+  if(bySpot.length) bulkJobs.push(fetchBulkBybit(false).then(m=>bySpot.forEach(l=>{ const v=m[resolveLeg(l).rest]; if(v) stats[l]=v; })));
+  if(byPerp.length) bulkJobs.push(fetchBulkBybit(true ).then(m=>byPerp.forEach(l=>{ const v=m[resolveLeg(l).rest]; if(v) stats[l]=v; })));
+  const cbJob = mapLimit(cbLegs, 4, async p=>[p, await fetchStats(resolveLeg(p).rest)])
+    .then(entries=>entries.forEach(([l,v])=>{ if(v) stats[l]=v; }));
+  // Yahoo: one proxied call per leg, concurrency-capped (proxies rate-limit harder
+  // than exchanges, so keep this small).
+  const yfJob = mapLimit(yfLegs, 3, async p=>[p, await fetchStatsYahoo(resolveLeg(p).rest)])
+    .then(entries=>entries.forEach(([l,v])=>{ if(v) stats[l]=v; }));
+  await Promise.all([...bulkJobs, cbJob, yfJob]);
 
   all.forEach(sym=>{
     let price, prev;
@@ -1410,17 +2251,51 @@ function installHoverTracker(){}
 
 // Manual chart pan for crosshair mode (the canvas always covers the chart, so the
 // chart's built-in drag-to-scroll can't see the gesture — we forward it here).
+// Horizontal drag scrolls the time scale; vertical drag shifts the price scale
+// (TradingView-style free pan in any direction).
 let panState=null;
 function startPan(p){
   const ts=chart.timeScale();
-  panState={ startX:p.x, startScroll:ts.scrollPosition() };
+  panState={ startX:p.x, startY:p.y, startScroll:ts.scrollPosition(),
+             startMargins:null, h:dcanvas.clientHeight||1 };
+  capturePanPrice();   // snapshot the current scaleMargins offset
+}
+// Snapshot the price scale's current vertical offset (scaleMargins) so a vertical
+// drag can slide it. We move the margins as a BALANCED pair — top += d, bottom -= d
+// — which keeps (top+bottom) constant, so the data band always occupies the same
+// fraction of the pane and the candle SIZE never changes (a pure translation, not a
+// rescale). lightweight-charts requires each margin in [0,1], so the pan is bounded
+// (content slides until it touches an edge) — the same practical limit TradingView
+// has. Returns false only if the scale isn't readable yet.
+function capturePanPrice(){
+  let m;
+  try{ m = chart.priceScale("right").options().scaleMargins; }catch(e){ m=null; }
+  if(!m) return false;
+  panState.startMargins = { top:m.top, bottom:m.bottom };
+  return true;
 }
 function doPan(p){
   if(!panState) return;
   const ts=chart.timeScale();
+  // — horizontal: scroll the time scale by whole-bar deltas —
   const spacing = currentBarSpacing();                       // px per bar
   const deltaBars = (p.x - panState.startX) / spacing;        // drag-left → scroll back
   ts.scrollToPosition(panState.startScroll - deltaBars, false);
+  // — vertical: slide the balanced margins so the plot tracks the cursor 1:1 —
+  if(!panState.startMargins){                                // late-bind if press was too early
+    if(capturePanPrice()) panState.startY = p.y;             // re-anchor so there's no jump
+  }
+  if(panState.startMargins){
+    const dy = p.y - panState.startY;                         // px dragged (down = +)
+    let f = dy / panState.h;                                  // fraction of pane height
+    const t0 = panState.startMargins.top, b0 = panState.startMargins.bottom;
+    // Clamp the shift so NEITHER margin leaves [0,1]; both move by the same |f| so
+    // their sum is preserved → no compression. Drag DOWN (f>0) pushes content down.
+    const maxDown = b0;          // bottom can drop to 0
+    const maxUp   = t0;          // top can drop to 0 (f negative)
+    f = Math.max(-maxUp, Math.min(maxDown, f));
+    try{ chart.priceScale("right").applyOptions({ scaleMargins:{ top:t0 + f, bottom:b0 - f } }); }catch(e){}
+  }
   redraw();
 }
 function currentBarSpacing(){
@@ -1430,6 +2305,53 @@ function currentBarSpacing(){
   const xa=chart.timeScale().timeToCoordinate(a.time), xb=chart.timeScale().timeToCoordinate(b.time);
   if(xa!=null&&xb!=null&&xa!==xb) return Math.abs(xb-xa);
   return 6;
+}
+
+// ── Right price-axis vertical drag (TradingView-style scale stretch) ──
+// The overlay canvas covers the chart, so the chart's own axisPressedMouseMove
+// never sees the gesture. We detect a press in the axis gutter and adjust a manual
+// price range: drag DOWN expands the range (zoom out / candles shrink), drag UP
+// compresses it (zoom in / candles grow). Double-click the axis → back to auto.
+let axisDrag=null;
+// True when the point is over the right price-axis gutter (the strip past the plot).
+function inPriceAxis(p){
+  const w=dcanvas.clientWidth;
+  return p.x >= w - axisW() && p.x <= w;
+}
+// Read the plot's current visible price span from the candle's pixel↔price map.
+function visiblePriceRange(){
+  const h=dcanvas.clientHeight;
+  let top=candle.coordinateToPrice(0), bot=candle.coordinateToPrice(h);
+  if(top==null || bot==null){ const f=priceFit(); if(!f) return null;
+    top=f.p1+(0-f.y1)*f.slope; bot=f.p1+(h-f.y1)*f.slope; }
+  const max=Math.max(top,bot), min=Math.min(top,bot);
+  return (isFinite(max)&&isFinite(min)&&max>min) ? {min,max} : null;
+}
+function startAxisDrag(p){
+  const r=visiblePriceRange(); if(!r) return false;
+  axisDrag={ startY:p.y, base:r, center:(r.min+r.max)/2, span:r.max-r.min };
+  dcanvas.style.cursor="ns-resize";
+  return true;
+}
+function doAxisDrag(p){
+  if(!axisDrag) return;
+  const h=dcanvas.clientHeight||1;
+  // Drag distance as a fraction of pane height → exponential zoom factor so the
+  // feel is symmetric up vs down. Down (dy>0) → factor>1 (expand range / zoom out).
+  const dy=p.y-axisDrag.startY;
+  const factor=Math.exp(dy/h * 2.2);            // 2.2 ≈ TradingView sensitivity
+  const span=Math.max(axisDrag.span*factor, 1e-12);
+  manualPriceRange={ min:axisDrag.center-span/2, max:axisDrag.center+span/2 };
+  candle.applyOptions({});                        // nudge LWC to re-run autoscaleInfoProvider
+  redraw();
+}
+function resetPriceScale(){
+  manualPriceRange=null;
+  // Restore auto-scale AND the default breathing-room margins removed during a
+  // manual pan/stretch, so the chart re-fits to the data with normal padding.
+  try{ chart.priceScale("right").applyOptions({ autoScale:true, scaleMargins:{ top:0.2, bottom:0.1 } }); }catch(e){}
+  candle.applyOptions({});                        // back to auto-scale (re-fit to data)
+  redraw();
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1514,9 +2436,10 @@ function updateCrosshair(p){
   try{
     const price=candle.coordinateToPrice(p.y);
     const time=chart.timeScale().coordinateToTime(p.x);
-    if(price==null || time==null){ chart.clearCrosshairPosition(); return; }
+    if(price==null || time==null){ chart.clearCrosshairPosition(); syncCrosshairToPanes(null, chart); return; }
     chart.setCrosshairPosition(price, time, candle);
     updateOhlcLegend(time);
+    syncCrosshairToPanes(time, chart);   // relay onto RSI + indicator/script panes
   }catch(e){}
 }
 // Show the OHLC of the bar nearest the crosshair time (or the hovered price when
@@ -1569,6 +2492,9 @@ dcanvas.addEventListener("mousedown", e=>{
   stopAutoSnap();                          // a real pan gesture → stop auto-snapping to latest
   const p=evtPt(e), c=ptToCoord(p);
   downPt=p; downMoved=false;
+
+  // ── Right price-axis: vertical drag stretches the price scale (any mode). ──
+  if(inPriceAxis(p) && startAxisDrag(p)){ downPt=null; return; }
 
   // ── Alert delete icon takes priority in any mode (it's only shown on hover). ──
   const trashId=alertTrashHit(p);
@@ -1698,6 +2624,10 @@ function finishOneClick(tool,c){
 dcanvas.addEventListener("mousemove", e=>{
   const p=evtPt(e), c=ptToCoord(p);
   draw.mouse=p;
+  // Dragging the right price axis stretches the scale — handle before anything else.
+  if(axisDrag){ doAxisDrag(p); return; }
+  // Show the resize cursor when merely hovering the axis gutter (not dragging).
+  if(!downPt && inPriceAxis(p)){ dcanvas.style.cursor="ns-resize"; return; }
   // The overlay canvas hides the cursor from the chart, so its built-in crosshair
   // (and the price/time axis tags) never move. Forward the cursor position so the
   // crosshair + axis labels track it like TradingView.
@@ -1731,10 +2661,12 @@ dcanvas.addEventListener("mousemove", e=>{
 dcanvas.addEventListener("mouseleave", ()=>{
   draw.mouse=null;
   try{ chart.clearCrosshairPosition(); }catch(e){}
+  syncCrosshairToPanes(null, chart);     // drop the shared crosshair off every pane
   if(draw.hover||draw.alertHover){ draw.hover=null; draw.alertHover=null; redraw(); }
 });
 
 window.addEventListener("mouseup", e=>{
+  if(axisDrag){ axisDrag=null; downPt=null; downMoved=false; dcanvas.style.cursor="default"; return; }  // end axis stretch
   if(panState){ panState=null; downPt=null; downMoved=false; redraw(); return; }   // end chart pan
   // finishing a drag-edit of an existing shape
   if(draw.drag){ persist(); draw.drag=null; downPt=null; return; }
@@ -1768,6 +2700,8 @@ window.addEventListener("mouseup", e=>{
 // double-click finishes a click-click pending (commit with current points) OR
 // opens settings on a shape.
 dcanvas.addEventListener("dblclick", e=>{
+  // Double-click the price axis → reset to auto-scale (TradingView behaviour).
+  if(inPriceAxis(evtPt(e))){ resetPriceScale(); return; }
   if(draw.pending){
     // drop the floating endpoint and commit what's placed
     if(draw.pending.pts.length>1) draw.pending.pts.pop();
@@ -1775,7 +2709,10 @@ dcanvas.addEventListener("dblclick", e=>{
     return;
   }
   const hit=hitTest(evtPt(e));
-  if(hit){ draw.sel=hit.id; openSettings(hit.id); }
+  if(hit){ draw.sel=hit.id; openSettings(hit.id); return; }
+  // Double-click empty chart body in crosshair mode → re-fit the price scale,
+  // undoing any vertical pan/stretch (matches TradingView's double-click-to-reset).
+  if(draw.tool==="cross" && manualPriceRange){ resetPriceScale(); }
 });
 
 // keyboard: Esc cancels, Del removes selected
@@ -1980,7 +2917,7 @@ function openSettings(id){
   document.getElementById("dlgDel").onclick=()=>{ deleteShape(id); closeDlg(); };
 }
 function closeDlg(){ dlg.classList.remove("open"); backdrop.classList.remove("open"); }
-backdrop.onclick=()=>{ closeDlg(); closeAlertDlg(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); };
+backdrop.onclick=()=>{ closeDlg(); closeAlertDlg(); closeSymDlg(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); };
 
 // ─────────────────────────────────────────────────────────────────────
 //  CREATE / EDIT ALERT DIALOG  (TradingView-style)
@@ -2557,7 +3494,26 @@ function srcArr(data,s){
 }
 const SRC_OPTS=["close","open","high","low","hl2","hlc3","ohlc4"];
 // Attach times to a number[] (null entries dropped) → {time,value}[]
-function pair(data,arr){ const out=[]; for(let i=0;i<arr.length;i++) if(arr[i]!=null && isFinite(arr[i])) out.push({time:data[i].time,value:arr[i]}); return out; }
+function pair(data,arr){ const out=[]; for(let i=0;i<arr.length;i++){ const v=arr[i]; out.push(v!=null && isFinite(v) ? {time:data[i].time,value:v} : {time:data[i].time}); } return out; }
+// Re-key a {time,value}[] (or {time,value,color}[]) onto the FULL `data` timeline,
+// inserting whitespace ({time} only) wherever the series has no point. Calc helpers
+// that start their loop at i=len-1 (macd/stoch/cci/willr/atr/…) return SHORTER
+// arrays; on a sub-pane that's logical-range-synced by bar index, a short series
+// lands at the wrong index and the plot shifts left. Padding fixes the alignment.
+function fullSeries(data, pts){
+  const m=new Map(); for(const pt of pts) m.set(pt.time, pt);
+  const base = data.map(b=> m.has(b.time) ? m.get(b.time) : {time:b.time});
+  // Append the same ~4-month future whitespace tail so sub-pane indicators reach
+  // the future region in lockstep with the main chart (index-synced panes stay aligned).
+  return base.concat(futureWhitespace(data));
+}
+// Wrap a sub-pane series so setData() auto-pads to the candle timeline — one place,
+// covers every indicator (current + future) without touching each *Calc function.
+function alignSubSeries(series){
+  const orig=series.setData.bind(series);
+  series.setData=(pts)=>orig(Array.isArray(pts)?fullSeries(lastData, pts):pts);
+  return series;
+}
 // — array primitives (null-padded to input length) —
 function smaA(a,len){ const o=new Array(a.length).fill(null); let s=0; for(let i=0;i<a.length;i++){ s+=a[i]; if(i>=len)s-=a[i-len]; if(i>=len-1)o[i]=s/len; } return o; }
 function wmaA(a,len){ const o=new Array(a.length).fill(null); const denom=len*(len+1)/2;
@@ -2716,6 +3672,10 @@ function addIndicator(type){
 function removeIndicator(id){
   const idx=indicators.findIndex(i=>i.id===id); if(idx<0) return; const ind=indicators[idx];
   if(ind.syncMain){ try{ chart.timeScale().unsubscribeVisibleLogicalRangeChange(ind.syncMain); }catch(e){} }
+  // syncSub holds a closure over the MAIN chart; unhook it from the sub-chart's
+  // scale before destroying the sub-chart so it can't fire on a torn-down pane.
+  if(ind.syncSub && ind.subChart){ try{ ind.subChart.timeScale().unsubscribeVisibleLogicalRangeChange(ind.syncSub); }catch(e){} }
+  if(ind.subChart) unregisterPane(ind.subChart);
   ind.series.forEach(s=>{ try{ (ind.subChart||chart).removeSeries(s); }catch(e){} });
   if(ind.subChart){ try{ ind.subChart.remove(); }catch(e){} if(ind.paneEl) ind.paneEl.remove(); }
   indicators.splice(idx,1); renderIndLegend(); layoutPanes();
@@ -2772,18 +3732,20 @@ function buildIndicatorSeries(ind){
   const gear=document.createElement("span"); gear.className="subClose"; gear.textContent="⚙"; gear.title="Settings"; gear.onclick=()=>openIndicatorSettings(ind.id);
   label.appendChild(gear); label.appendChild(close); el.appendChild(label); wrap.appendChild(el); ind.paneEl=el;
   const sc=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc"},
-    grid:{vertLines:{color:"#1e222d"},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39"},
-    timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false}, crosshair:{mode:0} });
+    grid:{vertLines:{color:"#1e222d"},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39",minimumWidth:PRICE_AXIS_W},
+    timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false,tickMarkFormatter:(t,type)=>tickLabel(t,type)}, crosshair:{mode:0} });
   ind.subChart=sc;
   let syncing=false;
   ind.syncMain=r=>{ if(r&&!syncing){ syncing=true; try{sc.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
   ind.syncSub =r=>{ if(r&&!syncing){ syncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
   chart.timeScale().subscribeVisibleLogicalRangeChange(ind.syncMain);
   sc.timeScale().subscribeVisibleLogicalRangeChange(ind.syncSub);
-  ind.series=specs.map(sp=> sp.k==="hist"
+  ind.series=specs.map(sp=> alignSubSeries(sp.k==="hist"
     ? sc.addHistogramSeries({color:sp.color})
-    : sc.addLineSeries({color:sp.color,lineWidth:sp.w}));
-  setTimeout(()=>{ try{ sc.applyOptions({width:el.clientWidth,height:el.clientHeight}); }catch(e){} },0);
+    : sc.addLineSeries({color:sp.color,lineWidth:sp.w})));
+  registerPane(sc, ind.series[0]);   // share the crosshair with the main chart + other panes
+  // New bottom pane → move the date axis down to it (and off the pane now above it).
+  setTimeout(()=>{ try{ sc.applyOptions({width:el.clientWidth,height:el.clientHeight}); }catch(e){} alignPriceAxes(); },0);
 }
 function renderIndicator(ind){
   const d=lastData; if(!d.length) return; const pp=ind.params; const S=ind.series;
@@ -2868,7 +3830,9 @@ let _fractalMarkers=[];
 function mergeMarkers(m){ _fractalMarkers=m; return m; }
 function renderAllIndicators(){ indicators.forEach(renderIndicator); }
 function layoutPanes(){
-  const subs=indicators.filter(i=>i.pane==="sub").length;
+  // Count BOTH indicator sub-panes and script sub-panes — otherwise removing the
+  // last indicator while a script pane is still open would collapse #subPanes.
+  const subs=indicators.filter(i=>i.pane==="sub").length + scripts.filter(s=>s.subChart).length;
   const wrap=document.getElementById("subPanes");
   wrap.style.display = subs?"flex":"none";
   // resize after the browser has applied the new flex layout, then re-derive the
@@ -3027,7 +3991,7 @@ function runScript(code, data){
   return plots;
 }
 // Attach time stamps, dropping null/NaN, for LWC setData.
-function scriptPair(data,arr){ const out=[]; for(let i=0;i<arr.length;i++){ const x=arr[i]; if(x!=null&&isFinite(x)) out.push({time:data[i].time,value:x}); } return out; }
+function scriptPair(data,arr){ const out=[]; for(let i=0;i<arr.length;i++){ const x=arr[i]; out.push(x!=null&&isFinite(x) ? {time:data[i].time,value:x} : {time:data[i].time}); } return out; }
 
 function addScript(name,code){
   const sc={ id:"sc"+(scriptUid++), name:name||("Script "+scriptUid), code, plots:[], series:[], subChart:null, paneEl:null };
@@ -3037,6 +4001,8 @@ function removeScript(id){
   const i=scripts.findIndex(s=>s.id===id); if(i<0) return; const sc=scripts[i];
   sc.series.forEach(s=>{ try{ (sc.subChart||chart).removeSeries(s); }catch(e){} });
   if(sc.syncMain){ try{ chart.timeScale().unsubscribeVisibleLogicalRangeChange(sc.syncMain);}catch(e){} }
+  if(sc.syncSub && sc.subChart){ try{ sc.subChart.timeScale().unsubscribeVisibleLogicalRangeChange(sc.syncSub); }catch(e){} }
+  if(sc.subChart) unregisterPane(sc.subChart);
   if(sc.subChart){ try{ sc.subChart.remove(); }catch(e){} if(sc.paneEl) sc.paneEl.remove(); }
   scripts.splice(i,1); saveScripts(); renderScriptLegend(); layoutPanes();
 }
@@ -3059,14 +4025,19 @@ function renderScript(sc){
     const edit=document.createElement("span"); edit.className="subClose"; edit.textContent="✎"; edit.title="Edit script"; edit.onclick=()=>openScriptEditor(sc.id);
     label.appendChild(edit); label.appendChild(close); el.appendChild(label); wrap.appendChild(el); sc.paneEl=el;
     const sChart=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc"},
-      grid:{vertLines:{color:"#1e222d"},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39"},
-      timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false}, crosshair:{mode:0} });
+      grid:{vertLines:{color:"#1e222d"},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39",minimumWidth:PRICE_AXIS_W},
+      timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false,tickMarkFormatter:(t,type)=>tickLabel(t,type)}, crosshair:{mode:0} });
     sc.subChart=sChart; let syncing=false;
     sc.syncMain=r=>{ if(r&&!syncing){ syncing=true; try{sChart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
     chart.timeScale().subscribeVisibleLogicalRangeChange(sc.syncMain);
-    sChart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r&&!syncing){ syncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } });
-    setTimeout(()=>{ try{ sChart.applyOptions({width:el.clientWidth,height:el.clientHeight}); }catch(e){} },0);
+    // Store the reverse handler too so removeScript can unsubscribe it (was anonymous → leaked).
+    sc.syncSub=r=>{ if(r&&!syncing){ syncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
+    sChart.timeScale().subscribeVisibleLogicalRangeChange(sc.syncSub);
+    registerPane(sChart, null);   // share the crosshair; anchor series set below after rebuild
+    // New bottom pane → move the date axis down to it (and off the pane now above it).
+    setTimeout(()=>{ try{ sChart.applyOptions({width:el.clientWidth,height:el.clientHeight}); }catch(e){} alignPriceAxes(); },0);
   } else if(!needSub && sc.subChart){
+    unregisterPane(sc.subChart);
     try{ sc.subChart.remove(); }catch(e){} if(sc.paneEl) sc.paneEl.remove(); sc.subChart=null; sc.paneEl=null;
   }
   plots.forEach(p=>{
@@ -3076,6 +4047,7 @@ function renderScript(sc){
       ? tgt.addHistogramSeries({ color:p.color, priceLineVisible:false })
       : tgt.addLineSeries({ color:p.color, lineWidth:p.width, priceLineVisible:false, lastValueVisible:p.pane==="main" });
     s.setData(scriptPair(d,p.arr)); sc.series.push(s);
+    if(p.pane==="sub") setPaneSeries(sc.subChart, s);   // anchor the shared crosshair to a live sub series
   });
   layoutPanes();
 }
@@ -3350,15 +4322,19 @@ document.getElementById("btnIndicators").onclick=()=>toggleIndicatorsMenu();
 document.getElementById("btnScript").onclick=()=>openScriptEditor(null);              // ƒ → new custom-indicator script
 document.getElementById("btnAlert").onclick=()=>openAlertDialog({});                  // bell → create alert (TradingView)
 document.getElementById("btnAlert").addEventListener("contextmenu", e=>{ e.preventDefault(); toggleAlertsPanel(); });  // right-click → manage list
-function closeAllPopups(){ hideCtx(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); closeDlg(); closeAlertDlg(); closeScriptDlg(); }
+function closeAllPopups(){ hideCtx(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); closeDlg(); closeAlertDlg(); closeScriptDlg(); closeSymDlg(); }
 
-// ── Watchlist: add-section affordances ──
-document.getElementById("wlAdd").onclick = ()=>addGroup(null);
+// ── Watchlist: add affordances ──
+// Header ＋ opens the searchable Add-symbol dialog (adds to the first section).
+document.getElementById("wlAdd").onclick = ()=>openAddSymbolDlg(null);
 // right-click empty space in the list (not on a section/row) → Add section
 document.getElementById("wlBody").addEventListener("contextmenu", e=>{
   if(e.target.closest(".section") || e.target.closest(".row")) return;  // those have their own menus
   e.preventDefault();
-  showCtx(e.clientX, e.clientY, [ mi("＋ Add section", ()=>addGroup(null)) ]);
+  showCtx(e.clientX, e.clientY, [
+    mi("＋ Add symbol",  ()=>openAddSymbolDlg(null)),
+    mi("＋ Add section", ()=>addGroup(null)),
+  ]);
 });
 
 // ── Boot ──
