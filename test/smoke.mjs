@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+const url = 'http://127.0.0.1:5501/';
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage();
+const errors = [];
+page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
+await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+await page.waitForTimeout(4000);
+const title = await page.title();
+const tfBtn = await page.locator('#tfSelBtn, .tf-sel').first().count();
+const canvas = await page.locator('canvas').count();
+await page.screenshot({ path: 'smoke.png', fullPage: false });
+console.log(JSON.stringify({ title, tfBtnFound: tfBtn, canvasCount: canvas, consoleErrors: errors.slice(0,10) }, null, 2));
+await browser.close();

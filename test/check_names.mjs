@@ -1,0 +1,10 @@
+import { chromium } from 'playwright';
+const b=await chromium.launch({headless:true}); const p=await b.newPage();
+await p.goto("http://127.0.0.1:5501/",{waitUntil:"domcontentloaded",timeout:20000});
+await p.waitForTimeout(4500);
+const nameW=await p.evaluate(()=>{ const n=document.querySelector(".row .nm"); return n?Math.round(n.getBoundingClientRect().width):null; });
+const nameText=await p.evaluate(()=>Array.from(document.querySelectorAll(".row .nm")).slice(0,6).map(n=>n.textContent));
+const clipped=await p.evaluate(()=>{ const n=document.querySelector(".row .nm"); return n? n.scrollWidth>n.clientWidth+1 : null; });
+await p.screenshot({path:"stepG_fixed.png"});
+console.log(JSON.stringify({nameW, nameText, clipped}));
+await b.close();

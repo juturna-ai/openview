@@ -1,0 +1,20 @@
+import { chromium } from 'playwright';
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage();
+const errs=[];
+page.on('console',m=>{if(m.type()==='error'&&!/HTTP|404|429|Failed to load resource/.test(m.text()))errs.push(m.text());});
+page.on('pageerror',e=>errs.push('PAGEERR: '+e.message));
+await page.goto('http://127.0.0.1:5501/',{waitUntil:'domcontentloaded',timeout:20000});
+await page.waitForTimeout(4500);
+const el=page.locator('#barCountdown');
+const visible1=await el.isVisible();
+const text1=await el.innerText().catch(()=>null);
+const top1=await el.evaluate(e=>e.style.top).catch(()=>null);
+await page.waitForTimeout(2200);
+const text2=await el.innerText().catch(()=>null);
+await page.screenshot({path:'countdown_1d.png'});
+// switch to a 5m TF where countdown ticks faster/visibly minutes
+await page.evaluate(()=>selectTF('5m')); await page.waitForTimeout(3000);
+const text5m=await el.innerText().catch(()=>null);
+console.log(JSON.stringify({visible1,text1,text2,changed:text1!==text2,top1,text5m,appErrors:errs.slice(0,6)},null,2));
+await browser.close();

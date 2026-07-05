@@ -1,0 +1,18 @@
+import { chromium } from 'playwright';
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage();
+const errs=[];
+page.on('console',m=>{if(m.type()==='error'&&!/HTTP|404|429|Failed to load resource/.test(m.text()))errs.push(m.text());});
+page.on('pageerror',e=>errs.push('PAGEERR: '+e.message));
+await page.goto('http://127.0.0.1:5501/',{waitUntil:'domcontentloaded',timeout:20000});
+await page.waitForTimeout(4500);
+const maVisibleBefore = await page.locator('#maLegend').isVisible();
+await page.locator('#legCollapse').click();
+await page.waitForTimeout(300);
+const collapsed = await page.evaluate(()=>document.getElementById('chartLegend').classList.contains('collapsed'));
+const maVisibleAfter = await page.locator('#maLegend').isVisible();
+await page.locator('#legCollapse').click();
+await page.waitForTimeout(300);
+const maVisibleReexpand = await page.locator('#maLegend').isVisible();
+console.log(JSON.stringify({maVisibleBefore, collapsed, maHiddenWhenCollapsed:!maVisibleAfter, maVisibleReexpand, appErrors:errs.slice(0,5)},null,2));
+await browser.close();

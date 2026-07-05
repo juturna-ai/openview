@@ -66,6 +66,12 @@ Coinbase and Binance/Bybit send permissive CORS headers, so the browser fetches 
 TF[key] = { label, menu, sec, base, bucket, pages }
 ```
 
+**Custom timeframes.** The tf menu has a text input (`#tfCustom`). `parseCustomTF("45m"|"3h"|"10d"|…)` accepts m/h/d/w (bare number = minutes), clamps to 1m–4w, and picks the largest native base in `TF_BASES` (86400/21600/3600/900/300/60) that evenly divides the requested bucket. `applyCustomTF` lazily inserts a `TF["c<sec>"]` entry (section `CUSTOM`, e.g. `c2700` for 45m) and selects it, so aggregate() rolls the base bars up to the custom bucket like any built-in TF.
+
+**Timezone selector.** Topbar dropdown `#tzSel` built from `TIMEZONES` (UTC/Exchange/NY/London/Berlin/Dubai/Tokyo/Sydney/Local). `tzOffsetMin` (minutes east of UTC) is applied by `tzShift(ms)`, which nudges the UNIX time so downstream `getUTC*` reads yield the selected zone's wall clock. Both `tickLabel` (axis) and `crosshairTimeFmt` (crosshair bottom tag, via `localization.timeFormatter`) route through it. `applyTz` re-applies the formatters to every pane in `charts` and persists to `localStorage["fv_tz"]`. Offsets are fixed (no DST math) — approximate, matching how the labels read on a 24/7 crypto chart; trading "sessions" don't apply to crypto so only the timezone half is implemented.
+
+**Bar-close countdown.** `#barCountdown` is a pill on the right price axis showing time until the current bar closes, TradingView-style. `updateCountdown()` (1s interval) computes the next epoch-aligned bucket boundary `(floor(now/step)+1)*step`, formats via `fmtCountdown` (d/h, h:mm:ss, or m:ss), and positions the pill at `candle.priceToCoordinate(lastClose)`. Hidden when there's no data or the price is off-screen.
+
 | Key | `base` (sec fetched) | `bucket` (sec per bar) | `pages` |
 |---|---|---|---|
 | `1m` | 60 | 60 | 26 |
@@ -73,13 +79,19 @@ TF[key] = { label, menu, sec, base, bucket, pages }
 | `15m` | 900 | 900 | 18 |
 | `30m` | 900 | 1800 | 18 |
 | `1h` | 3600 | 3600 | 36 |
+| `2h` | 3600 | 7200 | 36 |
 | `4h` | 3600 | 14400 | 36 |
 | `6h` | 21600 | 21600 | 20 |
 | `12h` | 21600 | 43200 | 20 |
 | `1d` | 86400 | 86400 | 9 |
 | `1w` | 86400 | 604800 | 9 |
+| `2w` | 86400 | 1209600 | 9 |
+| `1M` | 86400 | 2592000 | 9 |
+| `1Y` | 86400 | 31536000 | 9 |
 
-`base` is the native granularity actually fetched from the exchange. When `bucket > base` (4h, 12h, 1w, 30m), `aggregate()` rolls up the base bars into fixed epoch-aligned buckets.
+The `pages` field is legacy — the progressive loader no longer uses it for depth. Depth is now driven by a global `MAX_BARS = 50000` ceiling (see below); `pages` is only kept as a default on custom-TF entries.
+
+`base` is the native granularity actually fetched from the exchange. When `bucket > base` (2h, 4h, 12h, 1w, 2w, 1M, 1Y, 30m), `aggregate()` rolls up the base bars into fixed epoch-aligned buckets. `1M` (month, 30d) and `1Y` (year, 365d) are epoch-aligned like `1w` — not calendar-month/year boundaries. `1M` (month) is a distinct key from `1m` (minute); the map is case-sensitive.
 
 ### Per-exchange page fetchers
 
@@ -95,6 +107,8 @@ Each normalises its exchange's payload to the common shape `{time(sec), low, hig
 ### Progressive loader — `fetchKlinesProgressive`
 
 Paginates backward through history, calling `onPage(barsSoFar)` after each page so the chart can paint immediately while history deepens. Each page's oldest timestamp drives the next `end` parameter. A page shorter than 66% of the maximum page size signals the start of history; the loop stops early. Coinbase caps at 300 bars/page; Binance/Bybit at 1000.
+
+**50k-bar ceiling.** Every timeframe can be viewed back up to `MAX_BARS = 50000` candles. `maxPages` is computed from that target: raw base-bars needed = `MAX_BARS × (bucket / base)`, divided by the per-exchange page size. `finalizeBars` trims the aggregated series to the newest 50k. The short-page break still stops early when an exchange simply has less history than 50k bars.
 
 `fetchKlines(product, tfKey)` is a non-progressive wrapper (no `onPage` callback) for callers that want the full result.
 
@@ -143,7 +157,7 @@ All chart instances share `common` options (dark background, grid, `PRICE_AXIS_W
 
 - `candle` — `CandlestickSeries`; the canonical OHLC and coordinate anchor. `autoscaleInfoProvider` pins the scale to `manualPriceRange` when set.
 - `maSeries[0..5]` — six `LineSeries` for MA 7/25/99/150/200/300 (orange/red/green/cyan/magenta/white).
-- `aux{}` — lazily created auxiliary series keyed by chart type (`line`, `area`, `baseline`, `bars`) for non-candle chart styles.
+- `aux{}` — lazily created auxiliary series keyed by chart type (`line`, `linemark`, `step`, `area`, `baseline`, `bars`, `hlcbars`, `columns`, `highlow`, `renko`, `kagi`, `pnf`, `linebreak`) for non-candle chart styles.
 
 ### `renderData(data, keepView)`
 
@@ -160,18 +174,25 @@ The central paint function. Called on each progressive page and at completion:
 
 ### Chart types — `applyChartType`
 
-Controlled by `chartType` (string: `candles|hollow|heikin|bars|line|area|baseline`). `setChartType(t)` updates it and calls `applyChartType`.
+Controlled by `chartType` (string: `candles|hollow|heikin|bars|hlcbars|line|linemark|step|area|baseline|columns|highlow|renko|kagi|pnf|linebreak`). `setChartType(t)` updates it and calls `applyChartType`.
 
 - **candles** — `candle` visible with raw data.
 - **hollow** — `candle` visible with `hollowData(data)` (per-bar color `rgba(0,0,0,0)` body when close≥open; colored by close vs previous close).
 - **heikin** — `candle` visible with `heikinAshi(data)` transform.
-- **bars / line / area / baseline** — `candle` hidden (but still set with data so coordinates remain valid); the corresponding `auxSeries(type)` series is shown. Baseline anchors at `data[0].close`.
+- **bars / hlcbars** — bar series; `hlcbars` sets `openVisible:false` to hide the open tick.
+- **line / linemark / step** — line series; `linemark` adds `pointMarkersVisible`, `step` uses `lineType:1` (WithSteps).
+- **area / baseline** — area / baseline series; baseline anchors at `data[0].close`.
+- **columns** — histogram series, per-bar green/red vs previous close.
+- **highlow** — bar series with both ticks hidden, drawn low→high per period.
+- **renko / kagi / pnf / linebreak** — price-transform styles rendered through a dedicated candlestick aux series fed by `renkoData` / `kagiData` / `pnfData` / `lineBreakData`. These rebuild bars from price *movement* (box size from `boxStep` = 0.75× median bar range), so emitted bricks/legs borrow the source bar's timestamp (nudged +1s via `tsPusher` to stay strictly ascending). On these four, the time-based MA overlays are hidden (`maSeries … visible:false`) and `chart.timeScale().fitContent()` re-fits the view, since the transformed series no longer aligns to the calendar time axis.
+
+For non-candle styles the `candle` series is hidden but still set with the raw data so coordinate helpers, crosshair, and drawings remain valid (except the transform styles, which fit to their own series).
 
 Scale modes (0 Normal / 1 Log / 2 Percent) are set via `setScaleMode(m)` which calls `chart.priceScale("right").applyOptions({mode:m})`.
 
 ### Future whitespace — `futureWhitespace` / `withFuture` / `FUTURE_DAYS`
 
-`FUTURE_DAYS = 120`. Every series (candles, MAs, RSI, indicators, scripts) is padded with ~4 months of whitespace bars (`{time}` only — no OHLC) so the time scale, grid lines, date-axis labels, and drawings extend past the last real bar. `futureWhitespace(data)` is memoized on `(lastBarTime, tfStep, barCount)` to avoid reallocating the same tail array on every render call. `withFuture(data, pts)` appends the tail.
+`FUTURE_DAYS = 120`. Every series (candles, MAs, RSI, indicators, scripts) is padded with whitespace bars (`{time}` only — no OHLC) so the time scale, grid lines, date-axis labels, and drawings extend past the last real bar. The future extent is `max(FUTURE_DAYS·86400, step·6)` — normally ~4 months, but for coarse timeframes whose bucket exceeds 120 days (`1M`, `1Y`) it extends to ≥6 bars so those charts still get projection room instead of ending flush with the last candle (capped at 2000 whitespace bars). `futureWhitespace(data)` is memoized on `(lastBarTime, tfStep, barCount)` to avoid reallocating the same tail array on every render call. `withFuture(data, pts)` appends the tail.
 
 ### Date-axis — `tickLabel`
 
@@ -236,25 +257,37 @@ Each shape is stored as:
 
 **Auto-snap** (`_autoSnap`): during a fresh progressive load, `renderData` snaps the view to the latest bars on each page. The first real pan or zoom gesture calls `stopAutoSnap()` to stop re-snapping.
 
+### Left rail — flyout categories
+
+The left toolbar (`#toolbar`, 52px) is built by `buildToolbar()` from `TOOL_CATEGORIES` (cursor, trend-line tools, fib/gann, geometric shapes, forecasting/positions, annotation). Each category renders **one** rail button showing its current tool's icon + a `.catarrow` corner arrow. Clicking the arrow opens `openToolFlyout(cat, el)` — a `.tool-flyout` popup (dark `#1e222d`) listing the category's tools by name; picking one sets `catCurrent[cat.id]`, rebuilds the rail, and calls `selectTool`. Clicking the button body activates the category's current tool. `selectTool` reflects the active tool back onto whichever category owns it (updates that button's icon + `.active`). Below a separator sits the fixed toggle/action cluster (magnet, stay-in-drawing-mode, lock-all, hide-all, delete-all). All tool wiring/icons are reused from `TOOLS` — the categories are just a presentation layer over it.
+
 ### Drawing tool list
 
 The `TOOLS` array and `CLICKS` map define every tool. Tool names from Wave 1/2 (original) and Wave 3 (added):
 
 - **Lines:** Trend, Ray, Extended, Info (stats), Trend Angle, Horizontal Line, Horizontal Ray, Vertical Line, Cross Line
-- **Channels/Fans:** Parallel Channel (3-click), Andrews Pitchfork (3-click), Gann Fan
-- **Shapes:** Rectangle, Ellipse, Triangle (3-click), Arrow, Polyline/Path (multi-click, dblclick to finish), Brush (freehand)
+- **Channels/Fans:** Parallel Channel (3-click), Regression Trend (least-squares fit over bar closes + ±1σ channel), Andrews Pitchfork (3-click), Gann Fan, Gann Box (rect + diagonal + 0.25/0.5/0.75 fib grid)
+- **Shapes:** Rectangle, Ellipse, Circle (radius = center→edge), Triangle (3-click), Arrow, Arrow Marker up/down (1-click, direction from click vs bar close), Polyline/Path (multi-click, dblclick to finish), Brush (freehand)
 - **Fibonacci:** Fib Retracement, Fib Extension, Trend-Based Fib Extension (3-click), Fib Fan, Fib Time Zone
 - **Position:** Long Position, Short Position
 - **Ranges:** Price Range, Date Range, Date & Price Range, Measure
 - **Annotations:** Text (prompt), Callout/Note (prompt), Flag, Price Label
-- **Toggles:** Magnet (snap to OHLC), Lock All, Hide All
+- **Toggles:** Magnet (snap to OHLC), Stay in Drawing Mode, Lock All, Hide All. Plus per-shape lock (context menu) and undo/redo (Ctrl+Z / Ctrl+Y).
 - **Action:** Remove All (confirm dialog)
 
 `CLICKS[type]` gives the number of anchor points required: 1 = single-click finish, 2 = drag or two-click, 3 = three anchor points, 0 = freehand / unbounded (polyline/brush).
 
 ### Shape rendering — `drawShape` / `redraw`
 
-`redraw()` clears the canvas, draws alert dashed lines (`drawAlertLines`), then draws every shape in `draw.shapes` order plus any pending shape. `drawShape(s, selected, hovered)` dispatches on `s.type` to per-type drawing functions. Selected shapes show white circle handles at each `pt`. The `extend(x1,y1,x2,y2,W,H)` helper clips a ray to the canvas boundary.
+`redraw()` clears the canvas, draws the vertical time grid (`drawTimeGrid`), then alert dashed lines (`drawAlertLines`), then draws every shape in `draw.shapes` order plus any pending shape. `drawShape(s, selected, hovered)` dispatches on `s.type` to per-type drawing functions. Selected shapes show white circle handles at each `pt`. The `extend(x1,y1,x2,y2,W,H)` helper clips a ray to the canvas boundary.
+
+**Vertical grid — `drawTimeGrid`.** LWC's built-in vertical grid is disabled (`grid.vertLines.visible:false`) because it draws a line at ~every bar and turns into a dense grey wall on small timeframes. Instead `drawTimeGrid(W,H)` reads the visible time span (`xToTime(0)`→`xToTime(W)`), picks a "nice" step from `_GRID_STEPS` (1m…1y) so ~8–12 lines span the range, then draws one line per round boundary at `timeToX(t)` — count is bar-independent (matches TradingView). Boundaries align to the selected timezone (`tzOffsetMin`). Horizontal grid lines stay with LWC (already at price-axis labels). Sub-panes (RSI/indicators) keep LWC's grid since they're outside the `#draw` overlay. Verified: `test/audit_timegrid.mjs` (1d → 6 lines, 1m zoomed-out → 10 lines).
+
+**Undo / redo.** `snapshotDraw()` pushes a `JSON.stringify(draw.shapes)` onto `_undoStack` (cap `UNDO_MAX=100`) and clears `_redoStack`; it's called *before* every mutation — add (finishPending/finishOneClick), delete, clone, reorder, setStyle, lock-toggle, remove-all, and drag/resize (snapshotted at drag *start*; a no-op click pops the snapshot back on mouseup so undo isn't cluttered). `undoDraw`/`redoDraw` swap between the stacks via `restoreShapes`. Bound to Ctrl/Cmd+Z (undo) and Ctrl+Y / Ctrl+Shift+Z (redo), suppressed while typing in an input.
+
+**Per-drawing lock.** Each shape may carry `s.locked`. The context menu shows 🔒 Lock / 🔓 Unlock. A locked shape can't be dragged, resized, or deleted (guards in the crosshair-mode mousedown, the handle-resize path, and the Delete-key handler). Distinct from the global `draw.locked` ("Lock All Drawings") toolbar toggle.
+
+**Stay-in-drawing-mode.** Toolbar toggle sets `draw.stay`. Normally a completed shape reverts the tool to crosshair (`selectTool("cross")`); when `draw.stay` is on, `selectTool(tool)` re-arms the same tool so the user can draw repeatedly (TradingView's "stay in drawing mode").
 
 ### Settings dialog — `openSettings`
 
@@ -272,14 +305,16 @@ Right-axis vertical drag (`startAxisDrag` / `doAxisDrag`) computes an exponentia
 
 ### Catalog — `IND_CATALOG`
 
-~50 entries, each with `{type, name, cat, pane, params}`. Categories: Moving Averages, Oscillators, Trend, Volatility, Volume, Bill Williams, Other. `pane` is either `"main"` (overlay) or `"sub"` (separate pane below `#subPanes`).
+~76 entries, each with `{type, name, cat, pane, params}`. Categories: Moving Averages, Oscillators, Momentum, Trend, Volatility, Volume, Bill Williams, Other. `pane` is either `"main"` (overlay) or `"sub"` (separate pane below `#subPanes`). "Wave 5" added the full TradingView-technicals parity set — McGinley, KAMA, Chande Kroll Stop, Linear Regression Channel, TSI, KST, RVI, SMI, Woodies CCI, Connors RSI, Ease of Movement, Klinger, Net Volume, Volume Oscillator, TWAP, Bollinger %B, Historical Volatility, Mass Index, Ulcer Index, Bull Bear Power, MA Ribbon, 52-Week High/Low. Adding an indicator = 4 edits: `IND_CATALOG` entry + `plotSpec` case (series descriptors) + `renderIndicator` case (calc → setData) + a calc function.
 
 ### Lifecycle
 
-- **`addIndicator(type)`** — creates an entry in `indicators[]`, calls `buildIndicatorSeries` then `renderIndicator`.
+- **`addIndicator(type, opts?)`** — creates an entry in `indicators[]`, calls `buildIndicatorSeries` then `renderIndicator`; `opts` may carry `{params, hidden, silent}` (used by `loadIndicators` to restore persisted state without re-saving). Calls `saveIndicators()` unless `silent`.
 - **`buildIndicatorSeries(ind)`** — for `pane:"main"` indicators, creates series on `chart`. For `pane:"sub"`, creates a `<div class="subpane">` in `#subPanes`, creates a new `LightweightCharts` instance, wires bidirectional time-scale sync with `chart`, calls `registerPane`, and wraps each series with `alignSubSeries`.
 - **`renderIndicator(ind)`** — calls the appropriate `*Calc` function(s) and calls `series.setData(...)`. Dispatches on `ind.type` via a large switch.
 - **`removeIndicator(id)`** — unsubscribes time-scale sync handlers, removes series, removes the sub-chart and its DOM element, calls `unregisterPane`.
+- **`toggleIndicatorHidden(id)`** — 👁 eye toggle (in the sub-pane label and the main-chart legend). Sets `ind.hidden`, toggles each series' `visible`, and dims the pane (`.hiddenInd`) without removing the indicator.
+- **`wirePaneResize(grip, el)`** — each sub-pane carries a `.paneResize` grip on its top border. Dragging it adjusts the pane's flex-basis height (clamped 70–500px) live and calls `subChart.applyOptions({width,height})` so the LWC chart re-fills, then `alignPriceAxes()` on release.
 - **`renderAllIndicators()`** — calls `renderIndicator` on every active indicator; called from `renderData`.
 
 ### Plot descriptors — `plotSpec(ind)`
@@ -293,6 +328,10 @@ Calc helpers return shorter arrays (they start at `i = period - 1`). A sub-pane 
 ### Hardwired indicators
 
 Six MAs (7/25/99/150/200/300) are rendered directly in `renderData` via `smaSeries`. RSI(14) is rendered via `rsiSeries` / `maOfSeries` into the always-visible `#rsiWrap` pane (not part of `indicators[]`).
+
+### Indicators dialog — `toggleIndicatorsMenu`
+
+Two tabs: **Technicals** (full catalog, grouped by `cat`) and **★ Favorites** (filtered to `indFavorites`). Live search filters by name/category. Each row has a star toggle (`toggleFavorite` → persisted in `localStorage["fv_ind_favorites"]`); clicking the name adds the indicator. "Community" tab is omitted (no backend). `_indTab` holds the active tab.
 
 ### Indicator settings — `openIndicatorSettings`
 
@@ -371,8 +410,43 @@ For `price`-vs-`value` alerts, `redraw` calls `drawAlertLines()` which draws a d
 | `fv_draw_<symbol>_<tf>` | `draw.shapes[]` — array of `{id, type, pts, style, text?}` | `persist()` | `loadPersisted()` on symbol/TF change and at boot |
 | `fv_scripts_<symbol>` | `[{name, code}]` — user script name and source | `saveScripts()` | `loadScripts()` on symbol change and at boot |
 | `fv_alerts_<symbol>` | `[{id, source, op, target, value, trigger, expiry, message, notify, active}]` | `saveAlerts()` | `loadAlerts()` on symbol change and at boot |
+| `fv_indicators_<symbol>` | `[{type, params, hidden}]` — active indicators | `saveIndicators()` on add/remove/hide/settings | `loadIndicators()` on symbol change and at boot |
+| `fv_active_symbol` / `fv_active_tf` | last-viewed symbol + timeframe key | `saveActiveState()` on symbol/TF change | read at boot (before first `loadChart`); `validateRestoredTF` rebuilds a custom `c<sec>` TF entry or falls back to `1d` |
+| `fv_tz` | timezone offset (minutes east of UTC) | `applyTz()` | read at boot |
 
-Drawings are keyed per **symbol + timeframe** so a BTC-USD 1D layout does not clobber BTC-USD 1H. Scripts and alerts are keyed per **symbol only**.
+| `fv_ind_favorites` | array of catalog `type` keys starred in the indicators dialog | `saveFavorites()` | read at boot |
+
+**Watchlist import/export** — `exportWatchlist()` downloads a `.txt` in `###SECTION` + symbols-per-line format; `importWatchlistText(txt)` parses it back into `GROUPS`, saves, and rebuilds. Buttons ⭱/⭳ in `#wlHead`.
+
+**Session breaks** — `drawSessionBreaks(W,H)` (in `redraw`) draws faint vertical lines at each tz-adjusted day boundary, but only on intraday timeframes (`tfStepSec() < 86400`); daily+ early-returns. Also gated on visible span: skipped when the view spans >15 days, so a zoomed-out 4h/6h/12h chart doesn't render one line per day (a grey wall) — beyond that window `drawTimeGrid` provides the round-interval grid instead.
+
+**Volume Profile** — a `pane:"overlay"` catalog indicator that toggles `window.volProfileOn` instead of creating a LWC series (handled specially in `addIndicator`/`removeIndicator`). `drawVolumeProfile(W,H)` (in `redraw`) bins the visible bars' volume into 40 price buckets and draws a horizontal histogram on the left edge, highlighting the POC (highest-volume) bucket in orange. The floating legend (`#chartLegend`) has a `#legCollapse` chevron that toggles `.collapsed` to hide the MA/indicator rows.
+
+**Screenshot / fullscreen** — 📷 `saveScreenshot()` composites `chart.takeScreenshot()` (main chart canvas) with the `dcanvas` drawing overlay onto one canvas → PNG download `freeview-<symbol>-<tf>.png` (sub-panes not included). ⛶ `toggleFullscreen()` requests/exits fullscreen on `#app` and re-runs `resize()`/`sizeCanvas()` on `fullscreenchange`.
+
+**Keyboard shortcuts** (in the window `keydown` handler, skipped while typing): Arrow ←/→ pan the time axis (`scrollToPosition ±3`), `+`/`-` zoom the visible logical range (×1/1.2 / ×1.2), `Alt+H` drops a horizontal line at the crosshair price. (Esc cancels, Del deletes selected, Ctrl+Z/Y undo/redo — see drawing engine.)
+
+**Top toolbar** (`#topbar`, 38px) — TradingView order with thin `.tbdiv` dividers: symbol search (`#symbolBox`) │ interval (`#tfSel`) │ chart type (`#ctSel`) │ Indicators · Alert · Script, then a `.tbspacer` (flex:1) pushes screenshot 📷 + fullscreen ⛶ + live status to the right. `.tbtn` buttons are 28px tall with a rounded `#2a2e39` hover pill. The scale toggle + timezone selector live in the HTML here but are re-parented to the bottom bar at boot.
+
+**Bottom bar** (`#bottomBar`, TradingView-style) — spans the base of the chart column. Left: `#rangeShortcuts` date-range buttons (1D 5D 1M 3M 6M YTD 1Y 5Y All); each calls `applyRange(r)` which converts the target start time to a logical bar index and calls `setVisibleLogicalRange`. Right: `#bottomRight` holds the timezone selector (`#tzSel`) and scale toggle (`#btnScale`), relocated there from the top toolbar at boot by `initBottomBar` (which just re-parents the existing wired DOM nodes). YTD uses the tz-adjusted Jan-1; All spans the full loaded history.
+
+**Floating on-chart legend** (`#chartLegend`, TradingView-style) — a semi-transparent box pinned top-left over the chart (inside `#chartWrap`), holding three stacked rows: `#legSymRow` (symbol · tf · exchange + OHLC), `#maLegend` (the six MAs, colored, tabular-nums), and `#indLegend` (one row per added indicator with eye/gear/× + hover value). The symbol row is synced in `loadChart`; OHLC via `updateOhlcLegend`. These values were moved off the top toolbar (which now holds only controls) to match TradingView. **`updateOhlcLegend(time)`** finds the bar nearest the crosshair (or the latest bar on load, from `renderData`) and renders `O H L C` plus the **change** (abs + %) vs the previous close, green/red.
+
+**Symbol search** — the top-bar symbol name (`#symbolBox`, with a 🔍 icon) is clickable → `openAddSymbolDlg(null)`, opening the `#symDlg` search modal (categories All/Coinbase/Binance/Bybit/Stocks, live-filtered, keyboard-navigable). Right-clicking it opens `showSymbolInfo` — a popover with the symbol's structured details (symbol, exchange/type or numerator/denominator for ratios, base/quote, timeframe, last).
+
+**Infinite scroll-back** — `chart.timeScale().subscribeVisibleLogicalRangeChange` fires `loadOlderHistory()` when the view's `from` index drops below 30 (near the left edge of loaded bars). It fetches a few older pages via `fetchOlderPages(leg, tf, oldestTime, pages)` (both legs re-`makeRatio`'d for spreads), prepends the bars to `lastData`, repaints with `keepView`, and shifts the visible logical range by the prepended count so the view doesn't jump. Guards: `_loadingOlder` (in-flight) and `_historyExhausted` (a short page = start of history, or the 50k-bar `MAX_BARS` ceiling is reached — the older batch is trimmed so `lastData` never exceeds 50k), both reset on symbol/TF change in `loadChart`.
+
+**Real-time WebSocket** — `wsConnect()` opens Coinbase's public `wss://ws-feed.exchange.coinbase.com` and subscribes to the `ticker` channel for the active symbol's Coinbase leg(s) (`wsProductsForActive`). Each tick updates `_wsLast[product]`; `applyTick()` recomputes the live price (ratio = legA/legB), writes it into the forming bar's close/high/low, and calls `candle.update()` for an incremental redraw + legend refresh. `ws.onclose` reconnects with exponential backoff (1s→64s cap). A 1s poll of `activeSymbol` re-subscribes on symbol change. The 20s `loadChart` poll stays as source-of-truth / reconnect safety net and covers Binance/Bybit/Yahoo legs the WS doesn't handle.
+
+**Compare overlay** — the ＋Compare button prompts for a symbol; `addCompare(sym)` fetches it (`fetchKlines`) and plots a **% -normalized** line (change from its first bar) on its own hidden price scale (`priceScaleId:"compareN"`), so assets at very different price levels overlay comparably. `COMPARE` holds `{sym:{series,color}}`; chips render in the floating legend (`#compareLegend`) with an × to remove; `reloadAllCompares` refetches them when the base chart reloads (TF change).
+
+**Indicator hover values** — `recordData(series)` wraps a series' `setData` to stash the last array on `series._data` (LWC has no getData). `updateIndLegendValues(time)` (called from `updateCrosshair`) looks up each indicator's value at the crosshair time via `valueAtTime` and writes it into the legend row's `.vals` slot (overlays) or a `.subVals` span in the sub-pane label (oscillators); cleared on mouseleave (legend reverts to the latest bar).
+
+**Watchlist column sort** — the `#wlCols` header cells (Symbol/Last/Chg/Chg%) are clickable → `sortWatchlist(key)` cycles asc → desc → off. Non-destructive: `GROUPS` order is never mutated; `buildWatchlist` renders each group via `sortedSymbols(g.symbols)` which returns a sorted copy keyed off `PRICE_CACHE` (updated by `refreshPrices`) when `wlSort` is set. Rows are 28px; price cells flash via `flash-up`/`flash-down` keyframes on change.
+
+**Watchlist flags** — `SYMBOL_FLAGS` maps symbol → hex color, persisted in `localStorage["fv_flags"]`. A right-click row menu (`showRowMenu`) offers 6 `FLAG_COLORS`; the chosen color renders as a ⬤ dot at the left of the row.
+
+Drawings are keyed per **symbol + timeframe** so a BTC-USD 1D layout does not clobber BTC-USD 1H. Scripts, alerts, and indicators are keyed per **symbol only**. Active symbol/TF, timezone, and indicator favorites are global. So a reload restores the full workspace: symbol, timeframe (incl. custom), drawings, indicators (with params + hidden state), alerts, scripts, and timezone.
 
 ---
 

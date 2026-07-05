@@ -1,0 +1,13 @@
+import { chromium } from 'playwright';
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage();
+const traces=[];
+page.on('pageerror',e=>traces.push(e.stack||e.message));
+await page.goto('http://127.0.0.1:5501/',{waitUntil:'domcontentloaded',timeout:20000});
+await page.waitForTimeout(5000);
+await page.evaluate(()=>{ activeSymbol='BTC-USD'; activeTF='1h'; loadChart('BTC-USD','1h'); });
+await page.waitForTimeout(6000);
+await page.evaluate(()=>{ const ts=chart.timeScale(); const r=ts.getVisibleLogicalRange(); ts.setVisibleLogicalRange({from:5, to:5+(r.to-r.from)}); });
+await page.waitForTimeout(3000);
+console.log(traces.slice(0,2).join("\n---\n"));
+await browser.close();

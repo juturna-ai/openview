@@ -9,3 +9,9 @@ Thumbs.db
 # Logs / temp
 *.log
 tmp/
+
+# Test harness deps + generated artifacts
+test/node_modules/
+test/*.png
+test/**/*.png
+_docs/index.full.backup.html

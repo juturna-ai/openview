@@ -27,3 +27,19 @@ only when callers don't mutate it (here, `concat` doesn't).
 Ran 3 parallel Explore agents. They were largely accurate but had a few false alarms
 (e.g. "lastData polluted by whitespace" — it wasn't). Always re-read the exact lines
 before editing; line numbers and conclusions can drift.
+
+## Grid "too dense" had TWO independent sources — don't stop at the first fix
+User reported dense vertical gridlines. First I disabled LWC's built-in vertLines on the
+main chart, then on RSI, then on indicator sub-panes — each a separate config. But the
+intraday wall (visible on 4h/6h/12h, NOT daily) came from a THIRD source: `drawSessionBreaks`
+drawing one faint line per day, only active on intraday TFs. The "only below daily" symptom
+was the tell — it pointed at the intraday-only code path, not the shared grid config.
+Rule: when a visual artifact has a timeframe/zoom-dependent symptom, trace WHICH code path
+is TF-gated. And a canvas overlay can re-add "grid" lines the chart-lib config can't control
+— grep every function that strokes full-height verticals (drawTimeGrid, drawSessionBreaks,
+vline shapes), not just the LWC `grid:` options.
+
+## Overlay grid only covers the main chart, not sub-panes
+`#draw` canvas is scoped to `#chartWrap`. Anything drawn there (drawTimeGrid) never appears
+on RSI/indicator sub-panes — those are separate LWC charts with their own `grid:` config.
+So a "disable the grid" change needs edits in 3 places: `common`, and both sub-chart configs.

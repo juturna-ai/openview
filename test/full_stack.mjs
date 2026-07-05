@@ -1,0 +1,14 @@
+import { chromium } from 'playwright';
+const b=await chromium.launch({headless:true}); const p=await b.newPage();
+const errs=[];
+p.on('pageerror', e=>errs.push(e.stack || e.message));
+await p.goto("http://127.0.0.1:5501/",{waitUntil:"domcontentloaded",timeout:20000});
+await p.waitForTimeout(5000);
+console.log("=== ON LOAD ===");
+errs.slice(0,3).forEach((s,i)=>console.log("--- err",i,"---\n",s));
+errs.length=0;
+await p.evaluate(()=>{ activeSymbol='BTC-USD'; activeTF='1h'; loadChart('BTC-USD','1h'); });
+await p.waitForTimeout(6000);
+console.log("=== AFTER SWITCH ===");
+errs.slice(0,5).forEach((s,i)=>console.log("--- err",i,"---\n",s));
+await b.close();

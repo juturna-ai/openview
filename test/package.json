@@ -1,0 +1,10 @@
+{
+  "name": "freeview-test",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Dev-only Playwright browser verification harness for Freeview. Not part of the app (index.html ships zero dependencies).",
+  "type": "module",
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

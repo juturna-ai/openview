@@ -12,29 +12,55 @@
     --accent:#2962ff; --hover:#2a2e39;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
-  html,body{height:100%; font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); overflow:hidden;}
+  html,body{height:100%; font-family:'Trebuchet MS',-apple-system,'Segoe UI',Roboto,Ubuntu,Tahoma,Arial,sans-serif; background:var(--bg); color:var(--text); overflow:hidden;}
   #app{display:flex; height:100vh; width:100vw;}
 
   /* ── Left drawing toolbar ── */
-  #toolbar{width:44px; flex-shrink:0; background:var(--bg); border-right:1px solid var(--border);
-    display:flex; flex-direction:column; align-items:center; padding-top:4px; gap:1px; overflow-y:auto; z-index:30;}
+  #toolbar{width:52px; flex-shrink:0; background:var(--bg); border-right:1px solid var(--border);
+    display:flex; flex-direction:column; align-items:center; padding-top:6px; gap:2px; overflow-y:auto; z-index:30;}
   #toolbar::-webkit-scrollbar{width:0;}
-  .tool{width:38px; height:34px; display:flex; align-items:center; justify-content:center;
-    border-radius:5px; cursor:pointer; color:#b2b5be; position:relative;}
-  .tool:hover{background:var(--hover); color:#fff;}
-  .tool.active{background:#2962ff22; color:#2962ff;}
+  .tool{width:44px; height:38px; display:flex; align-items:center; justify-content:center;
+    border-radius:6px; cursor:pointer; color:#b2b5be; position:relative;}
+  .tool:hover{background:var(--hover); color:#e6e8eb;}
+  .tool.active{background:rgba(41,98,255,.15); color:#2962ff;}
   .tool.active svg{stroke:#2962ff;}
-  .tool svg{width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.6; pointer-events:none;}
+  .tool svg{width:26px; height:26px; stroke:currentColor; fill:none; stroke-width:1.5; pointer-events:none;}
   .tool .badge{position:absolute; bottom:2px; right:3px; font-size:7px; color:var(--muted);}
-  .tool-sep{width:24px; height:1px; background:var(--border); margin:4px 0;}
+  .tool-sep{width:28px; height:1px; background:var(--border); margin:5px 0;}
+  .tool.cat{position:relative;}
+  .tool .catarrow{position:absolute; bottom:3px; right:3px; font-size:6px; color:var(--muted); pointer-events:auto;}
+  .tool.cat:hover .catarrow{color:var(--text);}
+  /* Flyout popup listing a category's tools */
+  .tool-flyout{position:fixed; z-index:320; background:#1e222d; border:1px solid var(--border);
+    border-radius:8px; padding:5px; min-width:200px; box-shadow:0 8px 28px #000b;}
+  .tool-flyout .tfrow{display:flex; align-items:center; gap:10px; padding:7px 10px; border-radius:5px; cursor:pointer; color:#d1d4dc; font-size:13px;}
+  .tool-flyout .tfrow:hover{background:var(--hover);}
+  .tool-flyout .tfrow.sel{color:var(--accent);}
+  .tool-flyout .tfi{width:22px; height:22px; display:flex; align-items:center; justify-content:center; color:#b2b5be;}
+  .tool-flyout .tfi svg{width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.5;}
+  .tool-flyout .tfrow.sel .tfi{color:var(--accent);}
 
   /* z-index must beat the always-interactive drawing canvas (#draw, z-index:100)
      so toolbar dropdowns (timeframe menu etc.) that drop over the chart stay
      clickable instead of being swallowed by the overlay. The bar is only the top
      46px strip, so this never blocks chart pan/zoom gestures below it. */
-  #topbar{position:absolute; top:0; left:44px; right:300px; height:46px; background:var(--bg);
-    border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; padding:0 12px; z-index:120;}
-  #symbolBox{font-weight:700; font-size:15px; letter-spacing:.3px; white-space:nowrap;}
+  #topbar{position:absolute; top:0; left:52px; right:300px; height:38px; background:var(--bg);
+    border-bottom:1px solid var(--border); display:flex; align-items:center; gap:2px; padding:0 8px; z-index:120;}
+  #topbar .tbdiv{width:1px; height:20px; background:var(--border); margin:0 6px; flex:none;}
+  #topbar .tbspacer{flex:1;}
+  /* ── Bottom bar (date-range shortcuts + timezone/scale) ── */
+  #bottomBar{flex:none; height:28px; background:var(--bg); border-top:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; padding:0 8px; z-index:30;}
+  #rangeShortcuts{display:flex; gap:2px;}
+  #rangeShortcuts .rng{font-size:11px; color:var(--muted); padding:2px 8px; border-radius:4px; cursor:pointer;}
+  #rangeShortcuts .rng:hover{background:var(--hover); color:var(--text);}
+  #rangeShortcuts .rng.active{color:var(--accent);}
+  #bottomRight{display:flex; align-items:center; gap:4px;}
+  #bottomRight .tf-sel-btn{font-size:11px; padding:2px 6px;}
+  #bottomRight #btnScale{font-size:11px; padding:2px 8px;}
+  #symbolBox{font-weight:700; font-size:15px; letter-spacing:.3px; white-space:nowrap; cursor:pointer; padding:2px 6px; border-radius:5px;}
+  #symbolBox:hover{background:var(--hover);}
+  #symbolBox #symSearchIcon{font-size:12px; margin-right:6px; opacity:.7;}
   #symbolBox .exch{color:var(--muted); font-weight:400; font-size:12px; margin-left:6px;}
   /* ── Timeframe selector (TradingView-style sectioned dropdown) ── */
   .tf-group{display:flex; align-items:center; gap:2px; margin-left:8px;}
@@ -60,20 +86,41 @@
     cursor:pointer; color:var(--text); user-select:none; white-space:nowrap;}
   .tf-opt:hover{background:var(--hover);}
   .tf-opt.active{background:var(--accent); color:#fff;}
-  #maLegend{font-size:11px; margin-left:12px; white-space:nowrap;}
+  .tf-custom{padding:6px 8px 8px; border-bottom:1px solid var(--border); margin-bottom:4px;}
+  .tf-custom input{width:100%; box-sizing:border-box; background:var(--panel,#1e222d); color:var(--text);
+    border:1px solid var(--border); border-radius:4px; padding:6px 8px; font-size:12px; outline:none;}
+  .tf-custom input:focus{border-color:var(--accent);}
+  .tf-custom input.bad{border-color:var(--red); animation:tfShake .3s;}
+  @keyframes tfShake{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+  /* ── Floating on-chart legend (TradingView top-left) ── */
+  #chartLegend{position:absolute; top:8px; left:10px; z-index:110; max-width:70%;
+    display:flex; flex-direction:column; gap:1px; pointer-events:none;}
+  #chartLegend > div{pointer-events:auto; width:fit-content; background:rgba(19,23,34,.55);
+    border-radius:3px; padding:1px 5px;}
+  #legSymRow{font-size:13px; font-weight:700; color:var(--text); white-space:nowrap;}
+  #legCollapse{cursor:pointer; color:var(--muted); font-size:10px; margin-right:4px; display:inline-block; transition:transform .12s;}
+  #legCollapse:hover{color:var(--text);}
+  #chartLegend.collapsed #legCollapse{transform:rotate(-90deg);}
+  #chartLegend.collapsed #maLegend, #chartLegend.collapsed #indLegend{display:none;}
+  #legSymRow #legMeta{color:var(--muted); font-weight:400; font-size:11px; margin-left:4px;}
+  #maLegend{font-size:11px; white-space:nowrap; font-variant-numeric:tabular-nums;}
   #maLegend span{margin-right:8px;}
-  #ohlc{font-size:11px; color:var(--muted); margin-left:10px; white-space:nowrap;}
+  #ohlc{font-size:11px; color:var(--muted); margin-left:8px; white-space:nowrap; font-variant-numeric:tabular-nums;}
   #ohlc b{color:var(--text); font-weight:600;}
   #status{margin-left:auto; font-size:11px; color:var(--muted); white-space:nowrap;}
   .dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green); margin-right:5px; vertical-align:middle;}
 
-  #main{flex:1; position:relative; padding-top:46px; display:flex; flex-direction:column; overflow:hidden;}
+  #main{flex:1; position:relative; padding-top:38px; display:flex; flex-direction:column; overflow:hidden;}
   #chartWrap{width:100%; flex:1 1 0; min-height:60px;}   /* the only growable pane */
   #chart{width:100%; height:100%;}
   #draw{cursor:crosshair;}
   #rsiWrap{flex:0 1 auto; height:26%; min-height:96px; border-top:1px solid var(--border); position:relative;}
   #subPanes{flex:0 1 auto; min-height:0;}
   #rsiLabel{position:absolute; top:6px; left:10px; font-size:11px; color:var(--muted); z-index:5;}
+  /* Countdown-to-bar-close pill, pinned to the right price axis at the last price. */
+  #barCountdown{position:absolute; right:2px; z-index:6; display:none; transform:translateY(-50%);
+    background:#363a45; color:#d1d4dc; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;
+    padding:2px 6px; border-radius:3px; pointer-events:none; white-space:nowrap;}
   #rsiLabel b{font-weight:600;}
   #rsi{width:100%; height:100%;}
 
@@ -85,10 +132,15 @@
   #wlAdd{cursor:pointer; color:var(--muted); font-size:16px; line-height:1; padding:2px 6px;
     border-radius:4px; font-weight:400;}
   #wlAdd:hover{color:#fff; background:var(--hover);}
+  .wlActions{display:flex; align-items:center; gap:2px;}
+  .wlActions span{cursor:pointer; color:var(--muted); font-size:15px; line-height:1; padding:2px 6px; border-radius:4px; font-weight:400;}
+  .wlActions span:hover{color:#fff; background:var(--hover);}
   #wlCols{display:flex; padding:6px 12px 6px 14px; font-size:11px; color:var(--muted);
     border-bottom:1px solid var(--border);}
-  #wlCols .c1{flex:1;} #wlCols .c2{width:78px; text-align:right;}
-  #wlCols .c3{width:66px; text-align:right;} #wlCols .c4{width:54px; text-align:right;}
+  #wlCols .c1{flex:1;} #wlCols .c2{width:72px; text-align:right;}
+  #wlCols .c3{width:60px; text-align:right;} #wlCols .c4{width:52px; text-align:right;}
+  #wlCols span{cursor:pointer; user-select:none;} #wlCols span:hover{color:var(--text);}
+  #wlCols span.sorted{color:var(--accent);}
   #wlBody{flex:1; overflow-y:auto;}
   .section{padding:7px 12px 5px 14px; font-size:11px; color:var(--muted); background:transparent;
     letter-spacing:.4px; border-bottom:1px solid rgba(42,46,57,.5);
@@ -106,7 +158,7 @@
     stroke-linecap:round; stroke-linejoin:round;}
   /* section drop indicator (drag a symbol onto a collapsed/empty section header) */
   .section.drop-into{box-shadow:inset 0 0 0 1px var(--accent);}
-  .row{display:flex; align-items:center; padding:6px 12px 6px 14px; cursor:pointer; position:relative;}
+  .row{display:flex; align-items:center; height:28px; padding:0 10px 0 8px; cursor:pointer; position:relative;}
   .row:hover{background:var(--hover);}
   .row.active{background:#1c2c4a;}
   .row.dragging{opacity:.4;}
@@ -120,16 +172,18 @@
   .row .del:hover{color:var(--red); background:#2a2e39;}
   .row .del svg{width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.6;
     stroke-linecap:round; stroke-linejoin:round;}
-  .row .sym{flex:1; display:flex; align-items:center; gap:9px; min-width:0;}
-  .row .sym .nm{font-size:13px; font-weight:500; color:#d1d4dc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .row .flag{flex:none; font-size:8px; line-height:1; text-align:center; width:0; overflow:visible;}
+  .row .flag:not(:empty){width:9px; margin-right:1px;}
+  .row .sym{flex:1; display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;}
+  .row .sym .nm{font-size:12px; font-weight:500; color:#d1d4dc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .row .sym .exbadge{flex:none; font-size:9px; font-weight:600; letter-spacing:.3px; color:var(--muted);
     background:#2a2e39; border-radius:3px; padding:1px 4px; text-transform:uppercase;}
-  .row .ic{width:20px; height:20px; border-radius:50%; flex-shrink:0; object-fit:contain;
-    background:#2a2e39; color:#fff; font-size:9px; display:flex; align-items:center;
+  .row .ic{width:18px; height:18px; border-radius:50%; flex-shrink:0; object-fit:contain;
+    background:#2a2e39; color:#fff; font-size:8px; display:flex; align-items:center;
     justify-content:center; font-weight:700;}
-  .row .last{width:78px; text-align:right; font-size:13px; font-variant-numeric:tabular-nums; color:#d1d4dc;}
-  .row .chgabs{width:66px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums;}
-  .row .chg{width:54px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums;}
+  .row .last{width:72px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums; color:#d1d4dc;}
+  .row .chgabs{width:60px; text-align:right; font-size:11px; font-variant-numeric:tabular-nums;}
+  .row .chg{width:52px; text-align:right; font-size:11px; font-variant-numeric:tabular-nums;}
   .up{color:#26a69a;} .down{color:#ef5350;}
   #wlBody::-webkit-scrollbar{width:8px;}
   #wlBody::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
@@ -139,7 +193,7 @@
 
   /* ── topbar buttons ── */
   .tbtn{background:transparent; border:none; color:#d1d4dc; font-size:12px; cursor:pointer;
-    padding:5px 8px; border-radius:4px; display:flex; align-items:center; gap:4px;}
+    padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:4px; height:28px;}
   .tbtn:hover{background:var(--hover);}
 
   /* ── sub-panes for separate-pane indicators (MACD, Stoch, etc.) ── */
@@ -148,15 +202,26 @@
   .subpane .subLabel{position:absolute; top:4px; left:8px; z-index:5; font-size:11px; color:var(--muted);}
   .subpane .subClose{cursor:pointer; margin-left:8px; color:var(--muted);}
   .subpane .subClose:hover{color:var(--red);}
+  .subpane .subEye{cursor:pointer; margin-left:8px; color:var(--muted);}
+  .subpane .subEye:hover{color:var(--text);}
+  .subpane.hiddenInd{opacity:.5;}
+  /* Drag handle straddling a pane's top border to resize the pane above/below it. */
+  .subpane .paneResize{position:absolute; top:-3px; left:0; right:0; height:7px; z-index:8; cursor:ns-resize;}
+  .subpane .paneResize:hover{background:rgba(41,98,255,0.25);}
 
-  /* ── indicator legend (top-left of chart) ── */
-  #indLegend{position:absolute; top:50px; left:10px; z-index:40; font-size:11px;
-    display:flex; flex-direction:column; gap:2px; pointer-events:auto;}
-  .indrow{display:flex; align-items:center; gap:6px; background:#131722cc; padding:1px 6px; border-radius:3px;}
-  .indrow .nm{font-weight:600;} .indrow .vals{color:var(--muted);}
+  /* ── indicator legend (rows inside the floating #chartLegend) ── */
+  #indLegend{font-size:11px; display:flex; flex-direction:column; gap:1px; padding:0 !important; background:none !important;}
+  .indrow{display:flex; align-items:center; gap:6px; padding:0; border-radius:3px;}
+  .indrow .nm{font-weight:600;} .indrow .vals{color:var(--text); font-variant-numeric:tabular-nums;}
+  .subpane .subVals{color:var(--text); font-size:11px; font-variant-numeric:tabular-nums; margin-left:6px;}
   .indrow .x{cursor:pointer; color:var(--muted); padding:0 3px;}
   .indrow .x:hover{color:var(--red);} .indrow .gear{cursor:pointer; color:var(--muted);}
-  .indrow .gear:hover{color:#fff;}
+  .indrow .gear:hover{color:#fff;} .indrow .eye{cursor:pointer; color:var(--muted);}
+  .indrow .eye:hover{color:#fff;}
+  /* Symbol info popover */
+  #symInfoPop .sibody{padding:6px 0;}
+  #symInfoPop .sirow{display:flex; justify-content:space-between; padding:5px 14px; font-size:12px;}
+  #symInfoPop .sirow .sik{color:var(--muted);} #symInfoPop .sirow .siv{color:var(--text); font-weight:500; text-align:right; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 
   /* ── popup context menu ── */
   .popmenu{position:absolute; display:none; z-index:300; background:#1e222d; border:1px solid var(--border);
@@ -175,9 +240,16 @@
     display:flex; justify-content:space-between; align-items:center;}
   .panel .ph .cl{cursor:pointer; color:var(--muted); font-size:18px;}
   .panel .pb{overflow-y:auto; padding:6px 0;}
-  .panel .pi{padding:9px 14px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:13px;}
+  .panel .pi{padding:9px 14px; cursor:pointer; display:flex; align-items:center; gap:8px; font-size:13px;}
   .panel .pi:hover{background:var(--hover);}
+  .panel .pi .pinm{flex:1;}
   .panel .pi .meta{color:var(--muted); font-size:11px;}
+  .panel .pi .star{color:var(--muted); font-size:14px; cursor:pointer; width:16px; text-align:center;}
+  .panel .pi .star.on{color:#f5c518;} .panel .pi .star:hover{color:#f5c518;}
+  .panel .indtabs{display:flex; gap:4px; padding:6px 12px 0;}
+  .panel .indtab{font-size:12px; padding:5px 10px; border-radius:5px 5px 0 0; cursor:pointer; color:var(--muted); border-bottom:2px solid transparent;}
+  .panel .indtab:hover{color:var(--text);}
+  .panel .indtab.active{color:var(--text); border-bottom-color:var(--accent);}
   .panel .search{margin:8px 12px; padding:7px 10px; background:#131722; border:1px solid var(--border);
     border-radius:5px; color:#d1d4dc; font-size:13px; outline:none;}
   .panel .indcat{font-size:10px; font-weight:700; letter-spacing:.6px; color:var(--muted);
@@ -286,7 +358,8 @@
   <div id="toolbar"></div>
   <div id="main">
     <div id="topbar">
-      <span id="symbolBox"><span id="symName">NEAR-USD/INJ-USD</span><span class="exch">· <span id="exName">Coinbase</span> · <span id="tfName">1D</span></span></span>
+      <span id="symbolBox" title="Search symbols"><span id="symSearchIcon">🔍</span><span id="symName">NEAR-USD/INJ-USD</span><span class="exch">· <span id="exName">Coinbase</span> · <span id="tfName">1D</span></span></span>
+      <span class="tbdiv"></span>
       <div class="tf-group" id="tfGroup">
         <div class="tf-sel" id="tfSel">
           <div class="tf-sel-btn" id="tfSelBtn">
@@ -296,6 +369,7 @@
           <div class="tf-menu" id="tfMenu"><!-- built by JS from TF{} --></div>
         </div>
       </div>
+      <span class="tbdiv"></span>
       <!-- Chart-type selector (reuses the timeframe dropdown styling) -->
       <div class="tf-sel" id="ctSel" title="Chart type">
         <div class="tf-sel-btn" id="ctSelBtn">
@@ -304,25 +378,46 @@
         </div>
         <div class="tf-menu" id="ctMenu"><!-- built by JS from CHART_TYPES --></div>
       </div>
-      <!-- Price-scale mode toggle: Normal → Log → Percent -->
-      <button class="tbtn" id="btnScale" title="Price scale: Normal / Log / Percent">⤢ Auto</button>
+      <button class="tbtn" id="btnCompare" title="Compare / overlay another symbol">＋ Compare</button>
+      <span class="tbdiv"></span>
       <button class="tbtn" id="btnIndicators">⊞ Indicators</button>
-      <button class="tbtn" id="btnScript" title="Write a custom indicator (Freeview Script)">ƒ Script</button>
       <button class="tbtn" id="btnAlert" title="Click: create alert · Right-click: manage alerts">🔔 Alert</button>
-      <span id="maLegend"></span>
-      <span id="ohlc"></span>
-      <span id="status"><span class="dot"></span>Live · Coinbase API</span>
+      <button class="tbtn" id="btnScript" title="Write a custom indicator (Freeview Script)">ƒ Script</button>
+      <!-- Price-scale mode toggle + timezone selector are relocated to the bottom bar by JS at boot -->
+      <button class="tbtn" id="btnScale" title="Price scale: Normal / Log / Percent">⤢ Auto</button>
+      <div class="tf-sel" id="tzSel" title="Chart timezone">
+        <div class="tf-sel-btn" id="tzSelBtn">
+          <span class="tf-sel-label" id="tzSelLabel">🕓 UTC</span>
+          <span class="caret">▾</span>
+        </div>
+        <div class="tf-menu" id="tzMenu"><!-- built by JS from TIMEZONES --></div>
+      </div>
+      <span class="tbspacer"></span>
+      <button class="tbtn" id="btnSnap" title="Save chart screenshot (PNG)">📷</button>
+      <button class="tbtn" id="btnFull" title="Fullscreen">⛶</button>
+      <span id="status"><span class="dot"></span>Live</span>
     </div>
     <div id="chartWrap" style="position:relative;">
       <div id="chart" style="position:absolute; inset:0;"></div>
       <canvas id="draw" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:auto; z-index:100;"></canvas>
+      <!-- Floating on-chart legend (TradingView-style): symbol row + OHLC, then MA + indicator rows -->
+      <div id="chartLegend">
+        <div id="legSymRow"><span id="legCollapse" title="Collapse / expand legend">▾</span><span id="legSym">NEAR-USD/INJ-USD</span><span id="legMeta">· 1D · Coinbase</span> <span id="ohlc"></span></div>
+        <div id="maLegend"></div>
+        <div id="indLegend"></div>
+      </div>
+      <div id="barCountdown" title="Time until current bar closes"></div>
     </div>
     <div id="rsiWrap">
       <div id="rsiLabel">RSI 14 close <b id="rsiVal" style="color:#7e57c2">—</b> <b id="rsiMaVal" style="color:#e0a82e">—</b></div>
       <div id="rsi"></div>
     </div>
     <div id="subPanes"></div>
-    <div id="indLegend"></div>
+    <!-- Bottom bar (TradingView): date-range shortcuts left, timezone + scale toggles right -->
+    <div id="bottomBar">
+      <div id="rangeShortcuts"></div>
+      <div id="bottomRight"><!-- tzSel + btnScale relocated here by JS --></div>
+    </div>
   </div>
 
   <!-- floating UI -->
@@ -336,8 +431,15 @@
   <div id="dlgBackdrop"></div>
 
   <div id="watchlist">
-    <div id="wlHead"><span>comeback <span class="sub">▾</span></span><span id="wlAdd" title="Add symbol">＋</span></div>
-    <div id="wlCols"><span class="c1">Symbol</span><span class="c2">Last</span><span class="c3">Chg</span><span class="c4">Chg%</span></div>
+    <div id="wlHead"><span>comeback <span class="sub">▾</span></span>
+      <span class="wlActions">
+        <span id="wlImport" title="Import watchlist (.txt)">⭳</span>
+        <span id="wlExport" title="Export watchlist (.txt)">⭱</span>
+        <span id="wlAdd" title="Add symbol">＋</span>
+      </span>
+      <input type="file" id="wlImportFile" accept=".txt,text/plain" style="display:none">
+    </div>
+    <div id="wlCols"><span class="c1" data-sort="sym">Symbol</span><span class="c2" data-sort="last">Last</span><span class="c3" data-sort="chg">Chg</span><span class="c4" data-sort="chgpct">Chg%</span></div>
     <div id="wlBody"></div>
   </div>
 </div>
@@ -484,6 +586,12 @@ function loadGroups(){
 }
 let GROUPS = loadGroups();
 function saveGroups(){ try{ localStorage.setItem(WL_KEY, JSON.stringify(GROUPS)); }catch{} }
+// Per-symbol flag colors (TradingView-style row flags). {symbol: "#hex"}.
+let SYMBOL_FLAGS = {};
+try{ const f=localStorage.getItem("fv_flags"); if(f) SYMBOL_FLAGS=JSON.parse(f)||{}; }catch{}
+function saveFlags(){ try{ localStorage.setItem("fv_flags", JSON.stringify(SYMBOL_FLAGS)); }catch{} }
+const FLAG_COLORS=["#ef5350","#ff9800","#ffd600","#26a69a","#42a5f5","#ab47bc"];
+function setSymbolFlag(sym,col){ if(col) SYMBOL_FLAGS[sym]=col; else delete SYMBOL_FLAGS[sym]; saveFlags(); buildWatchlist(); }
 function allSymbols(){ return [...new Set(GROUPS.flatMap(g=>g.symbols))]; }
 
 // Coin logos from CoinCap's free icon CDN (BASE symbol, lowercased).
@@ -497,6 +605,12 @@ function logoUrl(sym){
 
 let activeSymbol = "NEAR-USD/INJ-USD";
 let activeTF = "1d";  // timeframe key into TF{}
+// Restore the last-viewed symbol + timeframe so a reload lands where you left off.
+try{
+  const sv=localStorage.getItem("fv_active_symbol"); if(sv) activeSymbol=sv;
+  const tv=localStorage.getItem("fv_active_tf");     if(tv) activeTF=tv;   // validated once TF{} exists (below)
+}catch(e){}
+function saveActiveState(){ try{ localStorage.setItem("fv_active_symbol",activeSymbol); localStorage.setItem("fv_active_tf",activeTF); }catch(e){} }
 
 // ── Chart setup ──
 const chartEl = document.getElementById("chart");
@@ -509,11 +623,29 @@ const PRICE_AXIS_W = 72;
 // clean across the padded future region (no skipped months / stray day numbers).
 // tickMarkType: 0 Year · 1 Month · 2 DayOfMonth · 3 Time · 4 TimeWithSeconds.
 const _MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+// ── Chart timezone ──
+// Axis/crosshair time labels are rendered from UTC by default. `tzOffsetMin` shifts
+// them to the selected zone (minutes east of UTC). We compute the shifted date by
+// nudging the UNIX time and then reading its UTC fields — so all downstream getUTC*
+// calls yield the local-zone wall clock without pulling in Intl per tick.
+const TIMEZONES = [
+  { label:"UTC",           off:0 },
+  { label:"Exchange (UTC)",off:0 },
+  { label:"New York",      off:-300 },   // EST base (TradingView labels are approximate; no DST math)
+  { label:"London",        off:0 },
+  { label:"Berlin",        off:60 },
+  { label:"Dubai",         off:240 },
+  { label:"Tokyo",         off:540 },
+  { label:"Sydney",        off:600 },
+  { label:"Local",         off:-new Date().getTimezoneOffset() },  // viewer's own zone
+];
+let tzOffsetMin = 0;   // persisted below; default UTC
+function tzShift(ms){ return new Date(ms + tzOffsetMin*60000); }
 function tickLabel(t, type){
   // Numeric times are UNIX seconds; {year,month,day} business-days come through as objects.
   const d = (typeof t === "object")
     ? new Date(Date.UTC(t.year, t.month-1, t.day))
-    : new Date(t*1000);
+    : tzShift(t*1000);
   switch(type){
     case 0:  return String(d.getUTCFullYear());                       // year boundary
     case 1:  return _MONTHS[d.getUTCMonth()];                         // month boundary
@@ -522,10 +654,20 @@ function tickLabel(t, type){
                     String(d.getUTCMinutes()).padStart(2,"0");
   }
 }
+// Crosshair bottom-axis tag formatter (full date+time in the selected zone).
+function crosshairTimeFmt(t){
+  const d = (typeof t==="object") ? new Date(Date.UTC(t.year,t.month-1,t.day)) : tzShift(t*1000);
+  const dd=String(d.getUTCDate()).padStart(2,"0"), mon=_MONTHS[d.getUTCMonth()], yr=String(d.getUTCFullYear()).slice(2);
+  const hh=String(d.getUTCHours()).padStart(2,"0"), mm=String(d.getUTCMinutes()).padStart(2,"0");
+  return `${dd} ${mon} '${yr}  ${hh}:${mm}`;
+}
 
 const common = {
-  layout:{ background:{color:"#131722"}, textColor:"#d1d4dc" },
-  grid:{ vertLines:{color:"#1e222d"}, horzLines:{color:"#1e222d"} },
+  layout:{ background:{color:"#131722"}, textColor:"#d1d4dc", fontFamily:"'Trebuchet MS', Roboto, Ubuntu, sans-serif" },
+  // Vertical grid lines are drawn manually on the overlay (drawTimeGrid) at round
+  // time intervals — ~8-12 lines regardless of zoom/timeframe — because LWC's built-in
+  // vertical grid puts a line at (nearly) every bar and turns dense on small TFs.
+  grid:{ vertLines:{visible:false}, horzLines:{color:"#1e222d"} },
   // Pin the right-axis gutter to a fixed width so every pane (main, RSI, indicator
   // sub-charts) reserves the same space and their plot areas line up horizontally —
   // otherwise each auto-sizes to its own labels ("0.42" vs "98.51") and a candle
@@ -539,6 +681,7 @@ const common = {
     // gives clean, TradingView-style month/day/year labels across the future region.
     tickMarkFormatter:(t,type)=>tickLabel(t,type) },
   crosshair:{ mode:0 },
+  localization:{ timeFormatter:crosshairTimeFmt },   // crosshair bottom tag → selected timezone
   // Pan + zoom are handled manually on the overlay canvas (dcanvas), which hides
   // these gestures from the chart's built-in handlers, so disable them here.
   handleScroll:false, handleScale:false,
@@ -568,9 +711,17 @@ const aux = {};              // lazily-created auxiliary series keyed by type
 function auxSeries(type){
   if(aux[type]) return aux[type];
   if(type==="line")     aux[type]=chart.addLineSeries({ color:"#2962ff", lineWidth:2, priceLineVisible:true, lastValueVisible:true });
+  else if(type==="linemark") aux[type]=chart.addLineSeries({ color:"#2962ff", lineWidth:2, priceLineVisible:true, lastValueVisible:true, pointMarkersVisible:true, pointMarkersRadius:3 });
+  else if(type==="step") aux[type]=chart.addLineSeries({ color:"#2962ff", lineWidth:2, priceLineVisible:true, lastValueVisible:true, lineType:1 /* LineType.WithSteps */ });
   else if(type==="area")aux[type]=chart.addAreaSeries({ lineColor:"#2962ff", topColor:"rgba(41,98,255,0.30)", bottomColor:"rgba(41,98,255,0.02)", lineWidth:2 });
   else if(type==="baseline") aux[type]=chart.addBaselineSeries({ baseValue:{type:"price",price:0}, topLineColor:"#26a69a", bottomLineColor:"#ef5350", topFillColor1:"rgba(38,166,154,0.20)", bottomFillColor1:"rgba(239,83,80,0.20)" });
-  else if(type==="bars") aux[type]=chart.addBarSeries({ upColor:"#26a69a", downColor:"#ef5350", thinBars:false });
+  else if(type==="columns") aux[type]=chart.addHistogramSeries({ color:"#26a69a", priceLineVisible:false, lastValueVisible:true });
+  else if(type==="bars"||type==="hlcbars") aux[type]=chart.addBarSeries({ upColor:"#26a69a", downColor:"#ef5350", thinBars:false, openVisible:type==="bars" });
+  else if(type==="highlow") aux[type]=chart.addBarSeries({ upColor:"#787b86", downColor:"#787b86", thinBars:false, openVisible:false });
+  // renko / kagi / pnf / linebreak render through a candlestick aux series fed
+  // transformed "brick"/"box"/"line" data, so they share candle coordinate anchoring.
+  else if(type==="renko"||type==="kagi"||type==="pnf"||type==="linebreak")
+    aux[type]=chart.addCandlestickSeries({ upColor:"#26a69a", downColor:"#ef5350", borderUpColor:"#26a69a", borderDownColor:"#ef5350", wickUpColor:"#26a69a", wickDownColor:"#ef5350", priceLineVisible:true, lastValueVisible:true });
   return aux[type];
 }
 // Heikin Ashi transform: HA-Close=(O+H+L+C)/4; HA-Open=(prevHAO+prevHAC)/2;
@@ -596,12 +747,108 @@ function hollowData(data){
       borderColor:col, wickColor:col };
   });
 }
+// ── Price-transform chart styles ──
+// These rebuild the series from price *movement* rather than time, so bar count
+// differs from the source. To keep them anchored to the real time axis (drawings,
+// crosshair, coordinate helpers all key off `candle`'s timestamps), each emitted
+// brick/box/line borrows the timestamp of the source bar that produced it. When
+// multiple bricks fall on one source bar we nudge later ones by +1s so timestamps
+// stay strictly increasing (lightweight-charts requires ascending unique times).
+function boxStep(data){
+  // ATR-ish box size: a fraction of the median bar range, so it adapts per symbol.
+  const ranges=data.map(b=>Math.abs(b.high-b.low)).filter(v=>v>0).sort((a,b)=>a-b);
+  const med=ranges.length?ranges[ranges.length>>1]:0;
+  const px = med>0 ? med*0.75 : (data.length?data[data.length-1].close*0.01:1);
+  return px>0?px:1;
+}
+function tsPusher(){ let last=-1; return t=>{ let x=t<=last?last+1:t; last=x; return x; }; }
+
+// Renko: fixed-size bricks; a new brick only when price moves ≥ box in one direction.
+function renkoData(data){
+  if(!data.length) return [];
+  const box=boxStep(data), out=[], next=tsPusher();
+  let base=data[0].close, dir=0;
+  for(const b of data){
+    let p=b.close;
+    while(p-base>=box){ const o=base,c=base+box; out.push({time:next(b.time),open:o,high:c,low:o,close:c}); base=c; dir=1; }
+    while(base-p>=box){ const o=base,c=base-box; out.push({time:next(b.time),open:o,high:o,low:c,close:c}); base=c; dir=-1; }
+  }
+  return out;
+}
+// Line Break (3-line break): a new line when close breaks the extreme of the prior N lines.
+function lineBreakData(data, n=3){
+  const out=[], next=tsPusher();
+  for(const b of data){
+    const c=b.close;
+    if(!out.length){ out.push({time:next(b.time),open:b.open,high:Math.max(b.open,c),low:Math.min(b.open,c),close:c,_d:c>=b.open?1:-1}); continue; }
+    const recent=out.slice(-n);
+    const hi=Math.max(...recent.map(x=>Math.max(x.open,x.close)));
+    const lo=Math.min(...recent.map(x=>Math.min(x.open,x.close)));
+    const prev=out[out.length-1];
+    if(c>hi){ const o=Math.max(prev.open,prev.close); out.push({time:next(b.time),open:o,high:c,low:o,close:c,_d:1}); }
+    else if(c<lo){ const o=Math.min(prev.open,prev.close); out.push({time:next(b.time),open:o,high:o,low:c,close:c,_d:-1}); }
+  }
+  return out.map(({_d,...x})=>x);
+}
+// Kagi: a zig-zag that reverses only on a ≥box counter-move. We trace each completed
+// leg as a candle from the leg's start price to its extreme (up leg = green, down = red).
+function kagiData(data){
+  if(!data.length) return [];
+  const box=boxStep(data), out=[], next=tsPusher();
+  let legStart=data[0].close;   // price where the current leg began
+  let ext=data[0].close;        // running extreme of the current leg
+  let dir=0;                    // 0 undecided, 1 up, -1 down
+  const emit=(t)=>out.push({time:next(t),open:legStart,high:Math.max(legStart,ext),low:Math.min(legStart,ext),close:ext});
+  for(const b of data){
+    const p=b.close;
+    if(dir===0){
+      if(p-ext>=box){ dir=1; ext=p; }
+      else if(ext-p>=box){ dir=-1; ext=p; }
+      else { ext=p; }            // still within first box, drift the extreme
+      continue;
+    }
+    if(dir===1){
+      if(p>ext){ ext=p; }                          // extend the up leg
+      else if(ext-p>=box){ emit(b.time); legStart=ext; ext=p; dir=-1; }  // reversed down
+    } else {
+      if(p<ext){ ext=p; }                          // extend the down leg
+      else if(p-ext>=box){ emit(b.time); legStart=ext; ext=p; dir=1; }   // reversed up
+    }
+  }
+  emit(data[data.length-1].time);                  // flush the final open leg
+  return out;
+}
+// Point & Figure: columns of X (up) / O (down); reversal after ≥ reversal·box counter-move.
+function pnfData(data, reversal=3){
+  if(!data.length) return [];
+  const box=boxStep(data), out=[], next=tsPusher();
+  let dir=0, top=data[0].close, bot=data[0].close;
+  for(const b of data){
+    const p=b.close;
+    if(dir>=0){
+      if(p>=top+box){ top=Math.floor((p-bot)/box)*box+bot; dir=1; }
+      else if(top-p>=reversal*box){ out.push({time:next(b.time),open:bot,high:top,low:bot,close:top}); dir=-1; bot=top-Math.floor((top-p)/box)*box; }
+    } else {
+      if(p<=bot-box){ bot=top-Math.floor((top-p)/box)*box; dir=-1; }
+      else if(p-bot>=reversal*box){ out.push({time:next(b.time),open:top,high:top,low:bot,close:bot}); dir=1; top=bot+Math.floor((p-bot)/box)*box; }
+    }
+  }
+  out.push({time:next(data[data.length-1].time),open:Math.min(top,bot),high:top,low:bot,close:Math.max(top,bot)});
+  return out;
+}
+
 // Route the current data into whatever representation chartType selects.
 function applyChartType(data){
   const d = data || lastData;
   const showCandle = (chartType==="candles"||chartType==="hollow"||chartType==="heikin");
   candle.applyOptions({ visible:showCandle });
   Object.entries(aux).forEach(([k,s])=> s.applyOptions({ visible: k===chartType }));
+  // Price-transform styles (renko/kagi/pnf/linebreak) rebuild their own price/time
+  // series, so the time-based MA overlays don't align and are meaningless on them —
+  // hide the MAs (TradingView does the same) and re-fit the view to the new series.
+  const isTransform = (chartType==="renko"||chartType==="kagi"||chartType==="pnf"||chartType==="linebreak");
+  if(typeof maSeries!=="undefined") maSeries.forEach(s=>{ try{ s.applyOptions({ visible: !isTransform }); }catch(e){} });
+  if(isTransform){ try{ chart.timeScale().fitContent(); }catch(e){} }
   if(!d || !d.length) return;
   // Pad every style's timeline with ~4 months of future whitespace so the time
   // scale, grey grid lines and date axis extend past the last real bar.
@@ -611,12 +858,25 @@ function applyChartType(data){
   else {
     candle.setData(withFuture(d, d));  // keep candle data (invisible) so coordinates stay valid
     const s=auxSeries(chartType);
-    if(chartType==="bars") s.setData(withFuture(d, d.map(b=>({time:b.time,open:b.open,high:b.high,low:b.low,close:b.close}))));
+    if(chartType==="bars"||chartType==="hlcbars")
+      // HLC bars = OHLC bars with the open tick hidden (openVisible:false set on the series).
+      s.setData(withFuture(d, d.map(b=>({time:b.time,open:b.open,high:b.high,low:b.low,close:b.close}))));
     else if(chartType==="baseline"){
       const base=d.length?d[0].close:0;
       s.applyOptions({ baseValue:{type:"price",price:base} });
       s.setData(withFuture(d, d.map(b=>({time:b.time,value:b.close}))));
-    } else s.setData(withFuture(d, d.map(b=>({time:b.time,value:b.close}))));
+    }
+    else if(chartType==="columns")
+      // green when close≥prev close, red otherwise (TradingView column coloring).
+      s.setData(withFuture(d, d.map((b,i)=>({time:b.time,value:b.close,color:(b.close>=(i>0?d[i-1].close:b.open))?"#26a69a":"#ef5350"}))));
+    else if(chartType==="highlow")
+      // High-Low: vertical bar from low to high per period (no open/close ticks).
+      s.setData(withFuture(d, d.map(b=>({time:b.time,open:b.low,high:b.high,low:b.low,close:b.high}))));
+    else if(chartType==="renko")    s.setData(renkoData(d));
+    else if(chartType==="kagi")     s.setData(kagiData(d));
+    else if(chartType==="pnf")      s.setData(pnfData(d));
+    else if(chartType==="linebreak")s.setData(lineBreakData(d));
+    else s.setData(withFuture(d, d.map(b=>({time:b.time,value:b.close}))));  // line / linemark / step
   }
 }
 function setChartType(t){ chartType=t; applyChartType(); if(typeof syncChartTypeUI==="function") syncChartTypeUI(); }
@@ -643,30 +903,33 @@ const rsiChart = LightweightCharts.createChart(rsiEl, { ...common });
 // Keep the panel pinned to a sensible RSI window so it reads like TradingView.
 const rsiScale = () => ({ priceRange:{ minValue:18, maxValue:82 } });
 
-// Overbought (>70) green highlight: baseline anchored at 70, fill only above it.
+// TradingView's default RSI shades the whole 30–70 band with a faint purple.
+// A baseline series anchored at 70 whose top+bottom fills are the same purple
+// paints a solid translucent block across the band region. rsiUnder (anchored at
+// 30) is kept as a transparent no-op so the rest of the code that feeds it stays
+// unchanged.
 const rsiOver = rsiChart.addBaselineSeries({
   baseValue:{ type:"price", price:70 },
-  topFillColor1:"rgba(38,166,154,0.30)", topFillColor2:"rgba(38,166,154,0.05)",
+  topFillColor1:"rgba(124,87,194,0.10)", topFillColor2:"rgba(124,87,194,0.10)",
+  topLineColor:"rgba(0,0,0,0)",
+  bottomFillColor1:"rgba(124,87,194,0.10)", bottomFillColor2:"rgba(124,87,194,0.10)",
+  bottomLineColor:"rgba(0,0,0,0)",
+  priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
+});
+const rsiUnder = rsiChart.addBaselineSeries({
+  baseValue:{ type:"price", price:30 },
+  topFillColor1:"rgba(0,0,0,0)", topFillColor2:"rgba(0,0,0,0)",
   topLineColor:"rgba(0,0,0,0)",
   bottomFillColor1:"rgba(0,0,0,0)", bottomFillColor2:"rgba(0,0,0,0)",
   bottomLineColor:"rgba(0,0,0,0)",
   priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
 });
-// Oversold (<30) red highlight: baseline at 30, fill only below it.
-const rsiUnder = rsiChart.addBaselineSeries({
-  baseValue:{ type:"price", price:30 },
-  topFillColor1:"rgba(0,0,0,0)", topFillColor2:"rgba(0,0,0,0)",
-  topLineColor:"rgba(0,0,0,0)",
-  bottomFillColor1:"rgba(239,83,80,0.05)", bottomFillColor2:"rgba(239,83,80,0.30)",
-  bottomLineColor:"rgba(0,0,0,0)",
-  priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
-});
-// dashed 70 / 30 bands + faint 50 midline
-const band70  = rsiChart.addLineSeries({ color:"#787b86", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
-const band30  = rsiChart.addLineSeries({ color:"#787b86", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+// dashed 70 / 30 bands — TradingView tints these purple (the RSI plot color).
+const band70  = rsiChart.addLineSeries({ color:"rgba(124,87,194,0.5)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+const band30  = rsiChart.addLineSeries({ color:"rgba(124,87,194,0.5)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
 const band50  = rsiChart.addLineSeries({ color:"#3a3e4a", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
-// RSI line (purple, thin) + smoothing MA (gold, thicker), added last = on top.
-const rsiLine = rsiChart.addLineSeries({ color:"#9c6ade", lineWidth:1, priceLineVisible:false, lastValueVisible:true, autoscaleInfoProvider:rsiScale });
+// RSI line (TradingView purple #7E57C2, thin) + smoothing MA (gold, thicker), added last = on top.
+const rsiLine = rsiChart.addLineSeries({ color:"#7e57c2", lineWidth:2, priceLineVisible:false, lastValueVisible:true, autoscaleInfoProvider:rsiScale });
 const rsiMa   = rsiChart.addLineSeries({ color:"#e6b400", lineWidth:2, priceLineVisible:false, lastValueVisible:true });
 
 // sync the two time scales
@@ -816,12 +1079,32 @@ const TF = {
   "15m": { label:"15m", menu:"15 minutes", sec:"MINUTES", base:900,   bucket:900,    pages:18 },  // ~5k bars
   "30m": { label:"30m", menu:"30 minutes", sec:"MINUTES", base:900,   bucket:1800,   pages:18 },  // 2×15m
   "1h":  { label:"1H",  menu:"1 hour",     sec:"HOURS",   base:3600,  bucket:3600,   pages:36 },  // ~10k bars (back to 2025)
+  "2h":  { label:"2H",  menu:"2 hours",    sec:"HOURS",   base:3600,  bucket:7200,   pages:36 },  // 2×1h, deep
   "4h":  { label:"4H",  menu:"4 hours",    sec:"HOURS",   base:3600,  bucket:14400,  pages:36 },  // 4×1h, deep
   "6h":  { label:"6H",  menu:"6 hours",    sec:"HOURS",   base:21600, bucket:21600,  pages:20 },  // ~5.5k bars (to 2022)
   "12h": { label:"12H", menu:"12 hours",   sec:"HOURS",   base:21600, bucket:43200,  pages:20 },  // 2×6h, to 2022
-  "1d":  { label:"1D",  menu:"1 day",      sec:"DAYS",    base:86400, bucket:86400,  pages:9 },   // ~1.4k bars (to 2022)
-  "1w":  { label:"1W",  menu:"1 week",     sec:"DAYS",    base:86400, bucket:604800, pages:9 },   // 7×1d
+  "1d":  { label:"1D",  menu:"1 day",      sec:"DAYS",    base:86400, bucket:86400,   pages:9 },  // ~1.4k bars (to 2022)
+  "1w":  { label:"1W",  menu:"1 week",     sec:"DAYS",    base:86400, bucket:604800,  pages:9 },  // 7×1d
+  "2w":  { label:"2W",  menu:"2 weeks",    sec:"DAYS",    base:86400, bucket:1209600, pages:9 },  // 14×1d
+  "1M":  { label:"1M",  menu:"1 month",    sec:"DAYS",    base:86400, bucket:2592000, pages:9 },  // 30×1d (epoch-aligned, like 1w)
+  "1Y":  { label:"1Y",  menu:"1 year",     sec:"DAYS",    base:86400, bucket:31536000,pages:9 },  // 365×1d
 };
+// A restored activeTF may be a custom bucket ("c<sec>") not yet in TF{}. Rebuild its
+// entry from the encoded seconds; if it's neither built-in nor a valid custom key,
+// fall back to the default so boot never charts an undefined timeframe.
+(function validateRestoredTF(){
+  if(TF[activeTF]) return;
+  const m=/^c(\d+)$/.exec(activeTF);
+  if(m){
+    const sec=+m[1], bases=[86400,21600,3600,900,300,60], base=bases.find(b=>sec%b===0&&b<=sec);
+    if(base){
+      const label = sec%604800===0?`${sec/604800}W` : sec%86400===0?`${sec/86400}D` : sec%3600===0?`${sec/3600}H` : `${sec/60}m`;
+      TF[activeTF]={ label, menu:label+" (custom)", sec:"CUSTOM", base, bucket:sec, pages:20 };
+      return;
+    }
+  }
+  activeTF="1d";
+})();
 
 function parseCandlesAgg(raw){
   if(!Array.isArray(raw)) return [];
@@ -960,13 +1243,17 @@ async function fetchPage(leg, g, span, end){
 
 // Clean + roll up an oldest-first bar list to the target bucket. Shared by the
 // progressive loader so every partial render goes through the same pipeline.
+// Hard ceiling on how far back any timeframe can be viewed.
+const MAX_BARS = 50000;
+
 function finalizeBars(all, tf){
   const seen = {};
   const out = [];
   for(const k of all){ if(seen[k.time]) continue; seen[k.time]=1; out.push(k); }
   out.sort((a,b)=>a.time-b.time);
   const clean = sanitize(out);                  // strip corrupt bad-print wicks
-  return aggregate(clean, tf.base, tf.bucket);  // roll up to 4h/12h/1w if needed
+  const agg = aggregate(clean, tf.base, tf.bucket);  // roll up to 4h/12h/1w if needed
+  return agg.length > MAX_BARS ? agg.slice(agg.length - MAX_BARS) : agg;  // keep newest 50k
 }
 
 // Progressive history loader. Calls `onPage(barsSoFar)` after EACH page so the
@@ -981,7 +1268,10 @@ async function fetchKlinesProgressive(leg, tfKey, onPage){
   // return ≤1000 per page, so far fewer round-trips reach the same history.
   const pageMax = ex==="COINBASE" ? 300 : 1000;
   const span = pageMax * g;             // seconds covered by one full page
-  const maxPages = ex==="COINBASE" ? tf.pages : Math.max(2, Math.ceil(tf.pages*300/1000)+1);
+  // Enough pages to reach MAX_BARS (50k) output candles. Each output bar rolls up
+  // bucket/base raw base-bars, so raw bars needed = MAX_BARS * bucket/base.
+  const rollup = Math.max(1, Math.round(tf.bucket / tf.base));
+  const maxPages = Math.max(2, Math.ceil(MAX_BARS * rollup / pageMax) + 1);
   let end = null;                       // null = newest
   const all = [];
   for(let i=0; i<maxPages; i++){
@@ -1002,6 +1292,65 @@ async function fetchKlinesProgressive(leg, tfKey, onPage){
 async function fetchKlines(product, tfKey){
   return fetchKlinesProgressive(product, tfKey, null);
 }
+
+// Fetch a batch of bars OLDER than `beforeTime` for one leg (a few pages deep).
+async function fetchOlderPages(leg, tfKey, beforeTime, pages){
+  const tf=TF[tfKey]||TF["1d"], g=tf.base;
+  const ex=resolveLeg(leg).exchange.id;
+  if(ex==="YAHOO") return [];                     // Yahoo returns whole series; no incremental older fetch
+  const pageMax=ex==="COINBASE"?300:1000, span=pageMax*g;
+  let end=beforeTime-g; const all=[];
+  for(let i=0;i<pages;i++){
+    const page=await fetchPage(leg, g, span, end);
+    if(!page.length) break;
+    all.push(...page);
+    end=Math.min(...page.map(k=>k.time))-g;
+    if(page.length<pageMax*0.66) break;           // reached start of history
+  }
+  return all;
+}
+
+// ── Infinite scroll-back ──
+// When the user pans near the left edge of loaded history, lazily fetch older bars
+// and prepend them. Guarded by a fetching flag + "reached start" flag so it can't
+// spam requests. Preserves the view (keepView) so the chart doesn't jump.
+let _loadingOlder=false, _historyExhausted=false;
+async function loadOlderHistory(){
+  if(_loadingOlder || _historyExhausted || !lastData.length) return;
+  if(lastData.length >= MAX_BARS){ _historyExhausted=true; return; }  // 50k-bar ceiling reached
+  _loadingOlder=true;
+  const sym=activeSymbol, tf=activeTF, oldest=lastData[0].time;
+  const tfMeta=TF[tf]||TF["1d"];
+  try{
+    let older=[];
+    if(sym.includes("/")){
+      const [a,b]=sym.split("/");
+      const [pa,pb]=await Promise.all([ fetchOlderPages(a,tf,oldest,4), fetchOlderPages(b,tf,oldest,4) ]);
+      if(pa.length && pb.length) older=makeRatio(finalizeBars(pa,tfMeta), finalizeBars(pb,tfMeta));
+    } else {
+      const raw=await fetchOlderPages(sym,tf,oldest,4);
+      if(raw.length) older=finalizeBars(raw,tfMeta);
+    }
+    // keep only bars strictly older than what we already have
+    older=older.filter(b=>b.time<oldest);
+    if(!older.length){ _historyExhausted=true; return; }
+    if(sym!==activeSymbol || tf!==activeTF) return;   // user switched mid-fetch
+    // don't prepend past the 50k ceiling — trim the older batch if it would overflow
+    const room = MAX_BARS - lastData.length;
+    if(older.length > room){ older = older.slice(older.length - room); _historyExhausted=true; }
+    if(!older.length){ _historyExhausted=true; return; }
+    // preserve the visible range across the prepend (indices shift by older.length)
+    const ts=chart.timeScale(); const before=ts.getVisibleLogicalRange();
+    lastData = older.concat(lastData);
+    renderData(lastData, true);                        // keepView
+    if(before){ try{ ts.setVisibleLogicalRange({ from:before.from+older.length, to:before.to+older.length }); }catch(e){} }
+  }catch(e){ /* transient; will retry on next pan */ }
+  finally{ _loadingOlder=false; }
+}
+// Trigger when the left edge of the view gets within ~30 bars of loaded history.
+chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{
+  if(r && r.from < 30 && !_loadingOlder && !_historyExhausted) loadOlderHistory();
+});
 
 // Build synthetic A/B ratio (spread) by aligning candles on matching timestamps
 function makeRatio(a, b){
@@ -1034,6 +1383,41 @@ const FUTURE_DAYS = 120;
 // Per-bar spacing (seconds) for the active timeframe. `bucket` is the rolled-up
 // granularity, so e.g. 4h = 14400, 1w = 604800.
 function tfStepSec(){ return (TF[activeTF] || TF["1d"]).bucket || 86400; }
+// TradingView draws far fewer vertical grid lines on daily+ charts because it
+// weights ticks at day/week/month granularity. Lightweight-charts only does the
+// same when timeVisible is OFF — with it ON, it weights every bar at minute
+// granularity and packs a grid line onto nearly every day when zoomed out.
+// So: intraday (bucket < 1 day) keeps the clock; daily+ turns it off.
+function applyTimeGranularity(){
+  const intraday = tfStepSec() < 86400;
+  (typeof allPaneCharts==="function"?allPaneCharts():[chart]).forEach(c=>{ try{
+    c.applyOptions({ timeScale:{ timeVisible:intraday } });
+  }catch(e){} });
+}
+
+// ── Countdown to bar close ──
+// Shows how long until the current (forming) bar closes, as a pill on the right
+// price axis at the last close — matching TradingView. Epoch-aligned to the TF
+// bucket (same alignment aggregate() uses), updated once per second.
+function fmtCountdown(sec){
+  sec=Math.max(0,Math.floor(sec));
+  const d=Math.floor(sec/86400), h=Math.floor(sec%86400/3600), m=Math.floor(sec%3600/60), s=sec%60;
+  if(d>0) return `${d}d ${h}h`;
+  if(h>0) return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  return `${m}:${String(s).padStart(2,"0")}`;
+}
+function updateCountdown(){
+  const el=document.getElementById("barCountdown"); if(!el) return;
+  if(!lastData || !lastData.length){ el.style.display="none"; return; }
+  const step=tfStepSec();
+  const now=Date.now()/1000;
+  const closeAt=(Math.floor(now/step)+1)*step;   // next bucket boundary
+  const y=(typeof candle!=="undefined") ? candle.priceToCoordinate(lastData[lastData.length-1].close) : null;
+  if(y==null){ el.style.display="none"; return; }
+  el.textContent=fmtCountdown(closeAt-now);
+  el.style.top=y+"px";
+  el.style.display="block";
+}
 
 // Build whitespace bars ({time} only — no OHLC) stepping from just after the last
 // real bar out to ~FUTURE_DAYS ahead. Whitespace extends the time scale so the
@@ -1051,7 +1435,10 @@ function futureWhitespace(data){
   const last = data[data.length-1].time;
   const key  = last + "/" + step + "/" + data.length;
   if(_fwCache.key === key) return _fwCache.tail;
-  const end  = last + FUTURE_DAYS*86400;
+  // Extend at least FUTURE_DAYS ahead, but never fewer than ~6 bars — so
+  // coarse timeframes (1M/1Y, whose step exceeds FUTURE_DAYS) still get room
+  // to project drawings into instead of ending flush with the last candle.
+  const end  = last + Math.max(FUTURE_DAYS*86400, step*6);
   const out=[]; let t=last+step;
   while(t<=end && out.length<2000){ out.push({time:t}); t+=step; }
   _fwCache = { key, tail:out };
@@ -1069,6 +1456,7 @@ function renderData(data, keepView){
   lastData = data;                 // expose to the drawing engine (magnet/measure/extrapolation)
   applyChartType(data);            // route into the active chart style (candles/HA/line/…)
   if(typeof redraw==="function") redraw();
+  if(data.length) updateOhlcLegend(data[data.length-1].time);   // default legend = latest bar
 
   // moving averages
   const legend=[];
@@ -1095,8 +1483,10 @@ function renderData(data, keepView){
   const rmFull = data.map(b=> rmMap.has(b.time) ? {time:b.time, value:rmMap.get(b.time)} : {time:b.time});
   // Extend each RSI series with the same future whitespace so the indicator pane
   // reaches ~4 months ahead in lockstep with the main chart (kept index-aligned).
-  rsiOver.setData(withFuture(data, rFull));            // green fill where RSI>70
-  rsiUnder.setData(withFuture(data, rFull));           // red fill where RSI<30
+  // Solid faint-purple block across the 30–70 band: constant series at 30 with
+  // baseValue 70 fills the whole region regardless of the RSI value.
+  rsiOver.setData(withFuture(data, data.map(b=>({time:b.time, value:30}))));
+  rsiUnder.setData(withFuture(data, rFull));           // transparent no-op
   band70.setData(withFuture(data, data.map(b=>({time:b.time, value:70}))));
   band50.setData(withFuture(data, data.map(b=>({time:b.time, value:50}))));
   band30.setData(withFuture(data, data.map(b=>({time:b.time, value:30}))));
@@ -1146,12 +1536,14 @@ function stopAutoSnap(){ _autoSnap = false; }
 
 async function loadChart(symbol, tf, keepView){
   const myToken = ++loadToken;
+  if(!keepView){ _historyExhausted=false; _loadingOlder=false; }   // new symbol/TF → history can be deepened again
   // A fresh load (symbol/TF switch) discards any manual axis stretch — a price range
   // pinned for one asset (e.g. BTC ~60k) is meaningless for the next (NEAR ~0.4).
   // Also restore the default margins a manual pan/stretch may have zeroed.
   if(!keepView){ manualPriceRange=null;
     try{ chart.priceScale("right").applyOptions({ autoScale:true, scaleMargins:{ top:0.2, bottom:0.1 } }); }catch(e){} }
   activeSymbol = symbol;   // the symbol being charted = the active one (keeps status/venue labels in sync)
+  if(typeof saveActiveState==="function") saveActiveState();   // remember symbol+tf across reloads
   document.getElementById("symName").textContent = symbol.includes("/") ? symbol : legShort(symbol);
   // venue label: for a ratio, show both sides' venues if they differ
   const exEl = document.getElementById("exName");
@@ -1165,6 +1557,10 @@ async function loadChart(symbol, tf, keepView){
     }
   }
   document.getElementById("tfName").textContent = (TF[tf]||{}).label || tf;
+  // Mirror symbol/tf/exchange into the floating on-chart legend row.
+  const legSym=document.getElementById("legSym"), legMeta=document.getElementById("legMeta");
+  if(legSym) legSym.textContent = symbol.includes("/") ? symbol : legShort(symbol);
+  if(legMeta) legMeta.textContent = "· "+((TF[tf]||{}).label||tf)+" · "+(document.getElementById("exName").textContent||"");
   // clear any stale "No data" error from the previous symbol and show progress.
   if(!keepView){
     document.getElementById("ohlc").innerHTML = "";
@@ -1204,6 +1600,7 @@ async function loadChart(symbol, tf, keepView){
       });
       paint(data);
     }
+    if(fresh() && typeof reloadAllCompares==="function") reloadAllCompares();  // refresh overlays for new TF
   }catch(e){
     if(fresh()) document.getElementById("ohlc").innerHTML = `<span class="down">⚠ ${escHtml(e.message)}</span>`;
   }
@@ -1226,6 +1623,28 @@ rsiChart.subscribeCrosshairMove(p=>{
 
 // ── Watchlist ──
 const rowMap = {};
+const PRICE_CACHE = {};          // {sym: {price, chgAbs, chgPct}} — updated by refreshPrices
+let wlSort = null;               // {key:"sym"|"last"|"chg"|"chgpct", dir:1|-1} or null (manual order)
+// Sort each group's symbols by the chosen column (TradingView sorts within sections).
+// Non-destructive: GROUPS order is never mutated; buildWatchlist applies wlSort at
+// render time via sortedSymbols(), so the saved layout is preserved.
+function sortWatchlist(key){
+  if(wlSort && wlSort.key===key){ wlSort = wlSort.dir===1 ? {key,dir:-1} : null; }  // asc→desc→off
+  else wlSort={key, dir:1};
+  buildWatchlist();
+  document.querySelectorAll("#wlCols span").forEach(s=>s.classList.toggle("sorted", wlSort&&s.dataset.sort===wlSort.key));
+}
+// A group's symbols in display order (sorted copy if wlSort is active, else as-is).
+function sortedSymbols(symbols){
+  if(!wlSort) return symbols;
+  const key=wlSort.key;
+  const val=(sym)=>{
+    if(key==="sym") return (sym.includes("/")?sym:legShort(sym)).toLowerCase();
+    const p=PRICE_CACHE[sym]||{};
+    return key==="last"?(p.price??-Infinity) : key==="chg"?(p.chgAbs??-Infinity) : (p.chgPct??-Infinity);
+  };
+  return [...symbols].sort((a,b)=>{ const va=val(a),vb=val(b); return (va<vb?-1:va>vb?1:0)*wlSort.dir; });
+}
 function buildWatchlist(){
   const body = document.getElementById("wlBody");
   body.innerHTML = "";
@@ -1241,7 +1660,7 @@ function buildWatchlist(){
     sectionDropWire(s, g.name);     // allow dropping a symbol onto the header (esp. when collapsed)
     body.appendChild(s);
     if(g.collapsed) return;         // header only; rows hidden while collapsed
-    g.symbols.forEach(sym=>{
+    sortedSymbols(g.symbols).forEach(sym=>{
       const row = document.createElement("div");
       row.className="row"+(sym===activeSymbol?" active":"");
       row.dataset.sym = sym;
@@ -1266,9 +1685,12 @@ function buildWatchlist(){
       const nmLabel = isRatio ? sym : legShort(sym);
       const exBadge = (exMeta && exMeta.id!=="COINBASE")
         ? `<span class="exbadge">${exMeta.label}</span>` : "";
-      row.innerHTML = `<span class="sym">${icon}<span class="nm">${escHtml(nmLabel)}</span>${exBadge}</span>
+      const flagCol = SYMBOL_FLAGS[sym];
+      const flag = `<span class="flag" title="Flag color"${flagCol?` style="color:${flagCol}"`:""}>${flagCol?"⬤":""}</span>`;
+      row.innerHTML = `${flag}<span class="sym">${icon}<span class="nm">${escHtml(nmLabel)}</span>${exBadge}</span>
         <span class="last" data-last>—</span><span class="chgabs" data-chgabs>—</span><span class="chg" data-chg>—</span>
         <span class="del" title="Remove from watchlist">${icTrashWl()}</span>`;
+      row.oncontextmenu = (e)=>{ e.preventDefault(); e.stopPropagation(); showRowMenu(sym, e.clientX, e.clientY); };
       row.onclick = ()=>{
         activeSymbol = sym;
         document.querySelectorAll(".row").forEach(r=>r.classList.remove("active"));
@@ -1276,6 +1698,7 @@ function buildWatchlist(){
         if(typeof loadPersisted==="function") loadPersisted();   // drawings are per symbol+tf
         if(typeof loadAlerts==="function") loadAlerts();         // alerts are per symbol
         if(typeof loadScripts==="function") loadScripts();       // custom scripts are per symbol
+        if(typeof loadIndicators==="function") loadIndicators(); // indicators are per symbol
         loadChart(sym, activeTF);
       };
       row.querySelector(".del").onclick = (e)=>{ e.stopPropagation(); removeSymbol(g.name, sym); };
@@ -1311,6 +1734,7 @@ function removeSymbol(groupName, sym){
       if(typeof loadPersisted==="function") loadPersisted();
       if(typeof loadAlerts==="function") loadAlerts();
       if(typeof loadScripts==="function") loadScripts();
+      if(typeof loadIndicators==="function") loadIndicators();
       loadChart(next, activeTF);
     }
   }
@@ -1415,6 +1839,7 @@ function removeGroup(name){
       if(typeof loadPersisted==="function") loadPersisted();
       if(typeof loadAlerts==="function") loadAlerts();
       if(typeof loadScripts==="function") loadScripts();
+      if(typeof loadIndicators==="function") loadIndicators();
       loadChart(next, activeTF);
     }
   }
@@ -1811,6 +2236,13 @@ function showSectionMenu(name, x, y){
     mi("＋ Add section",     ()=>addGroup(name)),
   ]);
 }
+// Right-click a watchlist row → flag it with a color (or clear the flag).
+function showRowMenu(sym, x, y){
+  const items=[ mi("Open "+ (sym.includes("/")?sym:legShort(sym)), ()=>{ const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click(); }), msep() ];
+  FLAG_COLORS.forEach(c=> items.push(mi("Flag", ()=>setSymbolFlag(sym,c), c)));
+  items.push(msep(), mi("Clear flag", ()=>setSymbolFlag(sym,null)));
+  showCtx(x,y,items);
+}
 
 // Let a dragged symbol be dropped onto a section header (appends to that group).
 function sectionDropWire(el, name){
@@ -1945,6 +2377,7 @@ async function refreshPrices(){
     }
     const chgAbs = price - prev;                 // absolute change
     const chgPct = prev ? (price/prev - 1)*100 : 0;
+    PRICE_CACHE[sym] = { price, chgAbs, chgPct };   // for column sorting
     const up = chgAbs >= 0;
     const txt    = fmtPrice(price);
     const absTxt = (up?"+":"−") + fmtPrice(Math.abs(chgAbs));
@@ -1985,7 +2418,9 @@ const tfMenu     = document.getElementById("tfMenu");
 
 // Build the menu from TF{}: a section header per group, then one option per timeframe in TF order.
 (function buildTfMenu(){
-  let html = "", lastSec = null;
+  // Custom-timeframe input row pinned to the top: type e.g. "45m", "3h", "10d".
+  let html = `<div class="tf-custom"><input id="tfCustom" type="text" placeholder="Custom  e.g. 45m, 3h, 10d" autocomplete="off" spellcheck="false"></div>`;
+  let lastSec = null;
   for(const key in TF){
     const t = TF[key];
     if(t.sec !== lastSec){ html += `<div class="tf-sec">${t.sec}</div>`; lastSec = t.sec; }
@@ -1993,6 +2428,38 @@ const tfMenu     = document.getElementById("tfMenu");
   }
   tfMenu.innerHTML = html;
 })();
+
+// Native granularities Coinbase/Binance/Bybit serve (sec). A custom bucket must be
+// an integer multiple of one of these so aggregate() can roll base bars up cleanly.
+const TF_BASES = [86400, 21600, 3600, 900, 300, 60];
+// Parse "45m"/"3h"/"10d"/"90" into seconds; bare number = minutes.
+function parseCustomTF(raw){
+  const s = String(raw||"").trim().toLowerCase();
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*(m|h|d|w|min|hour|hr|day|week)?$/);
+  if(!m) return null;
+  const n = parseFloat(m[1]); if(!(n>0)) return null;
+  const unit = m[2]||"m";
+  const mult = unit[0]==="w"?604800 : unit[0]==="d"?86400 : unit[0]==="h"?3600 : 60;
+  const sec = Math.round(n*mult);
+  if(sec < 60 || sec > 604800*4) return null;   // 1m … 4w sane bounds
+  // largest native base that evenly divides the requested bucket
+  const base = TF_BASES.find(b => sec % b === 0 && b <= sec);
+  if(!base) return null;
+  return { sec, base };
+}
+// Build/lookup a dynamic TF entry for a custom bucket and select it.
+function applyCustomTF(raw){
+  const p = parseCustomTF(raw);
+  if(!p){ const el=document.getElementById("tfCustom"); if(el){ el.classList.add("bad"); setTimeout(()=>el.classList.remove("bad"),700);} return false; }
+  // human label: normalise to the largest whole unit
+  const sec=p.sec;
+  const label = sec%604800===0?`${sec/604800}W` : sec%86400===0?`${sec/86400}D` : sec%3600===0?`${sec/3600}H` : `${sec/60}m`;
+  const key = "c"+sec;   // e.g. c2700
+  if(!TF[key]) TF[key] = { label, menu:label+" (custom)", sec:"CUSTOM", base:p.base, bucket:sec, pages:20 };
+  tfSel.classList.remove("open");
+  selectTF(key);
+  return true;
+}
 
 // Reflect activeTF in the button label and the highlighted menu option.
 function syncTfUI(){
@@ -2004,7 +2471,9 @@ function syncTfUI(){
 function selectTF(key){
   if(!TF[key]) return;
   activeTF = key;
+  saveActiveState();
   syncTfUI();
+  applyTimeGranularity();
   if(typeof loadPersisted==="function") loadPersisted();   // drawings are per symbol+tf
   loadChart(activeSymbol, activeTF);
 }
@@ -2021,9 +2490,14 @@ tfSelBtn.addEventListener("click", e=>{
 });
 
 tfMenu.addEventListener("click", e=>{
+  if(e.target.closest(".tf-custom")) { e.stopPropagation(); return; }  // don't close on input click
   const opt = e.target.closest(".tf-opt"); if(!opt) return;
   tfSel.classList.remove("open");
   selectTF(opt.dataset.i);
+});
+// Custom timeframe: Enter applies it.
+tfMenu.addEventListener("keydown", e=>{
+  if(e.target.id==="tfCustom" && e.key==="Enter"){ e.preventDefault(); applyCustomTF(e.target.value); }
 });
 
 // Close the menu on any click outside the selector.
@@ -2033,6 +2507,32 @@ document.addEventListener("click", e=>{
 
 syncTfUI();  // initialise label + highlight to the default activeTF
 
+// ── Timezone dropdown ────────────────────────────────────────────────
+const tzSel=document.getElementById("tzSel"), tzSelBtn=document.getElementById("tzSelBtn"),
+      tzSelLabel=document.getElementById("tzSelLabel"), tzMenu=document.getElementById("tzMenu");
+const TZ_KEY="fv_tz";
+tzMenu.innerHTML = TIMEZONES.map((z,i)=>`<div class="tf-opt" data-tz="${i}">${z.label}</div>`).join("");
+function syncTzUI(){
+  const z=TIMEZONES.find(z=>z.off===tzOffsetMin)||TIMEZONES[0];
+  tzSelLabel.textContent = "🕓 "+z.label;
+  tzMenu.querySelectorAll(".tf-opt").forEach(o=>o.classList.toggle("active", TIMEZONES[+o.dataset.tz].off===tzOffsetMin));
+}
+function applyTz(off){
+  tzOffsetMin=off;
+  try{ localStorage.setItem(TZ_KEY, String(off)); }catch(e){}
+  // Force every pane's time axis to relabel by re-applying its formatter.
+  (typeof charts!=="undefined"?charts:[chart]).forEach(c=>{ try{
+    c.applyOptions({ timeScale:{ tickMarkFormatter:(t,type)=>tickLabel(t,type) }, localization:{ timeFormatter:crosshairTimeFmt } });
+  }catch(e){} });
+  syncTzUI();
+}
+tzSelBtn.addEventListener("click", e=>{ e.stopPropagation(); tzSel.classList.toggle("open"); tfSel.classList.remove("open"); });
+tzMenu.addEventListener("click", e=>{ const o=e.target.closest(".tf-opt"); if(!o) return; tzSel.classList.remove("open"); applyTz(TIMEZONES[+o.dataset.tz].off); });
+document.addEventListener("click", e=>{ if(!e.target.closest("#tzSel")) tzSel.classList.remove("open"); });
+// restore persisted tz
+try{ const saved=localStorage.getItem(TZ_KEY); if(saved!=null && !isNaN(+saved)) tzOffsetMin=+saved; }catch(e){}
+syncTzUI();
+
 
 // ── Chart-type dropdown ──────────────────────────────────────────────
 const CHART_TYPES = [
@@ -2040,9 +2540,18 @@ const CHART_TYPES = [
   { key:"hollow",   label:"Hollow Candles",icon:"▢" },
   { key:"heikin",   label:"Heikin Ashi",  icon:"◧" },
   { key:"bars",     label:"Bars (OHLC)",  icon:"|" },
+  { key:"hlcbars",  label:"HLC Bars",     icon:"╞" },
   { key:"line",     label:"Line",         icon:"╱" },
+  { key:"linemark", label:"Line w/ Markers",icon:"•" },
+  { key:"step",     label:"Step Line",    icon:"⎍" },
   { key:"area",     label:"Area",         icon:"◢" },
   { key:"baseline", label:"Baseline",     icon:"≂" },
+  { key:"columns",  label:"Columns",      icon:"▮" },
+  { key:"highlow",  label:"High-Low",     icon:"↕" },
+  { key:"renko",    label:"Renko",        icon:"▧" },
+  { key:"kagi",     label:"Kagi",         icon:"⋀" },
+  { key:"pnf",      label:"Point & Figure",icon:"✕" },
+  { key:"linebreak",label:"Line Break",   icon:"▤" },
 ];
 const ctSel=document.getElementById("ctSel"), ctSelBtn=document.getElementById("ctSelBtn"),
       ctSelLabel=document.getElementById("ctSelLabel"), ctMenu=document.getElementById("ctMenu");
@@ -2089,13 +2598,17 @@ const TOOLS = [
   { key:"vline",  name:"Vertical Line",    icon:icVLine },
   { key:"crossline",name:"Cross Line",     icon:icCrossLine },
   { key:"channel",name:"Parallel Channel", icon:icChannel },
+  { key:"regression",name:"Regression Trend",icon:icRegression },
   { key:"pitchfork",name:"Andrews Pitchfork",icon:icPitchfork },
   { key:"gannfan",name:"Gann Fan",         icon:icGannFan },
+  { key:"gannbox",name:"Gann Box",         icon:icGannBox },
   { key:"sep" },
   { key:"rect",   name:"Rectangle",        icon:icRect },
   { key:"ellipse",name:"Ellipse",          icon:icEllipse },
+  { key:"circle", name:"Circle",           icon:icCircle },
   { key:"triangle",name:"Triangle",        icon:icTriangle },
   { key:"arrow",  name:"Arrow",            icon:icArrow },
+  { key:"arrowmark",name:"Arrow Marker (up/down)", icon:icArrowMark },
   { key:"polyline",name:"Polyline / Path", icon:icPolyline },
   { key:"brush",  name:"Brush (freehand)", icon:icBrush },
   { key:"sep" },
@@ -2119,6 +2632,7 @@ const TOOLS = [
   { key:"pricelabel",name:"Price Label",   icon:icPriceLabel },
   { key:"sep" },
   { key:"magnet", name:"Magnet Mode (snap to OHLC)", icon:icMagnet, toggle:true },
+  { key:"stay",   name:"Stay in Drawing Mode", icon:icStay, toggle:true },
   { key:"lock",   name:"Lock All Drawings", icon:icLock, toggle:true },
   { key:"hide",   name:"Hide All Drawings", icon:icEye,  toggle:true },
   { key:"sep" },
@@ -2147,6 +2661,11 @@ function icText(){   return svg('<path d="M5 6h14M12 6v13"/>'); }
 function icEmoji(){  return svg('<rect x="4" y="5" width="16" height="11" rx="2"/><path d="M9 16l-2 3v-3"/>'); }
 function icMeasure(){return svg('<path d="M3 9l6-6 12 12-6 6z"/><line x1="8" y1="8" x2="10" y2="10"/><line x1="11" y1="5" x2="13" y2="7"/><line x1="14" y1="11" x2="16" y2="13"/>'); }
 function icMagnet(){ return svg('<path d="M6 4v7a6 6 0 0 0 12 0V4"/><line x1="6" y1="4" x2="10" y2="4"/><line x1="14" y1="4" x2="18" y2="4"/>'); }
+function icStay(){   return svg('<path d="M12 3v6"/><path d="M8 9h8l-2 5H10z"/><line x1="12" y1="14" x2="12" y2="21"/>'); }
+function icRegression(){ return svg('<line x1="4" y1="18" x2="20" y2="6"/><circle cx="7" cy="17" r="1.2"/><circle cx="11" cy="11" r="1.2"/><circle cx="15" cy="12" r="1.2"/><circle cx="18" cy="7" r="1.2"/>'); }
+function icGannBox(){ return svg('<rect x="4" y="5" width="16" height="14" rx="1"/><line x1="4" y1="19" x2="20" y2="5"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="12" y1="5" x2="12" y2="19"/>'); }
+function icCircle(){  return svg('<circle cx="12" cy="12" r="8"/>'); }
+function icArrowMark(){ return svg('<line x1="12" y1="4" x2="12" y2="20"/><path d="M7 9l5-5 5 5"/>'); }
 function icLock(){   return svg('<rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'); }
 function icEye(){    return svg('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.5"/>'); }
 function icTrash(){  return svg('<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>'); }
@@ -2171,7 +2690,7 @@ function icPriceLabel(){return svg('<path d="M4 8h12l4 4-4 4H4z"/><line x1="7" y
 //  STATE
 // ─────────────────────────────────────────────────────────────────────
 const draw = {
-  tool:"cross", magnet:false, locked:false, hidden:false,
+  tool:"cross", magnet:false, locked:false, hidden:false, stay:false,
   shapes:[],          // {id,type,pts:[{time,price}],style:{...},text}
   pending:null,       // shape being created
   needClicks:2,       // clicks remaining to finish pending
@@ -2182,6 +2701,31 @@ const draw = {
   drag:null,          // {id, handle:int|'body', last:{time,price}}
   mouse:{x:0,y:0},
 };
+
+// ── Undo / redo ──
+// Snapshot-based history of draw.shapes. snapshotDraw() is called BEFORE any
+// mutation (add/delete/move/style/clone/reorder); undo/redo swap between stacks.
+const _undoStack=[], _redoStack=[], UNDO_MAX=100;
+function snapshotDraw(){
+  _undoStack.push(JSON.stringify(draw.shapes));
+  if(_undoStack.length>UNDO_MAX) _undoStack.shift();
+  _redoStack.length=0;   // a fresh mutation invalidates the redo branch
+}
+function restoreShapes(json){
+  try{ draw.shapes = JSON.parse(json); }catch(e){ draw.shapes=[]; }
+  if(!draw.shapes.find(s=>s.id===draw.sel)) draw.sel=null;
+  persist(); redraw();
+}
+function undoDraw(){
+  if(!_undoStack.length) return;
+  _redoStack.push(JSON.stringify(draw.shapes));
+  restoreShapes(_undoStack.pop());
+}
+function redoDraw(){
+  if(!_redoStack.length) return;
+  _undoStack.push(JSON.stringify(draw.shapes));
+  restoreShapes(_redoStack.pop());
+}
 let lastData = [];                      // current candle data (set by loadChart)
 const dcanvas = document.getElementById("draw");
 const dctx = dcanvas.getContext("2d");
@@ -2196,6 +2740,7 @@ const CLICKS = {
   // Wave 3
   info:2, angle:2, crossline:1, triangle:3, arrow:2,
   prange:2, drange:2, dprange:2, fibtbext:3, pitchfork:3, gannfan:2,
+  regression:2, gannbox:2, circle:2, arrowmark:1,
   flag:1, pricelabel:1,
   polyline:0, brush:0,   // 0 = freehand/multi-point, finished by dblclick/release
 };
@@ -2203,24 +2748,77 @@ const CLICKS = {
 // ─────────────────────────────────────────────────────────────────────
 //  TOOLBAR DOM
 // ─────────────────────────────────────────────────────────────────────
-(function buildToolbar(){
+// ── TradingView-style flyout categories ──
+// Each category is a single rail button showing its currently-selected tool's icon
+// + a corner arrow; clicking the arrow opens a flyout listing the category's tools
+// by name. Clicking the button body activates the category's current tool.
+// Keys reference entries in TOOLS (so all existing wiring/icons are reused).
+const TOOL_CATEGORIES = [
+  { id:"cursor",  name:"Cursors",        tools:["cross"] },
+  { id:"lines",   name:"Trend line tools", tools:["trend","ray","ext","info","angle","hline","hray","vline","crossline","channel","regression","pitchfork"] },
+  { id:"fib",     name:"Gann & Fibonacci", tools:["fib","fibext","fibtbext","fibfan","fibtime","gannfan","gannbox"] },
+  { id:"patterns",name:"Geometric shapes", tools:["rect","ellipse","circle","triangle","arrow","arrowmark","polyline","brush"] },
+  { id:"position",name:"Forecasting & positions", tools:["long","short","prange","drange","dprange","measure"] },
+  { id:"text",    name:"Annotation",     tools:["text","callout","flag","pricelabel"] },
+];
+const catCurrent = {};   // category id → currently-selected tool key
+TOOL_CATEGORIES.forEach(c=> catCurrent[c.id]=c.tools[0]);
+const toolMeta = k=>TOOLS.find(t=>t.key===k);
+
+function buildToolbar(){
   const tb = document.getElementById("toolbar");
-  TOOLS.forEach(t=>{
-    if(t.key==="sep"){ const s=document.createElement("div"); s.className="tool-sep"; tb.appendChild(s); return; }
+  tb.innerHTML="";
+  // One button per category
+  TOOL_CATEGORIES.forEach(cat=>{
+    const cur=toolMeta(catCurrent[cat.id]);
     const el=document.createElement("div");
-    el.className="tool"+(t.key==="cross"?" active":"");
+    el.className="tool cat"+(cat.tools.includes(draw.tool)?" active":"");
+    el.dataset.cat=cat.id; el.dataset.tool=catCurrent[cat.id]; el.title=cat.name;
+    el.innerHTML=cur.icon()+(cat.tools.length>1?'<span class="catarrow">◢</span>':"");
+    el.onclick=(e)=>{
+      if(cat.tools.length>1 && e.target.closest(".catarrow")){ openToolFlyout(cat, el); return; }
+      selectTool(catCurrent[cat.id]);
+    };
+    tb.appendChild(el);
+  });
+  // Separator, then the bottom toggle/action cluster (magnet/stay/lock/hide/clear)
+  const sep=document.createElement("div"); sep.className="tool-sep"; tb.appendChild(sep);
+  TOOLS.filter(t=>t.toggle||t.action).forEach(t=>{
+    const el=document.createElement("div");
+    el.className="tool"+((t.key==="magnet"&&draw.magnet)||(t.key==="stay"&&draw.stay)||(t.key==="lock"&&draw.locked)||(t.key==="hide"&&draw.hidden)?" active":"");
     el.dataset.tool=t.key; el.title=t.name; el.innerHTML=t.icon();
     el.onclick=()=>onToolClick(t,el);
     tb.appendChild(el);
   });
-})();
+}
+buildToolbar();
+
+// Flyout popup listing a category's tools by name (star-to-favorite optional later).
+function openToolFlyout(cat, anchorEl){
+  closeToolFlyout();
+  const fly=document.createElement("div"); fly.className="tool-flyout"; fly.id="toolFlyout";
+  cat.tools.forEach(k=>{
+    const t=toolMeta(k); if(!t) return;
+    const row=document.createElement("div"); row.className="tfrow"+(catCurrent[cat.id]===k?" sel":"");
+    row.innerHTML='<span class="tfi">'+t.icon()+'</span><span class="tfn">'+t.name+'</span>';
+    row.onclick=()=>{ catCurrent[cat.id]=k; closeToolFlyout(); buildToolbar(); selectTool(k); };
+    fly.appendChild(row);
+  });
+  document.body.appendChild(fly);
+  const r=anchorEl.getBoundingClientRect();
+  fly.style.left=(r.right+2)+"px"; fly.style.top=r.top+"px";
+  setTimeout(()=>document.addEventListener("mousedown", flyoutOutside),0);
+}
+function flyoutOutside(e){ if(!e.target.closest("#toolFlyout")&&!e.target.closest(".cat")) closeToolFlyout(); }
+function closeToolFlyout(){ const f=document.getElementById("toolFlyout"); if(f) f.remove(); document.removeEventListener("mousedown", flyoutOutside); }
 
 function onToolClick(t,el){
-  if(t.action){ if(t.key==="clear"){ if(confirm("Remove all drawings?")){ draw.shapes=[]; draw.sel=null; persist(); redraw(); } } return; }
+  if(t.action){ if(t.key==="clear"){ if(confirm("Remove all drawings?")){ snapshotDraw(); draw.shapes=[]; draw.sel=null; persist(); redraw(); } } return; }
   if(t.toggle){
     el.classList.toggle("active");
     const on=el.classList.contains("active");
     if(t.key==="magnet") draw.magnet=on;
+    if(t.key==="stay")   draw.stay=on;
     if(t.key==="lock")   draw.locked=on;
     if(t.key==="hide"){  draw.hidden=on; redraw(); }
     return;
@@ -2230,10 +2828,18 @@ function onToolClick(t,el){
 
 // Activate a tool by key (also used to auto-return to crosshair after placing).
 function selectTool(key){
-  document.querySelectorAll('.tool[data-tool]').forEach(x=>{
-    if(["magnet","lock","hide"].includes(x.dataset.tool)) return;
-    x.classList.toggle("active", x.dataset.tool===key);
-  });
+  // Update category buttons: highlight the category that owns `key`, and make that
+  // category's button show/activate `key` (so the rail reflects the active tool).
+  if(typeof TOOL_CATEGORIES!=="undefined"){
+    const owner=TOOL_CATEGORIES.find(c=>c.tools.includes(key));
+    if(owner) catCurrent[owner.id]=key;
+    document.querySelectorAll('.tool.cat').forEach(btn=>{
+      const cat=TOOL_CATEGORIES.find(c=>c.id===btn.dataset.cat); if(!cat) return;
+      const isOwner=cat.tools.includes(key);
+      btn.classList.toggle("active", isOwner);
+      if(isOwner){ btn.dataset.tool=key; const m=toolMeta(key); if(m) btn.innerHTML=m.icon()+(cat.tools.length>1?'<span class="catarrow">◢</span>':""); }
+    });
+  }
   draw.tool=key; draw.pending=null; draw.needClicks=0; draw.pendingClickMode=false; draw.sel=null;
   // The canvas is ALWAYS interactive now (pointerEvents stays "auto"). The chart's own
   // pan/zoom is disabled while drawing tools are active; in crosshair mode we forward
@@ -2439,6 +3045,7 @@ function updateCrosshair(p){
     if(price==null || time==null){ chart.clearCrosshairPosition(); syncCrosshairToPanes(null, chart); return; }
     chart.setCrosshairPosition(price, time, candle);
     updateOhlcLegend(time);
+    updateIndLegendValues(time);         // indicator readouts follow the crosshair
     syncCrosshairToPanes(time, chart);   // relay onto RSI + indicator/script panes
   }catch(e){}
 }
@@ -2446,11 +3053,19 @@ function updateCrosshair(p){
 // past the last bar / between bars with no exact match).
 function updateOhlcLegend(time){
   if(!lastData.length) return;
-  let best=lastData[0], bd=Infinity;
-  for(const b of lastData){ const d=Math.abs(b.time-time); if(d<bd){bd=d;best=b;} }
+  let best=lastData[0], bd=Infinity, bi=0;
+  for(let i=0;i<lastData.length;i++){ const d=Math.abs(lastData[i].time-time); if(d<bd){bd=d;best=lastData[i];bi=i;} }
   const col = best.close>=best.open ? "var(--green)":"var(--red)";
+  // Change vs previous bar's close (TradingView convention); falls back to open for bar 0.
+  const prevClose = bi>0 ? lastData[bi-1].close : best.open;
+  const chg = best.close - prevClose;
+  const chgPct = prevClose ? (chg/prevClose*100) : 0;
+  const up = chg>=0;
+  const cCol = up ? "var(--green)":"var(--red)";
+  const sign = up?"+":"−";
   document.getElementById("ohlc").innerHTML =
-    `O<b>${fmt(best.open)}</b> H<b>${fmt(best.high)}</b> L<b>${fmt(best.low)}</b> C<b style="color:${col}">${fmt(best.close)}</b>`;
+    `O<b>${fmt(best.open)}</b> H<b>${fmt(best.high)}</b> L<b>${fmt(best.low)}</b> C<b style="color:${col}">${fmt(best.close)}</b>`
+    + ` <span style="color:${cCol}">${sign}${fmt(Math.abs(chg))} (${sign}${Math.abs(chgPct).toFixed(2)}%)</span>`;
 }
 // Width (px) of the right price-axis gutter — the strip past the plot where the
 // candles don't render. Used to keep ray arrowheads off the axis price tag.
@@ -2503,7 +3118,9 @@ dcanvas.addEventListener("mousedown", e=>{
   // ── CROSSHAIR mode: click a shape → select/drag it; click empty → pan the chart ──
   if(draw.tool==="cross"){
     const hit = draw.locked ? null : hitTest(p);
-    if(hit){ draw.sel=hit.id; draw.drag={ id:hit.id, handle:hit.handle, last:c }; redraw(); }
+    const hs = hit ? getShape(hit.id) : null;
+    if(hit && hs && !hs.locked){ draw.sel=hit.id; snapshotDraw(); draw.drag={ id:hit.id, handle:hit.handle, last:c }; redraw(); }
+    else if(hit && hs){ draw.sel=hit.id; redraw(); }   // locked: select but don't drag
     else { draw.sel=null; startPan(p); redraw(); }
     return;
   }
@@ -2515,9 +3132,10 @@ dcanvas.addEventListener("mousedown", e=>{
 
   // Resize a handle of the currently-selected shape.
   if(!draw.locked && draw.sel){
+    const ss=getShape(draw.sel);
     const hit=hitTest(p);
-    if(hit && hit.id===draw.sel && typeof hit.handle==="number"){
-      draw.drag={ id:hit.id, handle:hit.handle, last:c }; redraw(); return;
+    if(hit && hit.id===draw.sel && typeof hit.handle==="number" && ss && !ss.locked){
+      snapshotDraw(); draw.drag={ id:hit.id, handle:hit.handle, last:c }; redraw(); return;
     }
   }
 
@@ -2599,12 +3217,14 @@ function commitPending(){
   const a=pend.pts[0], b=pend.pts[pend.pts.length-1];
   const tooSmall = pend.pts.every(pt=>pt.time===a.time && pt.price===a.price);
   if(tooSmall){ redraw(); return; }
+  snapshotDraw();
+  const tool=pend.type;
   draw.shapes.push(pend);
   draw.sel=pend.id;
   persist();
   // TradingView default: after placing one drawing, return to the crosshair so the
-  // next click SELECTS (rather than spawning another line). Re-pick the tool to draw again.
-  selectTool("cross");
+  // next click SELECTS. With stay-in-drawing-mode on, re-pick the same tool to keep drawing.
+  selectTool(draw.stay ? tool : "cross");
   redraw();
 }
 
@@ -2612,13 +3232,21 @@ function finishOneClick(tool,c){
   if(tool==="text" || tool==="callout"){
     const txt=prompt(tool==="callout"?"Note:":"Text:", tool==="callout"?"Note":"Text");
     if(txt==null) return;
+    snapshotDraw();
     const s={ id:newId(), type:tool, pts:[c], style:{...DEFAULT_STYLE, color:"#d1d4dc"}, text:txt };
     draw.shapes.push(s); draw.sel=s.id;
   } else {
+    snapshotDraw();
     const s={ id:newId(), type:tool, pts:[c], style:{...DEFAULT_STYLE} };
+    // Arrow marker points up (bullish) when placed at/below the bar close, down above it.
+    if(tool==="arrowmark"){
+      let nearest=lastData[0], bd=Infinity;
+      for(const d of lastData){ const dd=Math.abs(d.time-c.time); if(dd<bd){bd=dd;nearest=d;} }
+      s.dir = (nearest && c.price<=nearest.close) ? "up" : "down";
+    }
     draw.shapes.push(s); draw.sel=s.id;
   }
-  persist(); selectTool("cross"); redraw();
+  persist(); selectTool(draw.stay ? tool : "cross"); redraw();
 }
 
 dcanvas.addEventListener("mousemove", e=>{
@@ -2662,14 +3290,22 @@ dcanvas.addEventListener("mouseleave", ()=>{
   draw.mouse=null;
   try{ chart.clearCrosshairPosition(); }catch(e){}
   syncCrosshairToPanes(null, chart);     // drop the shared crosshair off every pane
+  updateIndLegendValues(null);           // clear indicator hover readouts
+  if(lastData.length){ updateOhlcLegend(lastData[lastData.length-1].time); }  // back to latest bar
   if(draw.hover||draw.alertHover){ draw.hover=null; draw.alertHover=null; redraw(); }
 });
 
 window.addEventListener("mouseup", e=>{
   if(axisDrag){ axisDrag=null; downPt=null; downMoved=false; dcanvas.style.cursor="default"; return; }  // end axis stretch
   if(panState){ panState=null; downPt=null; downMoved=false; redraw(); return; }   // end chart pan
-  // finishing a drag-edit of an existing shape
-  if(draw.drag){ persist(); draw.drag=null; downPt=null; return; }
+  // finishing a drag-edit of an existing shape. If nothing actually moved (a plain
+  // click that started a drag), discard the snapshot pushed at drag-start so undo
+  // isn't cluttered with no-op entries.
+  if(draw.drag){
+    if(_undoStack.length && _undoStack[_undoStack.length-1]===JSON.stringify(draw.shapes)) _undoStack.pop();
+    else persist();
+    draw.drag=null; downPt=null; return;
+  }
 
   // finishing the creation gesture for a pending shape
   if(draw.pending){
@@ -2715,12 +3351,50 @@ dcanvas.addEventListener("dblclick", e=>{
   if(draw.tool==="cross" && manualPriceRange){ resetPriceScale(); }
 });
 
-// keyboard: Esc cancels, Del removes selected
+// keyboard: Esc cancels, Del removes selected, Ctrl+Z/Y undo/redo
 window.addEventListener("keydown", e=>{
+  const typing = document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName);
   if(e.key==="Escape"){ draw.pending=null; draw.needClicks=0; draw.sel=null; closeAllPopups(); redraw(); }
   if((e.key==="Delete"||e.key==="Backspace") && draw.sel!=null && !draw.locked){
-    if(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    if(typing) return;
+    const sh=getShape(draw.sel); if(sh && sh.locked) return;   // don't delete a locked drawing
     deleteShape(draw.sel);
+  }
+  // Undo / redo — Ctrl/Cmd+Z, Ctrl+Y or Ctrl/Cmd+Shift+Z. Skip while typing in a field.
+  if((e.ctrlKey||e.metaKey) && !typing){
+    const k=e.key.toLowerCase();
+    if(k==="z" && !e.shiftKey){ e.preventDefault(); undoDraw(); }
+    else if((k==="y") || (k==="z" && e.shiftKey)){ e.preventDefault(); redoDraw(); }
+  }
+  if(typing || e.ctrlKey || e.metaKey) return;
+  const ts=chart.timeScale();
+  // Arrow keys pan the time axis; +/- zoom; Alt+H drops a horizontal line at the crosshair.
+  if(e.key==="ArrowLeft" || e.key==="ArrowRight"){
+    e.preventDefault(); stopAutoSnap();
+    const dir = e.key==="ArrowLeft" ? -1 : 1;
+    try{ ts.scrollToPosition(ts.scrollPosition() + dir*3, false); }catch(err){}
+    redraw();
+  }
+  else if(e.key==="+" || e.key==="=" || e.key==="-" || e.key==="_"){
+    e.preventDefault(); stopAutoSnap();
+    const r=ts.getVisibleLogicalRange(); if(!r) return;
+    const span=r.to-r.from, mid=(r.from+r.to)/2;
+    const zoomIn = (e.key==="+"||e.key==="=");
+    const newSpan=Math.max(8, span*(zoomIn?1/1.2:1.2));
+    ts.setVisibleLogicalRange({ from:mid-newSpan/2, to:mid+newSpan/2 });
+    redraw();
+  }
+  else if(e.altKey && (e.key==="h"||e.key==="H")){
+    e.preventDefault();
+    // place a horizontal line at the current crosshair price (or mid of visible range)
+    const y = draw.mouse && draw.mouse.y!=null ? draw.mouse.y : dcanvas.clientHeight/2;
+    const price = yToPrice(y);
+    if(price!=null){
+      snapshotDraw();
+      const t = lastData.length ? lastData[lastData.length-1].time : Math.floor(Date.now()/1000);
+      draw.shapes.push({ id:newId(), type:"hline", pts:[{time:t, price}], style:{...DEFAULT_STYLE} });
+      persist(); redraw();
+    }
   }
 });
 
@@ -2728,7 +3402,7 @@ window.addEventListener("keydown", e=>{
 //  DRAG / EDIT
 // ─────────────────────────────────────────────────────────────────────
 function getShape(id){ return draw.shapes.find(s=>s.id===id); }
-function deleteShape(id){ draw.shapes=draw.shapes.filter(s=>s.id!==id); if(draw.sel===id) draw.sel=null; persist(); redraw(); }
+function deleteShape(id){ snapshotDraw(); draw.shapes=draw.shapes.filter(s=>s.id!==id); if(draw.sel===id) draw.sel=null; persist(); redraw(); }
 
 function applyDrag(drag,c){
   const s=getShape(drag.id); if(!s) return;
@@ -2784,7 +3458,14 @@ function nearShape(s,p){
     return (p.x>=x1-4&&p.x<=x2+4&&(Math.abs(p.y-y1)<5||Math.abs(p.y-y2)<5))||(p.y>=y1-4&&p.y<=y2+4&&(Math.abs(p.x-x1)<5||Math.abs(p.x-x2)<5));
   }
   if(s.type==="gannfan"||s.type==="fibtbext"||s.type==="pitchfork") return distToSeg(p.x,p.y,a.x,a.y,b.x,b.y)<8;
-  if(s.type==="rect"||s.type==="long"||s.type==="short"||s.type==="measure"){
+  if(s.type==="arrowmark") return Math.abs(p.x-a.x)<8 && Math.abs(p.y-a.y)<18;
+  if(s.type==="circle"){
+    const r=Math.hypot(b.x-a.x,b.y-a.y); if(r<1) return false;
+    const d=Math.hypot(p.x-a.x,p.y-a.y);
+    return d>r-6 && d<r+6;
+  }
+  if(s.type==="regression") return distToSeg(p.x,p.y,a.x,a.y,b.x,b.y)<8;
+  if(s.type==="rect"||s.type==="long"||s.type==="short"||s.type==="measure"||s.type==="gannbox"){
     const x1=Math.min(a.x,b.x),x2=Math.max(a.x,b.x),y1=Math.min(a.y,b.y),y2=Math.max(a.y,b.y);
     const onEdge = (p.x>=x1-4&&p.x<=x2+4&&(Math.abs(p.y-y1)<5||Math.abs(p.y-y2)<5)) ||
                    (p.y>=y1-4&&p.y<=y2+4&&(Math.abs(p.x-x1)<5||Math.abs(p.x-x2)<5));
@@ -2848,15 +3529,16 @@ function showShapeMenu(id,x,y){
   const s=getShape(id);
   showCtx(x,y,[
     mi("⚙ Settings…", ()=>openSettings(id)),
-    mi("Clone", ()=>{ const c=JSON.parse(JSON.stringify(s)); c.id=newId(); c.pts=c.pts.map(p=>({time:p.time, price:p.price*0.99})); draw.shapes.push(c); draw.sel=c.id; persist(); redraw(); }),
+    mi("Clone", ()=>{ snapshotDraw(); const c=JSON.parse(JSON.stringify(s)); c.id=newId(); c.pts=c.pts.map(p=>({time:p.time, price:p.price*0.99})); draw.shapes.push(c); draw.sel=c.id; persist(); redraw(); }),
+    mi(s.locked?"🔓 Unlock":"🔒 Lock", ()=>{ snapshotDraw(); s.locked=!s.locked; persist(); redraw(); }),
     msep(),
     mi("🎨 Blue",   ()=>setStyle(id,{color:"#2962ff"}), "#2962ff"),
     mi("🎨 Green",  ()=>setStyle(id,{color:"#26a69a"}), "#26a69a"),
     mi("🎨 Red",    ()=>setStyle(id,{color:"#ef5350"}), "#ef5350"),
     mi("🎨 Orange", ()=>setStyle(id,{color:"#ff9800"}), "#ff9800"),
     msep(),
-    mi("Bring to Front", ()=>{ draw.shapes=draw.shapes.filter(z=>z.id!==id).concat(s); persist(); redraw(); }),
-    mi("Send to Back",   ()=>{ draw.shapes=[s].concat(draw.shapes.filter(z=>z.id!==id)); persist(); redraw(); }),
+    mi("Bring to Front", ()=>{ snapshotDraw(); draw.shapes=draw.shapes.filter(z=>z.id!==id).concat(s); persist(); redraw(); }),
+    mi("Send to Back",   ()=>{ snapshotDraw(); draw.shapes=[s].concat(draw.shapes.filter(z=>z.id!==id)); persist(); redraw(); }),
     msep(),
     mi("🗑 Delete", ()=>deleteShape(id)),
   ]);
@@ -2869,10 +3551,10 @@ function showChartMenu(x,y,p){
     mi("⊞ Add indicator…", ()=>toggleIndicatorsMenu(true)),
     mi("Reset chart view", ()=>chart.timeScale().fitContent()),
     msep(),
-    mi("Remove all drawings", ()=>{ if(confirm("Remove all drawings?")){ draw.shapes=[]; draw.sel=null; persist(); redraw(); } }),
+    mi("Remove all drawings", ()=>{ if(confirm("Remove all drawings?")){ snapshotDraw(); draw.shapes=[]; draw.sel=null; persist(); redraw(); } }),
   ]);
 }
-function setStyle(id,patch){ const s=getShape(id); if(s){ Object.assign(s.style,patch); persist(); redraw(); } }
+function setStyle(id,patch){ const s=getShape(id); if(s){ snapshotDraw(); Object.assign(s.style,patch); persist(); redraw(); } }
 document.addEventListener("mousedown", e=>{ if(!ctxMenu.contains(e.target)) hideCtx(); });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -3036,11 +3718,102 @@ const FIB_COLORS=["#787b86","#ef5350","#ff9800","#4caf50","#26a69a","#26c6da","#
 function redraw(){
   const W=dcanvas.clientWidth, H=dcanvas.clientHeight;
   dctx.clearRect(0,0,W,H);
+  drawTimeGrid(W,H);                                  // sparse vertical grid at round time intervals
+  if(window.volProfileOn) drawVolumeProfile(W,H);     // horizontal volume-by-price histogram
+  if(draw.sessions!==false) drawSessionBreaks(W,H);   // day-boundary lines (intraday only)
   drawAlertLines();
   if(!draw.hidden){
     for(const s of draw.shapes) drawShape(s, s.id===draw.sel, s.id===draw.hover);
   }
   if(draw.pending) drawShape(draw.pending, true, false);
+}
+
+// Volume Profile: horizontal histogram of traded volume by price bucket over the
+// VISIBLE bars, drawn on the left edge (TradingView "Volume Profile Visible Range").
+// The highest-volume bucket (POC — Point of Control) is highlighted.
+function drawVolumeProfile(W,H){
+  if(!lastData.length) return;
+  const range=chart.timeScale().getVisibleLogicalRange(); if(!range) return;
+  const from=Math.max(0,Math.floor(range.from)), to=Math.min(lastData.length-1,Math.ceil(range.to));
+  const bars=lastData.slice(from,to+1).filter(b=>b.volume>0);
+  if(bars.length<2) return;
+  let lo=Infinity, hi=-Infinity;
+  for(const b of bars){ if(b.low<lo)lo=b.low; if(b.high>hi)hi=b.high; }
+  if(!(hi>lo)) return;
+  const BUCKETS=40, span=hi-lo, vol=new Array(BUCKETS).fill(0);
+  for(const b of bars){
+    const mid=(b.high+b.low)/2;
+    let idx=Math.floor((mid-lo)/span*BUCKETS); if(idx<0)idx=0; if(idx>=BUCKETS)idx=BUCKETS-1;
+    vol[idx]+=b.volume;
+  }
+  const maxV=Math.max(...vol); if(maxV<=0) return;
+  const pocIdx=vol.indexOf(maxV);
+  const maxW=W*0.22;                              // widest bar = 22% of chart width
+  dctx.save();
+  for(let i=0;i<BUCKETS;i++){
+    if(vol[i]<=0) continue;
+    const pLo=lo+span*(i/BUCKETS), pHi=lo+span*((i+1)/BUCKETS);
+    const y1=priceToY(pHi), y2=priceToY(pLo); if(y1==null||y2==null) continue;
+    const bw=maxW*(vol[i]/maxV);
+    dctx.fillStyle = i===pocIdx ? "rgba(255,152,0,0.45)" : "rgba(120,123,134,0.30)";
+    dctx.fillRect(0, y1, bw, Math.max(1,y2-y1-1));
+  }
+  dctx.restore();
+}
+
+// Session breaks: faint vertical lines at each day boundary (in the selected
+// timezone), TradingView-style. Only on intraday timeframes — pointless on 1D+.
+// Sparse vertical grid (TradingView-style): pick a round time interval so ~8-12
+// lines span the visible range, then draw one line per interval at its true x —
+// independent of bar count. Replaces LWC's per-bar vertical grid (disabled above).
+const _GRID_STEPS = [
+  60, 120, 300, 600, 900, 1800,                 // 1m..30m
+  3600, 7200, 10800, 21600, 43200,              // 1h..12h
+  86400, 172800, 604800,                        // 1d, 2d, 1w
+  1209600, 2592000, 7776000, 15552000, 31536000 // 2w, 1mo, 3mo, 6mo, 1y
+];
+function drawTimeGrid(W,H){
+  if(!lastData.length) return;
+  const t0=xToTime(0), t1=xToTime(W);
+  if(t0==null||t1==null||!(t1>t0)) return;
+  const span=t1-t0;
+  const TARGET=10;                               // aim for ~10 vertical lines
+  let step=_GRID_STEPS[_GRID_STEPS.length-1];
+  for(const s of _GRID_STEPS){ if(span/s <= TARGET*1.5){ step=s; break; } }
+  const off=tzOffsetMin*60;                      // align boundaries to the selected tz
+  let t=Math.ceil((t0+off)/step)*step - off;     // first round boundary ≥ left edge
+  dctx.save();
+  dctx.strokeStyle="rgba(120,123,134,0.12)"; dctx.lineWidth=1; dctx.setLineDash([]);
+  for(; t<=t1; t+=step){
+    const x=timeToX(t);
+    if(x==null||x<0||x>W) continue;
+    const xi=Math.round(x)+0.5;                  // crisp 1px line
+    dctx.beginPath(); dctx.moveTo(xi,0); dctx.lineTo(xi,H); dctx.stroke();
+  }
+  dctx.restore();
+}
+
+function drawSessionBreaks(W,H){
+  if(!lastData.length) return;
+  if(tfStepSec() >= 86400) return;               // daily+ bars: no intra-day breaks
+  // Day separators only when zoomed in enough that they stay sparse — otherwise
+  // (4h/6h/12h zoomed out over months) one line per day becomes a grey wall.
+  // Beyond that window drawTimeGrid already provides the round-interval grid.
+  const t0=xToTime(0), t1=xToTime(W);
+  if(t0==null||t1==null||(t1-t0)/86400 > 15) return;
+  const dayOf=t=>Math.floor((t + tzOffsetMin*60)/86400);  // tz-adjusted day index
+  dctx.save();
+  dctx.strokeStyle="rgba(120,123,134,0.18)"; dctx.lineWidth=1; dctx.setLineDash([]);
+  let prevDay=null;
+  for(const b of lastData){
+    const d=dayOf(b.time);
+    if(prevDay!==null && d!==prevDay){
+      const x=timeToX(b.time);
+      if(x!=null && x>=0 && x<=W){ dctx.beginPath(); dctx.moveTo(x,0); dctx.lineTo(x,H); dctx.stroke(); }
+    }
+    prevDay=d;
+  }
+  dctx.restore();
 }
 
 function strokeLine(x1,y1,x2,y2,st){
@@ -3091,6 +3864,10 @@ function drawShape(s, selected, hovered){
     case "fibtbext": if(P[2])drawTrendFibExt(s,P,W); break;
     case "pitchfork": if(P[2])drawPitchfork(P,W,H,st); break;
     case "gannfan": if(b)drawGannFan(a,b,W,H); break;
+    case "gannbox": if(b)drawGannBox(a,b,st); break;
+    case "circle": if(b)drawCircle(a,b,st); break;
+    case "regression": if(b)drawRegression(s,P,st); break;
+    case "arrowmark": drawArrowMark(s,a,st); break;
     case "flag": drawFlag(s,a); break;
     case "pricelabel": drawPriceLabelTool(s,a); break;
   }
@@ -3322,6 +4099,67 @@ function drawGannFan(a,b,W,H){
     strokeLine(a.x,a.y,ex,ey,{color: r===1?"#2962ff":FIB_COLORS[i%FIB_COLORS.length], width: r===1?1.6:1, dash:0});
   });
 }
+// Gann Box: a rectangle with the main diagonal, mid horizontal/vertical, and the
+// classic Gann fib price/time subdivisions (0.25/0.5/0.75) as light grid lines.
+function drawGannBox(a,b,st){
+  const x1=Math.min(a.x,b.x),x2=Math.max(a.x,b.x),y1=Math.min(a.y,b.y),y2=Math.max(a.y,b.y);
+  dctx.save();
+  dctx.strokeStyle=st.color; dctx.lineWidth=st.width; dctx.setLineDash([]);
+  dctx.strokeRect(x1,y1,x2-x1,y2-y1);
+  // fib subdivisions
+  dctx.strokeStyle=withOpacity(st.color,0.35); dctx.lineWidth=1; dctx.setLineDash([3,3]);
+  [0.25,0.5,0.75].forEach(f=>{
+    const yy=y1+(y2-y1)*f, xx=x1+(x2-x1)*f;
+    dctx.beginPath(); dctx.moveTo(x1,yy); dctx.lineTo(x2,yy); dctx.stroke();
+    dctx.beginPath(); dctx.moveTo(xx,y1); dctx.lineTo(xx,y2); dctx.stroke();
+  });
+  // main Gann diagonal (1x1) following the click direction
+  dctx.setLineDash([]); dctx.strokeStyle=st.color; dctx.lineWidth=st.width;
+  dctx.beginPath(); dctx.moveTo(a.x,a.y); dctx.lineTo(b.x,b.y); dctx.stroke();
+  dctx.restore();
+}
+// Circle: an ellipse constrained to a true circle — radius = distance from the
+// first click (center) to the second (edge).
+function drawCircle(a,b,st){
+  const r=Math.hypot(b.x-a.x,b.y-a.y);
+  dctx.save(); dctx.strokeStyle=st.color; dctx.lineWidth=st.width; dctx.fillStyle=st.fill||"rgba(41,98,255,0.08)";
+  dctx.setLineDash(st.dash?(st.dash===2?[2,3]:[7,5]):[]);
+  dctx.beginPath(); dctx.arc(a.x,a.y,r,0,7); dctx.fill(); dctx.stroke(); dctx.restore();
+}
+// Regression trend: least-squares fit over the bar CLOSES between the two anchors,
+// with a ±1σ parallel channel (TradingView's Regression Trend).
+function drawRegression(s,P,st){
+  const a=P[0],b=P[1]; if(a.x==null||b.x==null) return;
+  const t1=Math.min(s.pts[0].time,s.pts[1].time), t2=Math.max(s.pts[0].time,s.pts[1].time);
+  const bars=lastData.filter(d=>d.time>=t1 && d.time<=t2);
+  if(bars.length<2){ strokeLine(a.x,a.y,b.x,b.y,st); return; }
+  // fit price = m*time + c via least squares (normalise time to bar index for stability)
+  const n=bars.length; let sx=0,sy=0,sxx=0,sxy=0;
+  bars.forEach((d,i)=>{ sx+=i; sy+=d.close; sxx+=i*i; sxy+=i*d.close; });
+  const denom=(n*sxx - sx*sx)||1;
+  const m=(n*sxy - sx*sy)/denom, c=(sy - m*sx)/n;
+  // residual stddev for the channel band
+  let ss=0; bars.forEach((d,i)=>{ const e=d.close-(m*i+c); ss+=e*e; });
+  const sd=Math.sqrt(ss/n);
+  const y0=priceToY(c), y1=priceToY(m*(n-1)+c);
+  const x0=px(bars[0]).x, xN=px(bars[n-1]).x;
+  if(x0==null||xN==null||y0==null||y1==null){ strokeLine(a.x,a.y,b.x,b.y,st); return; }
+  strokeLine(x0,y0,xN,y1,{color:st.color,width:Math.max(2,st.width)});
+  const up0=priceToY(c+sd),upN=priceToY(m*(n-1)+c+sd),dn0=priceToY(c-sd),dnN=priceToY(m*(n-1)+c-sd);
+  strokeLine(x0,up0,xN,upN,{color:st.color,width:1,dash:1});
+  strokeLine(x0,dn0,xN,dnN,{color:st.color,width:1,dash:1});
+}
+// Arrow marker: an up (green) or down (red) arrow anchored at the point. Direction
+// chosen at creation time from whether the click was in the lower/upper half.
+function drawArrowMark(s,a,st){
+  if(a.x==null) return;
+  const up=s.dir!=="down"; const col=up?"#26a69a":"#ef5350";
+  const y=a.y, tip=up?y-4:y+4, tail=up?y+16:y-16;
+  dctx.save(); dctx.strokeStyle=col; dctx.fillStyle=col; dctx.lineWidth=3;
+  dctx.beginPath(); dctx.moveTo(a.x,tail); dctx.lineTo(a.x,tip); dctx.stroke();
+  dctx.beginPath(); dctx.moveTo(a.x,up?y-12:y+12); dctx.lineTo(a.x-6,up?y-4:y+4); dctx.lineTo(a.x+6,up?y-4:y+4); dctx.closePath(); dctx.fill();
+  dctx.restore();
+}
 // Flag mark: small flag glyph anchored at the point.
 function drawFlag(s,a){
   if(a.x==null) return; const col=s.style.color||"#2962ff";
@@ -3427,6 +4265,7 @@ const IND_CATALOG = [
   { type:"bbw",   name:"Bollinger Bands Width", cat:"Volatility", pane:"sub", params:{length:20, mult:2, src:"close", color:"#4dd0e1"} },
   // ── Volume ──
   { type:"volume",name:"Volume",                cat:"Volume", pane:"sub", params:{} },
+  { type:"volprofile",name:"Volume Profile",    cat:"Volume", pane:"overlay", params:{} },
   { type:"vwap",  name:"VWAP",                  cat:"Volume", pane:"main", params:{color:"#ab47bc"} },
   { type:"obv",   name:"On Balance Volume",     cat:"Volume", pane:"sub", params:{color:"#4db6ac"} },
   { type:"mfi",   name:"Money Flow Index",      cat:"Volume", pane:"sub", params:{length:14, color:"#ba68c8"} },
@@ -3438,6 +4277,33 @@ const IND_CATALOG = [
   // ── Bill Williams ──
   { type:"alligator",name:"Alligator",          cat:"Bill Williams", pane:"main", params:{} },
   { type:"fractals",name:"Williams Fractals",   cat:"Bill Williams", pane:"main", params:{} },
+  // ── Trend (Wave 5) ──
+  { type:"mcginley",name:"McGinley Dynamic",    cat:"Trend", pane:"main", params:{length:14, src:"close", color:"#ffca28"} },
+  { type:"kama",  name:"KAMA",                  cat:"Trend", pane:"main", params:{length:10, fast:2, slow:30, src:"close", color:"#66bb6a"} },
+  { type:"ckstop",name:"Chande Kroll Stop",     cat:"Trend", pane:"main", params:{length:10, mult:1, stopLen:9, color:"#ef5350"} },
+  { type:"lrc",   name:"Linear Regression Channel", cat:"Trend", pane:"main", params:{length:100, mult:2, src:"close", color:"#42a5f5"} },
+  // ── Momentum (Wave 5) ──
+  { type:"tsi",   name:"True Strength Index",   cat:"Momentum", pane:"sub", params:{long:25, short:13, signal:13, src:"close", color:"#26c6da"} },
+  { type:"kst",   name:"KST",                   cat:"Momentum", pane:"sub", params:{signal:9, src:"close"} },
+  { type:"rvi",   name:"Relative Vigor Index",  cat:"Momentum", pane:"sub", params:{length:10, signal:4} },
+  { type:"smi",   name:"SMI",                   cat:"Momentum", pane:"sub", params:{length:13, smooth1:25, smooth2:2, signal:9} },
+  { type:"woodies",name:"Woodies CCI",          cat:"Momentum", pane:"sub", params:{length:14, turboLen:6, color:"#ab47bc"} },
+  { type:"crsi",  name:"Connors RSI",           cat:"Momentum", pane:"sub", params:{rsiLen:3, streakLen:2, rocLen:100, color:"#ff7043"} },
+  // ── Volume (Wave 5) ──
+  { type:"eom",   name:"Ease of Movement",      cat:"Volume", pane:"sub", params:{length:14, div:10000, color:"#4db6ac"} },
+  { type:"klinger",name:"Klinger Oscillator",   cat:"Volume", pane:"sub", params:{fast:34, slow:55, signal:13} },
+  { type:"netvol",name:"Net Volume",            cat:"Volume", pane:"sub", params:{} },
+  { type:"volosc",name:"Volume Oscillator",     cat:"Volume", pane:"sub", params:{fast:5, slow:10, color:"#7986cb"} },
+  { type:"twap",  name:"TWAP",                  cat:"Volume", pane:"main", params:{color:"#ffa726"} },
+  // ── Volatility (Wave 5) ──
+  { type:"bbpct", name:"Bollinger %B",          cat:"Volatility", pane:"sub", params:{length:20, mult:2, src:"close", color:"#26c6da"} },
+  { type:"histvol",name:"Historical Volatility",cat:"Volatility", pane:"sub", params:{length:10, color:"#ff9800"} },
+  { type:"massidx",name:"Mass Index",           cat:"Volatility", pane:"sub", params:{length:9, sumLen:25, color:"#bdbdbd"} },
+  { type:"ulcer", name:"Ulcer Index",           cat:"Volatility", pane:"sub", params:{length:14, color:"#ce93d8"} },
+  // ── Other (Wave 5) ──
+  { type:"bbp",   name:"Bull Bear Power",       cat:"Other", pane:"sub", params:{length:13, color:"#26a69a"} },
+  { type:"ribbon",name:"Moving Average Ribbon", cat:"Other", pane:"main", params:{length:10, step:10, count:6, src:"close", color:"#42a5f5"} },
+  { type:"hl52",  name:"52 Week High/Low",      cat:"Other", pane:"main", params:{length:252} },
   // ── Other ──
   { type:"pivots",name:"Pivot Points Standard", cat:"Other", pane:"main", params:{} },
 ];
@@ -3663,14 +4529,151 @@ function pivotsCalc(data){ // daily pivots projected from prior bar
     out.P.push({time:data[i].time,value:P}); out.R1.push({time:data[i].time,value:R1}); out.S1.push({time:data[i].time,value:S1}); out.R2.push({time:data[i].time,value:R2}); out.S2.push({time:data[i].time,value:S2}); }
   return out; }
 
+// ════════════════════════════════════════════════════════════════════
+//  EXTENDED INDICATOR MATH (Wave 5)
+// ════════════════════════════════════════════════════════════════════
+// — trend —
+function mcginleyCalc(data,len,s){ const a=srcArr(data,s); const o=new Array(a.length).fill(null); let md=null;
+  for(let i=0;i<a.length;i++){ if(md==null){ md=a[i]; } else { const ratio=md?a[i]/md:1; md=md+(a[i]-md)/(len*Math.pow(ratio,4)); } o[i]=md; } return pair(data,o); }
+function kamaCalc(data,len,fast,slow,s){ const a=srcArr(data,s); const o=new Array(a.length).fill(null);
+  const fastSc=2/(fast+1), slowSc=2/(slow+1); let prev=null;
+  for(let i=0;i<a.length;i++){ if(i<len){ if(i===len-1) prev=a[i]; o[i]=i===len-1?prev:null; continue; }
+    const change=Math.abs(a[i]-a[i-len]); let vol=0; for(let j=0;j<len;j++) vol+=Math.abs(a[i-j]-a[i-j-1]);
+    const er=vol?change/vol:0; const sc=Math.pow(er*(fastSc-slowSc)+slowSc,2);
+    prev=(prev==null?a[i]:prev)+sc*(a[i]-(prev==null?a[i]:prev)); o[i]=prev; } return pair(data,o); }
+function ckstopCalc(data,len,mult,stopLen){ const atr=rmaA(trA(data),len); const hh=highestA(data.map(d=>d.high),len), ll=lowestA(data.map(d=>d.low),len);
+  const longStopRaw=new Array(data.length).fill(null), shortStopRaw=new Array(data.length).fill(null);
+  for(let i=0;i<data.length;i++){ if(hh[i]!=null&&atr[i]!=null) longStopRaw[i]=hh[i]-mult*atr[i]; if(ll[i]!=null&&atr[i]!=null) shortStopRaw[i]=ll[i]+mult*atr[i]; }
+  const longStop=highestA(longStopRaw.map(v=>v==null?-Infinity:v),stopLen).map((v,i)=>longStopRaw[i]==null?null:v);
+  const shortStop=lowestA(shortStopRaw.map(v=>v==null?Infinity:v),stopLen).map((v,i)=>shortStopRaw[i]==null?null:v);
+  return { long:pair(data,longStop), short:pair(data,shortStop) }; }
+function lrcCalc(data,len,mult,s){ const a=srcArr(data,s); const mid=[],up=[],lo=[];
+  for(let i=len-1;i<data.length;i++){ let sx=0,sy=0,sxx=0,sxy=0; for(let j=0;j<len;j++){ const x=j, y=a[i-len+1+j]; sx+=x; sy+=y; sxx+=x*x; sxy+=x*y; }
+    const n=len, denom=n*sxx-sx*sx; const slope=denom?(n*sxy-sx*sy)/denom:0; const inter=(sy-slope*sx)/n;
+    const fit=(x)=>slope*x+inter; let se=0; for(let j=0;j<len;j++){ const d2=a[i-len+1+j]-fit(j); se+=d2*d2; } const sd=Math.sqrt(se/len);
+    const center=fit(len-1); mid.push({time:data[i].time,value:center}); up.push({time:data[i].time,value:center+mult*sd}); lo.push({time:data[i].time,value:center-mult*sd}); }
+  return {mid,up,lo}; }
+// — momentum —
+function tsiCalc(data,long,short,signal,s){ const a=srcArr(data,s); const mom=new Array(a.length).fill(0), absMom=new Array(a.length).fill(0);
+  for(let i=1;i<a.length;i++){ mom[i]=a[i]-a[i-1]; absMom[i]=Math.abs(mom[i]); }
+  const e1=emaA(mom,long), e2=emaA(e1.map(v=>v==null?0:v),short);
+  const ea1=emaA(absMom,long), ea2=emaA(ea1.map(v=>v==null?0:v),short);
+  const tsi=e2.map((v,i)=> (v!=null&&ea2[i])?100*v/ea2[i]:null);
+  const sigA=emaA(tsi.map(v=>v==null?0:v),signal); const signalArr=tsi.map((v,i)=>v==null?null:sigA[i]);
+  return { tsi:pair(data,tsi), signal:pair(data,signalArr) }; }
+function kstCalc(data,signal,s){ const a=srcArr(data,s); const roc=(n)=>{ const x=new Array(a.length).fill(0); for(let i=n;i<a.length;i++) x[i]=a[i-n]?((a[i]-a[i-n])/a[i-n])*100:0; return x; };
+  const r1=smaA(roc(10),10).map(v=>v==null?0:v), r2=smaA(roc(15),10).map(v=>v==null?0:v), r3=smaA(roc(20),10).map(v=>v==null?0:v), r4=smaA(roc(30),15).map(v=>v==null?0:v);
+  const kst=a.map((_,i)=> r1[i]*1+r2[i]*2+r3[i]*3+r4[i]*4);
+  const sigA=smaA(kst,signal);
+  return { kst:pair(data,kst), signal:pair(data,sigA) }; }
+function rviCalc(data,len,signal){ const num=data.map(d=>d.close-d.open), den=data.map(d=>d.high-d.low);
+  const weighted=(arr,i)=> i>=3? (arr[i]+2*arr[i-1]+2*arr[i-2]+arr[i-3])/6 : null;
+  const numS=new Array(data.length).fill(null), denS=new Array(data.length).fill(null);
+  for(let i=3;i<data.length;i++){ numS[i]=weighted(num,i); denS[i]=weighted(den,i); }
+  const numSm=smaA(numS.map(v=>v==null?0:v),len), denSm=smaA(denS.map(v=>v==null?0:v),len);
+  const rvi=new Array(data.length).fill(null); for(let i=0;i<data.length;i++) if(numS[i]!=null&&numSm[i]!=null&&denSm[i]) rvi[i]=numSm[i]/denSm[i];
+  const rviFilled=rvi.map(v=>v==null?0:v); const sig=new Array(data.length).fill(null);
+  for(let i=3;i<data.length;i++) if(rvi[i]!=null) sig[i]=(rviFilled[i]+2*rviFilled[i-1]+2*rviFilled[i-2]+rviFilled[i-3])/6;
+  return { rvi:pair(data,rvi), signal:pair(data,sig) }; }
+function smiCalc(data,len,smooth1,smooth2,signal){ const hh=highestA(data.map(d=>d.high),len), ll=lowestA(data.map(d=>d.low),len);
+  const mid=new Array(data.length).fill(null), diff=new Array(data.length).fill(null);
+  for(let i=0;i<data.length;i++) if(hh[i]!=null&&ll[i]!=null){ mid[i]=(hh[i]+ll[i])/2; diff[i]=hh[i]-ll[i]; }
+  const rel=data.map((d,i)=> mid[i]!=null? d.close-mid[i] : 0);
+  const diffFilled=diff.map(v=>v==null?0:v);
+  const relS=emaA(emaA(rel,smooth1).map(v=>v==null?0:v),smooth2);
+  const diffS=emaA(emaA(diffFilled,smooth1).map(v=>v==null?0:v),smooth2);
+  const smi=relS.map((v,i)=> (v!=null&&diffS[i])?200*(v/diffS[i]):null);
+  const sigA=emaA(smi.map(v=>v==null?0:v),signal).map((v,i)=>smi[i]==null?null:v);
+  return { smi:pair(data,smi), signal:pair(data,sigA) }; }
+function woodiesCalc(data,len,turboLen){ return { cci:cciCalc(data,len), turbo:cciCalc(data,turboLen) }; }
+function crsiCalc(data,rsiLen,streakLen,rocLen){ const closes=data.map(d=>d.close);
+  const rsiC=rsiCalc(data,rsiLen,"close"); const map={}; rsiC.forEach(p=>map[p.time]=p.value); const rsiArr=data.map(d=>map[d.time]);
+  const streak=new Array(data.length).fill(0);
+  for(let i=1;i<data.length;i++){ if(closes[i]>closes[i-1]) streak[i]= streak[i-1]>0?streak[i-1]+1:1; else if(closes[i]<closes[i-1]) streak[i]= streak[i-1]<0?streak[i-1]-1:-1; else streak[i]=0; }
+  const streakData=data.map((d,i)=>({time:d.time,open:d.open,high:d.high,low:d.low,close:streak[i],volume:d.volume}));
+  const streakRsi=rsiCalc(streakData,streakLen,"close"); const smap={}; streakRsi.forEach(p=>smap[p.time]=p.value); const streakRsiArr=data.map(d=>smap[d.time]);
+  const roc1=new Array(data.length).fill(null);
+  for(let i=rocLen;i<data.length;i++){ let cnt=0; for(let j=1;j<=rocLen;j++){ if(closes[i-j]<closes[i]) cnt++; } roc1[i]=cnt/rocLen*100; }
+  const o=new Array(data.length).fill(null);
+  for(let i=0;i<data.length;i++) if(rsiArr[i]!=null&&streakRsiArr[i]!=null&&roc1[i]!=null) o[i]=(rsiArr[i]+streakRsiArr[i]+roc1[i])/3;
+  return pair(data,o); }
+// — volume —
+function eomCalc(data,len,div){ const raw=new Array(data.length).fill(0);
+  for(let i=1;i<data.length;i++){ const midMove=(data[i].high+data[i].low)/2-(data[i-1].high+data[i-1].low)/2; const boxRatio=(data[i].volume||1)/div/((data[i].high-data[i].low)||1e-9); raw[i]=boxRatio?midMove/boxRatio:0; }
+  return pair(data,smaA(raw,len)); }
+function klingerCalc(data,fast,slow,signal){ const trend=new Array(data.length).fill(1); const dm=data.map(d=>d.high-d.low);
+  for(let i=1;i<data.length;i++){ const hlc=data[i].high+data[i].low+data[i].close, plc=data[i-1].high+data[i-1].low+data[i-1].close; trend[i]=hlc>plc?1:-1; }
+  const cm=new Array(data.length).fill(0); let cmPrev=dm[0]||0;
+  for(let i=1;i<data.length;i++){ cm[i]= trend[i]===trend[i-1]? cmPrev+dm[i] : (dm[i-1]||0)+dm[i]; cmPrev=cm[i]; }
+  const vf=data.map((d,i)=> (d.volume||0)*trend[i]*Math.abs(2*(cm[i]?dm[i]/cm[i]:0)-1)*100);
+  const ef=emaA(vf,fast), es=emaA(vf,slow);
+  const kvo=ef.map((v,i)=>(v!=null&&es[i]!=null)?v-es[i]:null);
+  const sigA=emaA(kvo.map(v=>v==null?0:v),signal).map((v,i)=>kvo[i]==null?null:v);
+  return { kvo:pair(data,kvo), signal:pair(data,sigA) }; }
+function netvolCalc(data){ return data.map(d=>({time:d.time, value:(d.close>=d.open?1:-1)*(d.volume||0)})); }
+function voloscCalc(data,fast,slow){ const vol=data.map(d=>d.volume||0); const ef=emaA(vol,fast), es=emaA(vol,slow);
+  const o=vol.map((_,i)=>(ef[i]!=null&&es[i])?(ef[i]-es[i])/es[i]*100:null); return pair(data,o); }
+function twapCalc(data){ const out=[]; let sum=0; for(let i=0;i<data.length;i++){ const tp=(data[i].high+data[i].low+data[i].close)/3; sum+=tp; out.push({time:data[i].time,value:sum/(i+1)}); } return out; }
+// — volatility —
+function bbpctCalc(data,len,mult,s){ const a=srcArr(data,s); const mid=smaA(a,len), sd=stdevA(a,len); const o=new Array(data.length).fill(null);
+  for(let i=0;i<data.length;i++) if(mid[i]!=null){ const up=mid[i]+mult*sd[i], lo=mid[i]-mult*sd[i], range=up-lo; if(range) o[i]=(a[i]-lo)/range; } return pair(data,o); }
+function histvolCalc(data,len){ const a=data.map(d=>d.close); const ret=new Array(a.length).fill(0);
+  for(let i=1;i<a.length;i++) ret[i]= a[i-1]?Math.log(a[i]/a[i-1]):0;
+  const sd=stdevA(ret,len); const ann=Math.sqrt(365); const o=sd.map(v=>v==null?null:v*ann*100); return pair(data,o); }
+function massIdxCalc(data,len,sumLen){ const range=data.map(d=>d.high-d.low); const e1=emaA(range,len); const e2=emaA(e1.map(v=>v==null?0:v),len);
+  const ratio=e1.map((v,i)=>(v!=null&&e2[i])?v/e2[i]:null);
+  const o=new Array(data.length).fill(null);
+  for(let i=sumLen-1;i<data.length;i++){ let ok=true,s=0; for(let j=0;j<sumLen;j++){ if(ratio[i-j]==null){ok=false;break;} s+=ratio[i-j]; } if(ok) o[i]=s; }
+  return pair(data,o); }
+function ulcerCalc(data,len){ const a=data.map(d=>d.close); const hh=highestA(a,len);
+  const dd=a.map((v,i)=> hh[i]?((v-hh[i])/hh[i]*100):0);
+  const o=new Array(data.length).fill(null);
+  for(let i=len-1;i<data.length;i++){ let s=0; for(let j=0;j<len;j++) s+=dd[i-j]*dd[i-j]; o[i]=Math.sqrt(s/len); }
+  return pair(data,o); }
+// — other —
+function bbpCalc(data,len){ const a=srcArr(data,"close"); const ema=emaA(a,len);
+  const o=data.map((d,i)=> ema[i]!=null?{time:d.time,value:(d.high-ema[i])+(d.low-ema[i])}:{time:d.time}); return o; }
+function ribbonCalc(data,len,step,count,s){ const a=srcArr(data,s); const lines=[];
+  for(let k=0;k<count;k++){ lines.push(pair(data,emaA(a,len+step*k))); } return lines; }
+function hl52Calc(data,len){ const n=Math.min(len,data.length); const hh=highestA(data.map(d=>d.high),n), ll=lowestA(data.map(d=>d.low),n);
+  return { hi:pair(data,hh), lo:pair(data,ll) }; }
+
 // ── add / remove / render ──
-function addIndicator(type){
+function addIndicator(type, opts){
   const cat=IND_CATALOG.find(c=>c.type===type); if(!cat) return;
-  const ind={ id:"i"+(indUid++), type, name:cat.name, pane:cat.pane, params:Object.assign({},cat.params), series:[], subChart:null };
-  indicators.push(ind); buildIndicatorSeries(ind); renderIndicator(ind); renderIndLegend(); layoutPanes(); toggleIndicatorsMenu(false);
+  const params=Object.assign({},cat.params, (opts&&opts.params)||{});
+  const ind={ id:"i"+(indUid++), type, name:cat.name, pane:cat.pane, params, series:[], subChart:null, hidden:!!(opts&&opts.hidden) };
+  indicators.push(ind);
+  // Canvas-overlay indicators (Volume Profile) toggle a redraw flag instead of a LWC series.
+  if(cat.pane==="overlay"){
+    if(type==="volprofile") window.volProfileOn=true;
+    renderIndLegend(); redraw(); toggleIndicatorsMenu(false);
+    if(!(opts&&opts.silent)) saveIndicators();
+    return ind;
+  }
+  buildIndicatorSeries(ind); renderIndicator(ind); renderIndLegend(); layoutPanes(); toggleIndicatorsMenu(false);
+  if(ind.hidden) ind.series.forEach(s=>{ try{ s.applyOptions({visible:false}); }catch(e){} });
+  if(!(opts&&opts.silent)) saveIndicators();
+  return ind;
 }
-function removeIndicator(id){
+// Persist active indicators per symbol so they restore on reload (mirrors scripts/alerts).
+const INDICATORS_KEY = ()=>"fv_indicators_"+activeSymbol;
+function saveIndicators(){
+  try{ localStorage.setItem(INDICATORS_KEY(), JSON.stringify(indicators.map(i=>({type:i.type, params:i.params, hidden:!!i.hidden})))); }catch(e){}
+}
+function loadIndicators(){
+  // tear down existing, then rebuild from storage (silent = don't re-save while loading)
+  [...indicators].forEach(i=>removeIndicator(i.id, true));
+  indicators.length=0;
+  try{ const raw=localStorage.getItem(INDICATORS_KEY()); if(raw){ JSON.parse(raw).forEach(r=>addIndicator(r.type,{params:r.params, hidden:r.hidden, silent:true})); } }catch(e){}
+  renderIndLegend(); layoutPanes();
+}
+function removeIndicator(id, silent){
   const idx=indicators.findIndex(i=>i.id===id); if(idx<0) return; const ind=indicators[idx];
+  if(ind.pane==="overlay"){
+    if(ind.type==="volprofile"){ window.volProfileOn=false; redraw(); }
+    indicators.splice(idx,1); renderIndLegend(); if(!silent) saveIndicators(); return;
+  }
   if(ind.syncMain){ try{ chart.timeScale().unsubscribeVisibleLogicalRangeChange(ind.syncMain); }catch(e){} }
   // syncSub holds a closure over the MAIN chart; unhook it from the sub-chart's
   // scale before destroying the sub-chart so it can't fire on a torn-down pane.
@@ -3679,6 +4682,37 @@ function removeIndicator(id){
   ind.series.forEach(s=>{ try{ (ind.subChart||chart).removeSeries(s); }catch(e){} });
   if(ind.subChart){ try{ ind.subChart.remove(); }catch(e){} if(ind.paneEl) ind.paneEl.remove(); }
   indicators.splice(idx,1); renderIndLegend(); layoutPanes();
+  if(!silent) saveIndicators();
+}
+// Hide / show an indicator's plot without removing it (eye toggle in the pane label
+// and the main-chart legend). For sub-pane indicators we dim the pane; for overlays
+// we just toggle series visibility.
+function toggleIndicatorHidden(id){
+  const ind=indicators.find(i=>i.id===id); if(!ind) return;
+  ind.hidden=!ind.hidden;
+  ind.series.forEach(s=>{ try{ s.applyOptions({ visible:!ind.hidden }); }catch(e){} });
+  if(ind.paneEl){
+    ind.paneEl.classList.toggle("hiddenInd", ind.hidden);
+    const eye=ind.paneEl.querySelector(".subEye"); if(eye) eye.textContent=ind.hidden?"🚫":"👁";
+  }
+  renderIndLegend();
+  saveIndicators();
+}
+// Drag a pane divider to resize. Adjusts the pane's flex-basis (height) live; the
+// LWC chart inside is re-sized on each move so its plot fills the new box.
+function wirePaneResize(grip, el){
+  grip.addEventListener("mousedown", e=>{
+    e.preventDefault(); e.stopPropagation();
+    const startY=e.clientY, startH=el.getBoundingClientRect().height;
+    const onMove=ev=>{
+      const h=Math.max(70, Math.min(500, startH+(ev.clientY-startY)));
+      el.style.flex="0 0 "+h+"px"; el.style.height=h+"px";
+      const ind=indicators.find(i=>i.paneEl===el);
+      if(ind&&ind.subChart){ try{ ind.subChart.applyOptions({ width:el.clientWidth, height:el.clientHeight }); }catch(e){} }
+    };
+    const onUp=()=>{ document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp); if(typeof alignPriceAxes==="function") alignPriceAxes(); };
+    document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
+  });
 }
 // PLOT DESCRIPTORS: for each type, how many series and of what kind/color.
 // kind: "line" | "hist" | "area-top"/"area-bot" (cloud halves). Lets build &
@@ -3714,25 +4748,55 @@ function plotSpec(ind){
     case "alligator": return [L("#2196f3"),L("#e53935"),L("#43a047")]; // jaw,teeth,lips
     case "fractals": return []; // markers, not series
     case "pivots": return [L("#787b86",1),L("#26a69a",1),L("#ef5350",1),L("#26a69a",1),L("#ef5350",1)];
+    // Wave 5 — trend
+    case "mcginley": return [L(c||"#ffca28",2)];
+    case "kama": return [L(c||"#66bb6a",2)];
+    case "ckstop": return [L(c||"#26a69a",1),L("#ef5350",1)]; // long,short
+    case "lrc": return [L(c||"#42a5f5",1),L(c||"#42a5f5",1),L(c||"#42a5f5",1)]; // mid,up,lo
+    // Wave 5 — momentum
+    case "tsi": return [L(c||"#26c6da"),L("#ff9800")];
+    case "kst": return [L("#26c6da"),L("#ff9800")];
+    case "rvi": return [L("#26c6da"),L("#ff9800")];
+    case "smi": return [L("#26c6da"),L("#ff9800")];
+    case "woodies": return [L(c||"#ab47bc"),L("#ffa726")];
+    case "crsi": return [L(c||"#ff7043",2)];
+    // Wave 5 — volume
+    case "eom": return [L(c||"#4db6ac",2)];
+    case "klinger": return [L("#26c6da"),L("#ff9800")];
+    case "netvol": return [{k:"hist",color:"#26a69a"}];
+    case "volosc": return [L(c||"#7986cb",2)];
+    case "twap": return [L(c||"#ffa726",2)];
+    // Wave 5 — volatility
+    case "bbpct": return [L(c||"#26c6da",2)];
+    case "histvol": return [L(c||"#ff9800",2)];
+    case "massidx": return [L(c||"#bdbdbd",2)];
+    case "ulcer": return [L(c||"#ce93d8",2)];
+    // Wave 5 — other
+    case "bbp": return [{k:"hist",color:c||"#26a69a"}];
+    case "ribbon": return Array.from({length:p.count||6},(_,i)=>L(c||"#42a5f5", 1+ (i%3)*0.3));
+    case "hl52": return [L("#26a69a",1),L("#ef5350",1)];
     default: return [L(c||"#ffeb3b",2)];
   }
 }
 function buildIndicatorSeries(ind){
   const specs=plotSpec(ind);
   if(ind.pane==="main"){
-    ind.series=specs.map(sp=> sp.k==="hist"
+    ind.series=specs.map(sp=> recordData(sp.k==="hist"
       ? chart.addHistogramSeries({priceLineVisible:false,lastValueVisible:false})
-      : chart.addLineSeries({color:sp.color,lineWidth:sp.w,priceLineVisible:false,lastValueVisible:false}));
+      : chart.addLineSeries({color:sp.color,lineWidth:sp.w,priceLineVisible:false,lastValueVisible:false})));
     return;
   }
   const wrap=document.getElementById("subPanes");
   const el=document.createElement("div"); el.className="subpane";
   const label=document.createElement("div"); label.className="subLabel"; label.textContent=ind.name;
-  const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeIndicator(ind.id);
+  const eye=document.createElement("span"); eye.className="subEye"; eye.textContent=ind.hidden?"🚫":"👁"; eye.title="Hide / show"; eye.onclick=()=>toggleIndicatorHidden(ind.id);
   const gear=document.createElement("span"); gear.className="subClose"; gear.textContent="⚙"; gear.title="Settings"; gear.onclick=()=>openIndicatorSettings(ind.id);
-  label.appendChild(gear); label.appendChild(close); el.appendChild(label); wrap.appendChild(el); ind.paneEl=el;
-  const sc=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc"},
-    grid:{vertLines:{color:"#1e222d"},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39",minimumWidth:PRICE_AXIS_W},
+  const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeIndicator(ind.id);
+  label.appendChild(eye); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
+  const grip=document.createElement("div"); grip.className="paneResize"; grip.title="Drag to resize pane"; wirePaneResize(grip,el); el.appendChild(grip);
+  wrap.appendChild(el); ind.paneEl=el;
+  const sc=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc",fontFamily:"'Trebuchet MS', Roboto, Ubuntu, sans-serif"},
+    grid:{vertLines:{visible:false},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39",minimumWidth:PRICE_AXIS_W},
     timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false,tickMarkFormatter:(t,type)=>tickLabel(t,type)}, crosshair:{mode:0} });
   ind.subChart=sc;
   let syncing=false;
@@ -3740,9 +4804,9 @@ function buildIndicatorSeries(ind){
   ind.syncSub =r=>{ if(r&&!syncing){ syncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
   chart.timeScale().subscribeVisibleLogicalRangeChange(ind.syncMain);
   sc.timeScale().subscribeVisibleLogicalRangeChange(ind.syncSub);
-  ind.series=specs.map(sp=> alignSubSeries(sp.k==="hist"
+  ind.series=specs.map(sp=> recordData(alignSubSeries(sp.k==="hist"
     ? sc.addHistogramSeries({color:sp.color})
-    : sc.addLineSeries({color:sp.color,lineWidth:sp.w})));
+    : sc.addLineSeries({color:sp.color,lineWidth:sp.w}))));
   registerPane(sc, ind.series[0]);   // share the crosshair with the main chart + other panes
   // New bottom pane → move the date axis down to it (and off the pane now above it).
   setTimeout(()=>{ try{ sc.applyOptions({width:el.clientWidth,height:el.clientHeight}); }catch(e){} alignPriceAxes(); },0);
@@ -3812,6 +4876,33 @@ function renderIndicator(ind){
       case "alligator": { const r=alligatorCalc(d); S[0].setData(r.jaw); S[1].setData(r.teeth); S[2].setData(r.lips); break; }
       case "fractals": { const r=fractalsCalc(d); const m=[...r.up,...r.dn].sort((a,b)=>a.time-b.time); try{ candle.setMarkers(mergeMarkers(m)); }catch(e){} break; }
       case "pivots": { const r=pivotsCalc(d); S[0].setData(r.P); S[1].setData(r.R1); S[2].setData(r.S1); S[3].setData(r.R2); S[4].setData(r.S2); break; }
+      // Wave 5 — trend
+      case "mcginley": S[0].setData(mcginleyCalc(d,pp.length,pp.src)); break;
+      case "kama": S[0].setData(kamaCalc(d,pp.length,pp.fast,pp.slow,pp.src)); break;
+      case "ckstop": { const r=ckstopCalc(d,pp.length,pp.mult,pp.stopLen); S[0].setData(r.long); S[1].setData(r.short); break; }
+      case "lrc": { const r=lrcCalc(d,pp.length,pp.mult,pp.src); S[0].setData(r.mid); S[1].setData(r.up); S[2].setData(r.lo); break; }
+      // Wave 5 — momentum
+      case "tsi": { const r=tsiCalc(d,pp.long,pp.short,pp.signal,pp.src); S[0].setData(r.tsi); S[1].setData(r.signal); break; }
+      case "kst": { const r=kstCalc(d,pp.signal,pp.src); S[0].setData(r.kst); S[1].setData(r.signal); break; }
+      case "rvi": { const r=rviCalc(d,pp.length,pp.signal); S[0].setData(r.rvi); S[1].setData(r.signal); break; }
+      case "smi": { const r=smiCalc(d,pp.length,pp.smooth1,pp.smooth2,pp.signal); S[0].setData(r.smi); S[1].setData(r.signal); break; }
+      case "woodies": { const r=woodiesCalc(d,pp.length,pp.turboLen); S[0].setData(r.cci); S[1].setData(r.turbo); break; }
+      case "crsi": S[0].setData(crsiCalc(d,pp.rsiLen,pp.streakLen,pp.rocLen)); break;
+      // Wave 5 — volume
+      case "eom": S[0].setData(eomCalc(d,pp.length,pp.div)); break;
+      case "klinger": { const r=klingerCalc(d,pp.fast,pp.slow,pp.signal); S[0].setData(r.kvo); S[1].setData(r.signal); break; }
+      case "netvol": S[0].setData(hist(netvolCalc(d))); break;
+      case "volosc": S[0].setData(voloscCalc(d,pp.fast,pp.slow)); break;
+      case "twap": S[0].setData(twapCalc(d)); break;
+      // Wave 5 — volatility
+      case "bbpct": S[0].setData(bbpctCalc(d,pp.length,pp.mult,pp.src)); break;
+      case "histvol": S[0].setData(histvolCalc(d,pp.length)); break;
+      case "massidx": S[0].setData(massIdxCalc(d,pp.length,pp.sumLen)); break;
+      case "ulcer": S[0].setData(ulcerCalc(d,pp.length)); break;
+      // Wave 5 — other
+      case "bbp": S[0].setData(hist(bbpCalc(d,pp.length))); break;
+      case "ribbon": { const lines=ribbonCalc(d,pp.length,pp.step,pp.count,pp.src); lines.forEach((ln,i)=>{ if(S[i]) S[i].setData(ln); }); break; }
+      case "hl52": { const r=hl52Calc(d,pp.length); S[0].setData(r.hi); S[1].setData(r.lo); break; }
     }
   }catch(e){}
 }
@@ -3849,41 +4940,88 @@ function layoutPanes(){
 function indParamSummary(ind){
   return Object.entries(ind.params).filter(e=>!["color","src"].includes(e[0])).map(e=>e[1]).join(", ");
 }
+// Wrap a series' setData so we can look up its value at a crosshair time later
+// (lightweight-charts has no getData). The last array set is stashed on the series.
+function recordData(series){
+  const orig=series.setData.bind(series);
+  series.setData=arr=>{ series._data=arr; return orig(arr); };
+  return series;
+}
+// Nearest {time,value} in a recorded series at/around `time`.
+function valueAtTime(series, time){
+  const d=series&&series._data; if(!d||!d.length) return null;
+  let best=null, bd=Infinity;
+  for(const p of d){ if(p.value==null) continue; const gap=Math.abs(p.time-time); if(gap<bd){bd=gap;best=p;} }
+  return best?best.value:null;
+}
+// On crosshair move, fill each indicator legend row's value slot.
+function updateIndLegendValues(time){
+  document.querySelectorAll("#indLegend .indrow").forEach(row=>{
+    const ind=indicators.find(i=>i.id===row.dataset.id); if(!ind) return;
+    const slot=row.querySelector(".vals"); if(!slot) return;
+    if(time==null){ slot.textContent=""; return; }
+    const v=valueAtTime(ind.series[0], time);
+    slot.textContent = v!=null ? " "+fmt(v) : "";
+  });
+  // sub-pane indicators show their value in the pane label
+  indicators.filter(i=>i.pane==="sub"&&i.paneEl).forEach(ind=>{
+    let slot=ind.paneEl.querySelector(".subVals");
+    if(!slot){ slot=document.createElement("span"); slot.className="subVals"; ind.paneEl.querySelector(".subLabel").appendChild(slot); }
+    const v = time==null?null:valueAtTime(ind.series[0], time);
+    slot.textContent = v!=null ? " "+fmt(v) : "";
+  });
+}
 function renderIndLegend(){
   const box=document.getElementById("indLegend"); box.innerHTML="";
   // overlay indicators show in the on-chart legend; sub-pane ones get their gear
   // in the pane label (added in buildIndicatorSeries) so we list only main here.
   indicators.filter(i=>i.pane==="main").forEach(ind=>{
-    const row=document.createElement("div"); row.className="indrow";
+    const row=document.createElement("div"); row.className="indrow"; row.dataset.id=ind.id;
     const params=indParamSummary(ind);
-    row.innerHTML='<span class="nm" style="color:'+(ind.params.color||"#d1d4dc")+'">'+ind.name+(params?" ("+params+")":"")+'</span><span class="gear" title="Settings">⚙</span><span class="x" title="Remove">×</span>';
+    row.innerHTML='<span class="nm" style="color:'+(ind.params.color||"#d1d4dc")+(ind.hidden?";opacity:.5":"")+'">'+ind.name+(params?" ("+params+")":"")+'</span><span class="vals"></span><span class="eye" title="Hide / show">'+(ind.hidden?"🚫":"👁")+'</span><span class="gear" title="Settings">⚙</span><span class="x" title="Remove">×</span>';
+    row.querySelector(".eye").onclick=()=>toggleIndicatorHidden(ind.id);
     row.querySelector(".gear").onclick=()=>openIndicatorSettings(ind.id);
     row.querySelector(".x").onclick=()=>removeIndicator(ind.id);
     box.appendChild(row);
   });
 }
+// Favorite indicators — persisted set of catalog type keys, starred in the dialog.
+let indFavorites=new Set();
+try{ const f=localStorage.getItem("fv_ind_favorites"); if(f) indFavorites=new Set(JSON.parse(f)); }catch(e){}
+function saveFavorites(){ try{ localStorage.setItem("fv_ind_favorites", JSON.stringify([...indFavorites])); }catch(e){} }
+function toggleFavorite(type){ if(indFavorites.has(type)) indFavorites.delete(type); else indFavorites.add(type); saveFavorites(); }
+
+let _indTab="technicals";   // "technicals" | "favorites"
 function toggleIndicatorsMenu(force){
   const m=document.getElementById("indicatorsMenu");
   const open = force!==undefined ? force : !m.classList.contains("open");
   if(open){
-    m.innerHTML='<div class="ph">Indicators <span class="cl" id="indClose">×</span></div><input class="search" id="indSearch" placeholder="Search…"><div class="pb" id="indList"></div>';
+    m.innerHTML='<div class="ph">Indicators <span class="cl" id="indClose">×</span></div>'
+      +'<div class="indtabs"><span class="indtab" data-tab="technicals">Technicals</span><span class="indtab" data-tab="favorites">★ Favorites</span></div>'
+      +'<input class="search" id="indSearch" placeholder="Search…"><div class="pb" id="indList"></div>';
     const list=m.querySelector("#indList");
     const fill=(q)=>{
       q=(q||"").toLowerCase(); list.innerHTML="";
-      const cats=[...new Set(IND_CATALOG.map(c=>c.cat))];
+      const pool = _indTab==="favorites" ? IND_CATALOG.filter(c=>indFavorites.has(c.type)) : IND_CATALOG;
+      const cats=[...new Set(pool.map(c=>c.cat))];
       cats.forEach(cat=>{
-        const items=IND_CATALOG.filter(c=>c.cat===cat && (c.name.toLowerCase().includes(q)||cat.toLowerCase().includes(q)));
+        const items=pool.filter(c=>c.cat===cat && (c.name.toLowerCase().includes(q)||cat.toLowerCase().includes(q)));
         if(!items.length) return;
         const h=document.createElement("div"); h.className="indcat"; h.textContent=cat; list.appendChild(h);
         items.forEach(c=>{
           const it=document.createElement("div"); it.className="pi";
-          it.innerHTML='<span>'+c.name+'</span><span class="meta">'+(c.pane==="main"?"overlay":"pane")+'</span>';
-          it.onclick=()=>addIndicator(c.type); list.appendChild(it);
+          const fav=indFavorites.has(c.type);
+          it.innerHTML='<span class="star'+(fav?" on":"")+'" title="Favorite">'+(fav?"★":"☆")+'</span><span class="pinm">'+c.name+'</span><span class="meta">'+(c.pane==="main"?"overlay":"pane")+'</span>';
+          it.querySelector(".pinm").onclick=()=>addIndicator(c.type);
+          it.querySelector(".star").onclick=(e)=>{ e.stopPropagation(); toggleFavorite(c.type); fill(m.querySelector("#indSearch").value); };
+          list.appendChild(it);
         });
       });
-      if(!list.children.length) list.innerHTML='<div class="pi" style="color:var(--muted)">No matches</div>';
+      if(!list.children.length) list.innerHTML='<div class="pi" style="color:var(--muted)">'+(_indTab==="favorites"?"No favorites yet — tap ☆ to add":"No matches")+'</div>';
     };
-    fill();
+    const syncTabs=()=>m.querySelectorAll(".indtab").forEach(t=>t.classList.toggle("active", t.dataset.tab===_indTab));
+    m.querySelectorAll(".indtab").forEach(t=>t.onclick=()=>{ _indTab=t.dataset.tab; syncTabs(); fill(m.querySelector("#indSearch").value); });
+    syncTabs(); fill();
     m.querySelector("#indSearch").oninput=e=>fill(e.target.value);
     m.querySelector("#indClose").onclick=()=>toggleIndicatorsMenu(false);
     m.classList.add("open");
@@ -3909,7 +5047,7 @@ function openIndicatorSettings(id){
     }
     renderIndicator(ind); renderIndLegend(); };
   dlg.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",apply));
-  document.getElementById("dlgOk").onclick=()=>{ apply(); closeDlg(); };
+  document.getElementById("dlgOk").onclick=()=>{ apply(); saveIndicators(); closeDlg(); };
   document.getElementById("dlgCancel").onclick=closeDlg;
   document.getElementById("dlgClose").onclick=closeDlg;
 }
@@ -4024,8 +5162,8 @@ function renderScript(sc){
     const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeScript(sc.id);
     const edit=document.createElement("span"); edit.className="subClose"; edit.textContent="✎"; edit.title="Edit script"; edit.onclick=()=>openScriptEditor(sc.id);
     label.appendChild(edit); label.appendChild(close); el.appendChild(label); wrap.appendChild(el); sc.paneEl=el;
-    const sChart=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc"},
-      grid:{vertLines:{color:"#1e222d"},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39",minimumWidth:PRICE_AXIS_W},
+    const sChart=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc",fontFamily:"'Trebuchet MS', Roboto, Ubuntu, sans-serif"},
+      grid:{vertLines:{visible:false},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39",minimumWidth:PRICE_AXIS_W},
       timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false,tickMarkFormatter:(t,type)=>tickLabel(t,type)}, crosshair:{mode:0} });
     sc.subChart=sChart; let syncing=false;
     sc.syncMain=r=>{ if(r&&!syncing){ syncing=true; try{sChart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
@@ -4322,11 +5460,165 @@ document.getElementById("btnIndicators").onclick=()=>toggleIndicatorsMenu();
 document.getElementById("btnScript").onclick=()=>openScriptEditor(null);              // ƒ → new custom-indicator script
 document.getElementById("btnAlert").onclick=()=>openAlertDialog({});                  // bell → create alert (TradingView)
 document.getElementById("btnAlert").addEventListener("contextmenu", e=>{ e.preventDefault(); toggleAlertsPanel(); });  // right-click → manage list
+
+// ── Screenshot export ──
+// Composite the main chart's own canvas (via LWC takeScreenshot) with the drawing
+// overlay canvas, then download as PNG. Sub-panes aren't included (main chart only).
+function saveScreenshot(){
+  try{
+    const base = chart.takeScreenshot();           // HTMLCanvasElement of the main chart
+    const out = document.createElement("canvas");
+    out.width = base.width; out.height = base.height;
+    const ctx = out.getContext("2d");
+    ctx.drawImage(base, 0, 0);
+    // overlay (drawings) is a separate canvas the same CSS size; scale to match
+    try{ ctx.drawImage(dcanvas, 0, 0, out.width, out.height); }catch(e){}
+    out.toBlob(blob=>{
+      if(!blob) return;
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url; a.download="freeview-"+activeSymbol.replace(/[^\w-]/g,"_")+"-"+activeTF+".png";
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    },"image/png");
+  }catch(e){ alert("Screenshot failed: "+e.message); }
+}
+document.getElementById("btnSnap").onclick=saveScreenshot;
+
+// ── Fullscreen ──
+function toggleFullscreen(){
+  const el=document.getElementById("app")||document.documentElement;
+  if(!document.fullscreenElement){ (el.requestFullscreen||el.webkitRequestFullscreen||(()=>{})).call(el); }
+  else { (document.exitFullscreen||document.webkitExitFullscreen||(()=>{})).call(document); }
+}
+document.getElementById("btnFull").onclick=toggleFullscreen;
+document.addEventListener("fullscreenchange", ()=>{ setTimeout(()=>{ resize(); sizeCanvas(); },100); });
 function closeAllPopups(){ hideCtx(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); closeDlg(); closeAlertDlg(); closeScriptDlg(); closeSymDlg(); }
 
 // ── Watchlist: add affordances ──
 // Header ＋ opens the searchable Add-symbol dialog (adds to the first section).
 document.getElementById("wlAdd").onclick = ()=>openAddSymbolDlg(null);
+// Clicking the symbol name in the top bar opens the symbol-search dialog (TradingView).
+document.getElementById("symbolBox").onclick = ()=>openAddSymbolDlg(null);
+// Collapse / expand the floating on-chart legend.
+document.getElementById("legCollapse").onclick = (e)=>{
+  e.stopPropagation();
+  document.getElementById("chartLegend").classList.toggle("collapsed");
+};
+
+// ── Compare / overlay symbols ──
+// Each compared symbol is plotted as a % -normalized line (change from its first
+// visible bar) on its OWN hidden price scale, so assets at very different price
+// levels overlay comparably (TradingView "Compare"). Re-fetched on symbol/TF change.
+const COMPARE = {};   // sym → { series, color }
+const COMPARE_COLORS = ["#ff9800","#26c6da","#ab47bc","#66bb6a","#ec407a"];
+function addCompare(sym){
+  sym=(sym||"").trim().toUpperCase(); if(!sym || COMPARE[sym]) return;
+  const color=COMPARE_COLORS[Object.keys(COMPARE).length % COMPARE_COLORS.length];
+  const series=chart.addLineSeries({ color, lineWidth:2, priceScaleId:"compare"+Object.keys(COMPARE).length,
+    priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false });
+  try{ series.priceScale().applyOptions({ visible:false, scaleMargins:{top:0.1,bottom:0.1} }); }catch(e){}
+  COMPARE[sym]={ series, color };
+  loadCompareData(sym);
+  renderCompareLegend();
+}
+async function loadCompareData(sym){
+  const c=COMPARE[sym]; if(!c) return;
+  try{
+    const bars=await fetchKlines(sym, activeTF);
+    if(!bars.length){ c.series.setData([]); return; }
+    const base=bars[0].close||1;
+    c.series.setData(bars.map(b=>({ time:b.time, value:(b.close/base-1)*100 })));  // % change
+  }catch(e){ /* leave empty on fetch failure */ }
+}
+function removeCompare(sym){
+  const c=COMPARE[sym]; if(!c) return;
+  try{ chart.removeSeries(c.series); }catch(e){}
+  delete COMPARE[sym]; renderCompareLegend();
+}
+function reloadAllCompares(){ Object.keys(COMPARE).forEach(loadCompareData); }
+function renderCompareLegend(){
+  // show compared symbols as chips in the floating legend (below indicators)
+  let box=document.getElementById("compareLegend");
+  if(!box){ box=document.createElement("div"); box.id="compareLegend"; document.getElementById("chartLegend").appendChild(box); }
+  box.innerHTML="";
+  Object.entries(COMPARE).forEach(([sym,c])=>{
+    const row=document.createElement("div"); row.className="indrow";
+    row.innerHTML='<span class="nm" style="color:'+c.color+'">'+sym+' (%)</span><span class="x" title="Remove">×</span>';
+    row.querySelector(".x").onclick=()=>removeCompare(sym);
+    box.appendChild(row);
+  });
+}
+document.getElementById("btnCompare").onclick=()=>{
+  const sym=prompt("Compare symbol (e.g. BTC-USD, ETH-USD):","BTC-USD");
+  if(sym) addCompare(sym);
+};
+
+// ── Symbol info panel ──
+// Right-click the symbol name → a small popover with the structured details we know
+// (symbol, exchange, type, base/quote, timeframe). No external description source.
+function showSymbolInfo(x,y){
+  const sym=activeSymbol;
+  const rows=[];
+  rows.push(["Symbol", sym]);
+  if(sym.includes("/")){
+    const [a,b]=sym.split("/");
+    rows.push(["Type","Spread / Ratio"]);
+    rows.push(["Numerator", a+" ("+resolveLeg(a).exchange.label+")"]);
+    rows.push(["Denominator", b+" ("+resolveLeg(b).exchange.label+")"]);
+  } else {
+    const r=resolveLeg(sym);
+    rows.push(["Exchange", r.exchange.label]);
+    rows.push(["Type", r.isPerp?"Perpetual":"Spot"]);
+    const parts=sym.split("-");
+    if(parts.length===2){ rows.push(["Base", parts[0]]); rows.push(["Quote", parts[1]]); }
+  }
+  rows.push(["Timeframe", (TF[activeTF]||{}).label||activeTF]);
+  const p=PRICE_CACHE[sym];
+  if(p) rows.push(["Last", fmtPrice(p.price)]);
+  const html='<div class="ph">Symbol info <span class="cl" id="siClose">×</span></div>'
+    + '<div class="sibody">'+rows.map(r=>'<div class="sirow"><span class="sik">'+r[0]+'</span><span class="siv">'+escHtml(String(r[1]))+'</span></div>').join("")+'</div>';
+  let el=document.getElementById("symInfoPop");
+  if(!el){ el=document.createElement("div"); el.id="symInfoPop"; el.className="panel"; document.body.appendChild(el); }
+  el.innerHTML=html; el.style.display="block"; el.style.position="fixed"; el.style.left=Math.min(x,window.innerWidth-280)+"px"; el.style.top=(y+6)+"px"; el.style.width="240px";
+  el.querySelector("#siClose").onclick=()=>{ el.style.display="none"; };
+  setTimeout(()=>document.addEventListener("mousedown", siOutside),0);
+  function siOutside(e){ if(!e.target.closest("#symInfoPop")&&!e.target.closest("#symbolBox")){ el.style.display="none"; document.removeEventListener("mousedown", siOutside); } }
+}
+document.getElementById("symbolBox").addEventListener("contextmenu", e=>{ e.preventDefault(); showSymbolInfo(e.clientX, e.clientY); });
+// Click a watchlist column header to sort within each section (toggle asc/desc).
+document.querySelectorAll("#wlCols span[data-sort]").forEach(h=>{
+  h.onclick = ()=>sortWatchlist(h.dataset.sort);
+});
+
+// ── Watchlist import / export (.txt) ──
+// Format: "###SECTION NAME" lines start a section; other non-blank lines are symbols.
+// Matches TradingView's exported watchlist text format closely enough to round-trip.
+function exportWatchlist(){
+  let txt="";
+  GROUPS.forEach(g=>{ txt+="###"+g.name+"\n"+g.symbols.join("\n")+"\n"; });
+  const blob=new Blob([txt],{type:"text/plain"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download="freeview-watchlist.txt";
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+function importWatchlistText(txt){
+  const groups=[]; let cur=null;
+  txt.split(/\r?\n/).forEach(line=>{
+    const s=line.trim(); if(!s) return;
+    if(s.startsWith("###")){ cur={ name:s.slice(3).trim()||"IMPORTED", symbols:[] }; groups.push(cur); }
+    else { if(!cur){ cur={ name:"IMPORTED", symbols:[] }; groups.push(cur); } cur.symbols.push(s.toUpperCase()); }
+  });
+  if(!groups.length || !groups.some(g=>g.symbols.length)){ alert("No symbols found in that file."); return; }
+  GROUPS = groups;
+  saveGroups(); buildWatchlist();
+}
+document.getElementById("wlExport").onclick = exportWatchlist;
+document.getElementById("wlImport").onclick = ()=>document.getElementById("wlImportFile").click();
+document.getElementById("wlImportFile").onchange = e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ importWatchlistText(String(r.result||"")); }; r.readAsText(f);
+  e.target.value="";  // allow re-importing the same file
+};
 // right-click empty space in the list (not on a section/row) → Add section
 document.getElementById("wlBody").addEventListener("contextmenu", e=>{
   if(e.target.closest(".section") || e.target.closest(".row")) return;  // those have their own menus
@@ -4338,11 +5630,50 @@ document.getElementById("wlBody").addEventListener("contextmenu", e=>{
 });
 
 // ── Boot ──
+// ── Bottom bar: relocate timezone + scale toggle, build date-range shortcuts ──
+(function initBottomBar(){
+  const br=document.getElementById("bottomRight");
+  const tz=document.getElementById("tzSel"), sc=document.getElementById("btnScale");
+  if(br && tz) br.appendChild(tz);           // move (keeps all existing event wiring)
+  if(br && sc) br.appendChild(sc);
+  // Date-range shortcuts: set the visible span to roughly the last N of history.
+  const RANGES=[
+    {label:"1D",days:1},{label:"5D",days:5},{label:"1M",days:30},{label:"3M",days:90},
+    {label:"6M",days:180},{label:"YTD",days:"ytd"},{label:"1Y",days:365},{label:"5Y",days:1825},{label:"All",days:"all"},
+  ];
+  const host=document.getElementById("rangeShortcuts"); if(!host) return;
+  host.innerHTML="";
+  RANGES.forEach(r=>{
+    const b=document.createElement("span"); b.className="rng"; b.textContent=r.label;
+    b.onclick=()=>applyRange(r); host.appendChild(b);
+  });
+  window.applyRange=function(r){
+    if(!lastData.length) return;
+    stopAutoSnap();
+    const last=lastData[lastData.length-1].time;
+    let fromT;
+    if(r.days==="all"){ fromT=lastData[0].time; }
+    else if(r.days==="ytd"){ const d=tzShift(last*1000); fromT=Math.floor(Date.UTC(d.getUTCFullYear(),0,1)/1000); }
+    else fromT=last - r.days*86400;
+    // convert times → logical indices, then set the visible logical range
+    const ts=chart.timeScale();
+    try{
+      const fromIdx = nearestBarIndex(fromT), toIdx=lastData.length-1;
+      ts.setVisibleLogicalRange({ from:Math.max(0,fromIdx)-0.5, to:toIdx+6 });
+    }catch(e){}
+    host.querySelectorAll(".rng").forEach(x=>x.classList.toggle("active", x.textContent===r.label));
+    redraw();
+  };
+  function nearestBarIndex(t){ let bi=0,bd=Infinity; for(let i=0;i<lastData.length;i++){ const d=Math.abs(lastData[i].time-t); if(d<bd){bd=d;bi=i;} } return bi; }
+})();
+
 buildWatchlist();
 installHoverTracker();     // lets crosshair mode select/edit shapes while still panning
 loadPersisted();           // restore saved drawings for current symbol+tf
 loadAlerts();              // restore saved alerts for current symbol
 loadScripts();             // restore saved custom indicator scripts for current symbol
+loadIndicators();          // restore saved indicators for current symbol
+applyTimeGranularity();    // fewer vertical grid lines on daily+ (TradingView parity)
 loadChart(activeSymbol, activeTF);
 resize();
 sizeCanvas();
@@ -4353,6 +5684,64 @@ setTimeout(refreshPrices, 1200);
 window.addEventListener("resize", ()=>{ resize(); sizeCanvas(); });
 setInterval(refreshPrices, 6000);
 setInterval(()=>loadChart(activeSymbol, activeTF, true), 20000);  // keepView: don't snap the chart
+setInterval(updateCountdown, 1000); updateCountdown();           // bar-close countdown pill
+
+// ── Real-time WebSocket (Coinbase ticker) ──
+// Live ticks update the forming bar's close/high/low between the 20s poll refreshes,
+// so the last candle moves without waiting. Coinbase's public ws-feed needs no auth.
+// The 20s poll stays as the source of truth / reconnect safety net (and covers
+// Binance/Bybit/ratio legs the WS doesn't handle). Auto-reconnects with backoff.
+const CB_WS = "wss://ws-feed.exchange.coinbase.com";
+let _ws=null, _wsSyms=[], _wsRetry=0, _wsLast={};
+function wsProductsForActive(){
+  // Only Coinbase spot legs get a live socket; ratios subscribe to both legs.
+  const legs = activeSymbol.includes("/") ? activeSymbol.split("/") : [activeSymbol];
+  return legs.map(l=>{ const r=resolveLeg(l); return r.exchange.id==="COINBASE"? r.rest : null; }).filter(Boolean);
+}
+function applyTick(prodPrice){
+  // prodPrice: {product:price}. For a single Coinbase symbol, drive the last bar.
+  if(!lastData.length) return;
+  const prods=wsProductsForActive();
+  let price=null;
+  if(activeSymbol.includes("/")){
+    const [a,b]=activeSymbol.split("/");
+    const pa=_wsLast[resolveLeg(a).rest], pb=_wsLast[resolveLeg(b).rest];
+    if(pa&&pb) price=pa/pb;
+  } else {
+    price=_wsLast[prods[0]];
+  }
+  if(price==null || !isFinite(price)) return;
+  const bar=lastData[lastData.length-1];
+  bar.close=price; if(price>bar.high)bar.high=price; if(price<bar.low)bar.low=price;
+  try{
+    if(chartType==="candles"||chartType==="hollow"||chartType==="heikin"||chartType==="bars"||chartType==="hlcbars"){
+      candle.update({time:bar.time, open:bar.open, high:bar.high, low:bar.low, close:bar.close});
+    }
+  }catch(e){}
+  updateOhlcLegend(bar.time);
+}
+function wsConnect(){
+  const prods=wsProductsForActive();
+  if(!prods.length){ if(_ws){ try{_ws.close();}catch(e){} _ws=null; } return; }  // no Coinbase legs → rely on poll
+  try{ if(_ws){ _ws.close(); } }catch(e){}
+  _wsSyms=prods;
+  let ws; try{ ws=new WebSocket(CB_WS); }catch(e){ return; }
+  _ws=ws;
+  ws.onopen=()=>{ _wsRetry=0; try{ ws.send(JSON.stringify({type:"subscribe", product_ids:prods, channels:["ticker"]})); }catch(e){} };
+  ws.onmessage=(ev)=>{
+    let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+    if(m.type==="ticker" && m.product_id && m.price){ _wsLast[m.product_id]=+m.price; applyTick(); }
+  };
+  ws.onclose=()=>{ if(_ws===ws){ _ws=null; _wsRetry=Math.min(_wsRetry+1,6); setTimeout(()=>{ if(!_ws) wsConnect(); }, 1000*Math.pow(2,_wsRetry)); } };
+  ws.onerror=()=>{ try{ ws.close(); }catch(e){} };
+}
+// (Re)subscribe whenever the active symbol changes. Hook into loadChart via a light poll
+// of activeSymbol so we don't have to thread a callback through every call site.
+let _wsSymSeen=null;
+setInterval(()=>{
+  if(activeSymbol!==_wsSymSeen){ _wsSymSeen=activeSymbol; _wsLast={}; wsConnect(); }
+}, 1000);
+wsConnect();
 </script>
 </body>
 </html>

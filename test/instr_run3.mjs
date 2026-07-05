@@ -1,0 +1,13 @@
+import { chromium } from 'playwright';
+const b=await chromium.launch({headless:true}); const p=await b.newPage();
+const allConsole=[]; const errs=[];
+p.on('console', m=>allConsole.push(m.text()));
+p.on('pageerror', e=>errs.push(e.message));
+await p.goto("http://127.0.0.1:5501/",{waitUntil:"domcontentloaded",timeout:20000});
+await p.waitForTimeout(5000);
+await p.evaluate(()=>{ activeSymbol='BTC-USD'; activeTF='1h'; loadChart('BTC-USD','1h'); });
+await p.waitForTimeout(6000);
+console.log("pageerrors:", errs.length);
+console.log("console msg count:", allConsole.length);
+console.log(allConsole.filter(c=>c.includes('BADDATA')).length, "baddata warnings");
+await b.close();
