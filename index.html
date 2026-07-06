@@ -11,9 +11,28 @@
     --text:#d1d4dc; --muted:#787b86; --green:#26a69a; --red:#ef5350;
     --accent:#2962ff; --hover:#2a2e39;
   }
+  /* Light theme (TradingView light) — overrides the variables when <html class="light"> */
+  html.light{
+    --bg:#ffffff; --panel:#f8f9fd; --panel2:#eff2f7; --border:#e0e3eb;
+    --text:#131722; --muted:#6a6d78; --green:#089981; --red:#f23645;
+    --accent:#2962ff; --hover:#e9edf4;
+  }
   *{box-sizing:border-box; margin:0; padding:0;}
   html,body{height:100%; font-family:'Trebuchet MS',-apple-system,'Segoe UI',Roboto,Ubuntu,Tahoma,Arial,sans-serif; background:var(--bg); color:var(--text); overflow:hidden;}
   #app{display:flex; height:100vh; width:100vw;}
+  /* Embed mode (grid panel): hide the watchlist so the panel is pure chart */
+  html.embed #watchlist{display:none;}
+  html.embed #topbar{right:0;}
+  /* ── Multi-chart grid (iframe panels) ── */
+  #chartGrid{display:none; position:absolute; top:38px; left:52px; right:0; bottom:0; z-index:35;
+    background:var(--bg); gap:2px; grid-auto-rows:1fr;}
+  html.grid-on #chartGrid{display:grid;}
+  html.grid-on #chartWrap, html.grid-on #rsiWrap, html.grid-on #subPanes, html.grid-on #bottomBar{display:none;}
+  #chartGrid iframe{width:100%; height:100%; border:1px solid var(--border); border-radius:0; background:var(--bg);}
+  #chartGrid iframe.gsel{border-color:var(--accent);}
+  #chartGrid[data-layout="2h"]{grid-template-columns:1fr 1fr; grid-template-rows:1fr;}
+  #chartGrid[data-layout="2v"]{grid-template-columns:1fr; grid-template-rows:1fr 1fr;}
+  #chartGrid[data-layout="4"]{grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr;}
 
   /* ── Left drawing toolbar ── */
   #toolbar{width:52px; flex-shrink:0; background:var(--bg); border-right:1px solid var(--border);
@@ -39,12 +58,15 @@
   .tool-flyout .tfi{width:22px; height:22px; display:flex; align-items:center; justify-content:center; color:#b2b5be;}
   .tool-flyout .tfi svg{width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.5;}
   .tool-flyout .tfrow.sel .tfi{color:var(--accent);}
+  .tool-flyout .tfrow .tfn{flex:1;}
+  .tool-flyout .tfstar{cursor:pointer; color:var(--muted); font-size:13px;}
+  .tool-flyout .tfstar.on{color:#f5c518;} .tool-flyout .tfstar:hover{color:#f5c518;}
 
   /* z-index must beat the always-interactive drawing canvas (#draw, z-index:100)
      so toolbar dropdowns (timeframe menu etc.) that drop over the chart stay
      clickable instead of being swallowed by the overlay. The bar is only the top
      46px strip, so this never blocks chart pan/zoom gestures below it. */
-  #topbar{position:absolute; top:0; left:52px; right:300px; height:38px; background:var(--bg);
+  #topbar{position:absolute; top:0; left:52px; right:0; height:38px; background:var(--bg);
     border-bottom:1px solid var(--border); display:flex; align-items:center; gap:2px; padding:0 8px; z-index:120;}
   #topbar .tbdiv{width:1px; height:20px; background:var(--border); margin:0 6px; flex:none;}
   #topbar .tbspacer{flex:1;}
@@ -114,6 +136,11 @@
   #chartWrap{width:100%; flex:1 1 0; min-height:60px;}   /* the only growable pane */
   #chart{width:100%; height:100%;}
   #draw{cursor:crosshair;}
+  /* White horizontal double-arrow shown while hovering/dragging the date-axis strip
+     (the time-scale bar-spacing stretch). A dark outline keeps it visible on any bg. */
+  body.time-resize, body.time-resize *{
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='20' viewBox='0 0 32 20'%3E%3Cpath d='M9 3 L2 10 L9 17 M9 6 L9 14 M23 6 L23 14 M23 3 L30 10 L23 17' fill='none' stroke='%23000' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M9 3 L2 10 L9 17 M9 6 L9 14 M23 6 L23 14 M23 3 L30 10 L23 17' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 16 10, ew-resize !important;
+  }
   #rsiWrap{flex:0 1 auto; height:26%; min-height:96px; border-top:1px solid var(--border); position:relative;}
   #subPanes{flex:0 1 auto; min-height:0;}
   #rsiLabel{position:absolute; top:6px; left:10px; font-size:11px; color:var(--muted); z-index:5;}
@@ -124,8 +151,17 @@
   #rsiLabel b{font-weight:600;}
   #rsi{width:100%; height:100%;}
 
-  #watchlist{width:300px; background:var(--panel); border-left:1px solid var(--border);
-    display:flex; flex-direction:column; overflow:hidden;}
+  #watchlist{width:var(--wl-w,300px); background:var(--panel); border-left:1px solid var(--border);
+    display:flex; flex-direction:column; overflow:hidden; position:relative;}
+  #wlResize{position:absolute; left:-3px; top:0; bottom:0; width:6px; cursor:col-resize; z-index:10;}
+  #wlResize:hover{background:rgba(41,98,255,.3);}
+  /* Far-right vertical icon rail (TradingView) */
+  #rightRail{width:40px; flex-shrink:0; background:var(--bg); border-left:1px solid var(--border);
+    display:flex; flex-direction:column; align-items:center; padding-top:8px; gap:4px;}
+  #rightRail .rr-btn{width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+    border-radius:6px; cursor:pointer; font-size:15px; opacity:.75;}
+  #rightRail .rr-btn:hover{background:var(--hover); opacity:1;}
+  #stubPanel{position:fixed; display:none; z-index:300; top:44px; right:48px; width:280px; max-height:70vh; overflow-y:auto;}
   #wlHead{padding:10px 12px; font-size:13px; font-weight:600; border-bottom:1px solid var(--border);
     display:flex; align-items:center; justify-content:space-between;}
   #wlHead .sub{font-size:10px; color:var(--muted); font-weight:400;}
@@ -137,8 +173,11 @@
   .wlActions span:hover{color:#fff; background:var(--hover);}
   #wlCols{display:flex; padding:6px 12px 6px 14px; font-size:11px; color:var(--muted);
     border-bottom:1px solid var(--border);}
-  #wlCols .c1{flex:1;} #wlCols .c2{width:72px; text-align:right;}
-  #wlCols .c3{width:60px; text-align:right;} #wlCols .c4{width:52px; text-align:right;}
+  #wlCols{position:relative;}
+  #wlCols .c1{flex:1;} #wlCols .c2{width:var(--wl-c2,72px); text-align:right;}
+  #wlCols .colgrip{position:absolute; top:0; bottom:0; width:5px; cursor:col-resize; z-index:2;}
+  #wlCols .colgrip:hover{background:rgba(41,98,255,.3);}
+  #wlCols .c3{width:var(--wl-c3,60px); text-align:right;} #wlCols .c4{width:var(--wl-c4,52px); text-align:right;}
   #wlCols span{cursor:pointer; user-select:none;} #wlCols span:hover{color:var(--text);}
   #wlCols span.sorted{color:var(--accent);}
   #wlBody{flex:1; overflow-y:auto;}
@@ -181,9 +220,9 @@
   .row .ic{width:18px; height:18px; border-radius:50%; flex-shrink:0; object-fit:contain;
     background:#2a2e39; color:#fff; font-size:8px; display:flex; align-items:center;
     justify-content:center; font-weight:700;}
-  .row .last{width:72px; text-align:right; font-size:12px; font-variant-numeric:tabular-nums; color:#d1d4dc;}
-  .row .chgabs{width:60px; text-align:right; font-size:11px; font-variant-numeric:tabular-nums;}
-  .row .chg{width:52px; text-align:right; font-size:11px; font-variant-numeric:tabular-nums;}
+  .row .last{width:var(--wl-c2,72px); text-align:right; font-size:12px; font-variant-numeric:tabular-nums; color:#d1d4dc;}
+  .row .chgabs{width:var(--wl-c3,60px); text-align:right; font-size:11px; font-variant-numeric:tabular-nums;}
+  .row .chg{width:var(--wl-c4,52px); text-align:right; font-size:11px; font-variant-numeric:tabular-nums;}
   .up{color:#26a69a;} .down{color:#ef5350;}
   #wlBody::-webkit-scrollbar{width:8px;}
   #wlBody::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
@@ -200,6 +239,9 @@
   #subPanes{display:none; flex-direction:column; flex:0 1 auto; min-height:0;}
   .subpane{position:relative; height:120px; flex:0 1 120px; min-height:70px; border-top:1px solid var(--border);}
   .subpane .subLabel{position:absolute; top:4px; left:8px; z-index:5; font-size:11px; color:var(--muted);}
+  .subpane.pane-collapsed{min-height:0 !important;}
+  .subpane.pane-collapsed > div:not(.subLabel){opacity:0; pointer-events:none;}
+  .subpane.pane-collapsed .subLabel{top:4px;}
   .subpane .subClose{cursor:pointer; margin-left:8px; color:var(--muted);}
   .subpane .subClose:hover{color:var(--red);}
   .subpane .subEye{cursor:pointer; margin-left:8px; color:var(--muted);}
@@ -350,6 +392,49 @@
   .symdlg .symfoot kbd{background:#131722;border:1px solid var(--border);border-radius:4px;
     padding:1px 6px;font-size:10px;color:#d1d4dc;font-family:inherit;}
 
+  /* ── Bar replay control bar ── */
+  #replayBar{position:absolute; bottom:12px; left:50%; transform:translateX(-50%); z-index:110;
+    display:none; align-items:center; gap:8px; background:rgba(30,34,45,.95); border:1px solid var(--border);
+    border-radius:8px; padding:5px 10px; box-shadow:0 4px 16px #0007;}
+  #replayBar.active{display:flex;}
+  #replayBar.picking{display:flex;}
+  #replayBar .rb-btn{background:transparent; border:none; color:var(--text); cursor:pointer; font-size:14px; padding:3px 7px; border-radius:5px;}
+  #replayBar .rb-btn:hover{background:var(--hover);}
+  #replayBar .rb-hint{color:var(--muted); font-size:12px;}
+  #replayBar .rb-pos{color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums;}
+  html.light #replayBar{background:rgba(248,249,253,.97);}
+
+  /* ── Object tree panel ── */
+  #objTree{position:fixed; display:none; z-index:300; top:44px; right:308px; width:240px; max-height:70vh; overflow-y:auto;}
+  #objTree .ot-row{display:flex; align-items:center; gap:8px; padding:5px 12px; font-size:12px;}
+  #objTree .ot-row:hover{background:var(--hover);}
+  #objTree .ot-nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-transform:capitalize;}
+  #objTree .ot-eye{cursor:pointer; color:var(--muted);} #objTree .ot-eye:hover{color:var(--text);}
+  #objTree .ot-x{cursor:pointer; color:var(--muted);} #objTree .ot-x:hover{color:var(--red);}
+  #objTree .ot-empty{padding:4px 12px; color:var(--muted); font-size:11px;}
+  #wlNameBtn{cursor:pointer; padding:2px 4px; border-radius:4px;} #wlNameBtn:hover{background:var(--hover);}
+  #wlNameMenu{position:absolute; top:34px; left:12px; min-width:160px;}
+
+  /* ── Strategy tester results panel ── */
+  #strategyPanel{position:absolute; right:312px; bottom:38px; z-index:60; display:none; width:220px;
+    background:var(--panel); border:1px solid var(--border); border-radius:8px; box-shadow:0 6px 20px #0007; font-size:12px;}
+  #strategyPanel .sp-head{padding:7px 10px; font-weight:600; border-bottom:1px solid var(--border); display:flex; justify-content:space-between;}
+  #strategyPanel .sp-x{cursor:pointer; color:var(--muted);} #strategyPanel .sp-x:hover{color:var(--red);}
+  #strategyPanel .sp-stats{display:flex; flex-direction:column; gap:3px; padding:8px 10px; border-bottom:1px solid var(--border);}
+  #strategyPanel .sp-stats span{display:flex; justify-content:space-between; color:var(--muted);}
+  #strategyPanel .sp-stats b{color:var(--text);}
+  #strategyPanel .sp-trades{max-height:160px; overflow-y:auto; padding:4px 0;}
+  #strategyPanel .sp-row{display:flex; justify-content:space-between; padding:3px 10px; color:var(--muted); font-variant-numeric:tabular-nums;}
+
+  /* ── Toast notifications ── */
+  #toastWrap{position:fixed; bottom:44px; left:50%; transform:translateX(-50%); z-index:600;
+    display:flex; flex-direction:column; gap:6px; align-items:center; pointer-events:none;}
+  #toastWrap .toast{background:#2a2e39; color:var(--text); border:1px solid var(--border); border-radius:6px;
+    padding:8px 14px; font-size:12px; box-shadow:0 4px 16px #0008; opacity:1; transition:opacity .3s, transform .3s;}
+  #toastWrap .toast.out{opacity:0; transform:translateY(6px);}
+  #toastWrap .toast.ok{border-color:var(--green);} #toastWrap .toast.err{border-color:var(--red);}
+  html.light #toastWrap .toast{background:#fff;}
+
   /* alert price lines drawn by lightweight-charts createPriceLine - styled inline */
 </style>
 </head>
@@ -394,9 +479,24 @@
       </div>
       <span class="tbspacer"></span>
       <button class="tbtn" id="btnSnap" title="Save chart screenshot (PNG)">📷</button>
+      <div class="tf-sel" id="layoutSel" title="Chart layout">
+        <div class="tf-sel-btn" id="layoutSelBtn"><span class="tf-sel-label" id="layoutSelLabel">▢ 1</span><span class="caret">▾</span></div>
+        <div class="tf-menu" id="layoutMenu">
+          <div class="tf-opt" data-layout="1">▢&nbsp; Single</div>
+          <div class="tf-opt" data-layout="2h">◫&nbsp; Two (side by side)</div>
+          <div class="tf-opt" data-layout="2v">⊟&nbsp; Two (stacked)</div>
+          <div class="tf-opt" data-layout="4">⊞&nbsp; Four (grid)</div>
+        </div>
+      </div>
+      <button class="tbtn" id="btnReplay" title="Bar replay">⏮ Replay</button>
+      <button class="tbtn" id="btnObjTree" title="Object tree (drawings & indicators)">🗂</button>
+      <button class="tbtn" id="btnSettings" title="Chart settings">⚙</button>
+      <button class="tbtn" id="btnTheme" title="Toggle light / dark theme">🌙</button>
       <button class="tbtn" id="btnFull" title="Fullscreen">⛶</button>
       <span id="status"><span class="dot"></span>Live</span>
     </div>
+    <!-- Multi-chart grid overlay (iframe panels); shown when layout != single -->
+    <div id="chartGrid"></div>
     <div id="chartWrap" style="position:relative;">
       <div id="chart" style="position:absolute; inset:0;"></div>
       <canvas id="draw" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:auto; z-index:100;"></canvas>
@@ -407,6 +507,14 @@
         <div id="indLegend"></div>
       </div>
       <div id="barCountdown" title="Time until current bar closes"></div>
+      <div id="replayBar">
+        <span class="rb-hint" id="rbHint">Click a bar to start replay from there</span>
+        <button class="rb-btn" id="rbStepBack" title="Step back">⏪</button>
+        <button class="rb-btn" id="rbPlay" title="Play / pause">▶</button>
+        <button class="rb-btn" id="rbStep" title="Step forward">⏩</button>
+        <span class="rb-pos" id="rbPos"></span>
+        <button class="rb-btn" id="rbExit" title="Exit replay">✕</button>
+      </div>
     </div>
     <div id="rsiWrap">
       <div id="rsiLabel">RSI 14 close <b id="rsiVal" style="color:#7e57c2">—</b> <b id="rsiMaVal" style="color:#e0a82e">—</b></div>
@@ -431,13 +539,15 @@
   <div id="dlgBackdrop"></div>
 
   <div id="watchlist">
-    <div id="wlHead"><span>comeback <span class="sub">▾</span></span>
+    <div id="wlResize" title="Drag to resize"></div>
+    <div id="wlHead"><span id="wlNameBtn" title="Switch watchlist"><span id="wlName">comeback</span> <span class="sub">▾</span></span>
       <span class="wlActions">
         <span id="wlImport" title="Import watchlist (.txt)">⭳</span>
         <span id="wlExport" title="Export watchlist (.txt)">⭱</span>
         <span id="wlAdd" title="Add symbol">＋</span>
       </span>
       <input type="file" id="wlImportFile" accept=".txt,text/plain" style="display:none">
+      <div id="wlNameMenu" class="popmenu"></div>
     </div>
     <div id="wlCols"><span class="c1" data-sort="sym">Symbol</span><span class="c2" data-sort="last">Last</span><span class="c3" data-sort="chg">Chg</span><span class="c4" data-sort="chgpct">Chg%</span></div>
     <div id="wlBody"></div>
@@ -585,7 +695,40 @@ function loadGroups(){
   return JSON.parse(JSON.stringify(DEFAULT_GROUPS));  // deep copy of defaults
 }
 let GROUPS = loadGroups();
-function saveGroups(){ try{ localStorage.setItem(WL_KEY, JSON.stringify(GROUPS)); }catch{} }
+// ── Multiple named watchlists ──
+// fv_watchlists = { name: groups[] }; fv_active_wl = current name. Legacy fv_watchlist
+// (single GROUPS) is migrated in as "comeback" on first run.
+let WATCHLISTS = {}, ACTIVE_WL = "comeback";
+(function initWatchlists(){
+  try{
+    const raw=localStorage.getItem("fv_watchlists"); if(raw) WATCHLISTS=JSON.parse(raw)||{};
+    const a=localStorage.getItem("fv_active_wl"); if(a) ACTIVE_WL=a;
+  }catch(e){}
+  if(!Object.keys(WATCHLISTS).length){ WATCHLISTS[ACTIVE_WL]=GROUPS; }        // migrate legacy
+  if(!WATCHLISTS[ACTIVE_WL]) ACTIVE_WL=Object.keys(WATCHLISTS)[0];
+  GROUPS = WATCHLISTS[ACTIVE_WL] || GROUPS;
+})();
+function saveGroups(){
+  WATCHLISTS[ACTIVE_WL]=GROUPS;
+  try{ localStorage.setItem(WL_KEY, JSON.stringify(GROUPS));                   // keep legacy key in sync
+       localStorage.setItem("fv_watchlists", JSON.stringify(WATCHLISTS));
+       localStorage.setItem("fv_active_wl", ACTIVE_WL); }catch{}
+}
+function switchWatchlist(name){
+  if(!WATCHLISTS[name]) return;
+  WATCHLISTS[ACTIVE_WL]=GROUPS;   // stash current
+  ACTIVE_WL=name; GROUPS=WATCHLISTS[name];
+  saveGroups(); buildWatchlist(); syncWlHead();
+}
+function createWatchlist(){
+  const name=prompt("New watchlist name:", "Watchlist "+(Object.keys(WATCHLISTS).length+1));
+  if(!name || WATCHLISTS[name]) return;
+  WATCHLISTS[ACTIVE_WL]=GROUPS;
+  WATCHLISTS[name]=[{name:"SECTION 1", symbols:[]}];
+  ACTIVE_WL=name; GROUPS=WATCHLISTS[name];
+  saveGroups(); buildWatchlist(); syncWlHead();
+}
+function syncWlHead(){ const el=document.getElementById("wlName"); if(el) el.textContent=ACTIVE_WL; }
 // Per-symbol flag colors (TradingView-style row flags). {symbol: "#hex"}.
 let SYMBOL_FLAGS = {};
 try{ const f=localStorage.getItem("fv_flags"); if(f) SYMBOL_FLAGS=JSON.parse(f)||{}; }catch{}
@@ -605,12 +748,20 @@ function logoUrl(sym){
 
 let activeSymbol = "NEAR-USD/INJ-USD";
 let activeTF = "1d";  // timeframe key into TF{}
+// URL params let this page act as an embeddable panel in a multi-chart grid:
+// ?sym=BTC-USD&tf=1h&embed=1  → loads that symbol/tf, hides the watchlist, and does
+// NOT persist active state (so grid panels don't clobber each other or the main app).
+const _params = new URLSearchParams(location.search);
+const IS_EMBED = _params.get("embed")==="1";
 // Restore the last-viewed symbol + timeframe so a reload lands where you left off.
 try{
   const sv=localStorage.getItem("fv_active_symbol"); if(sv) activeSymbol=sv;
   const tv=localStorage.getItem("fv_active_tf");     if(tv) activeTF=tv;   // validated once TF{} exists (below)
 }catch(e){}
-function saveActiveState(){ try{ localStorage.setItem("fv_active_symbol",activeSymbol); localStorage.setItem("fv_active_tf",activeTF); }catch(e){} }
+// URL params override the restored state (used by the grid host).
+if(_params.get("sym")) activeSymbol=_params.get("sym");
+if(_params.get("tf"))  activeTF=_params.get("tf");
+function saveActiveState(){ if(IS_EMBED) return; try{ localStorage.setItem("fv_active_symbol",activeSymbol); localStorage.setItem("fv_active_tf",activeTF); }catch(e){} }
 
 // ── Chart setup ──
 const chartEl = document.getElementById("chart");
@@ -681,7 +832,10 @@ const common = {
     // gives clean, TradingView-style month/day/year labels across the future region.
     tickMarkFormatter:(t,type)=>tickLabel(t,type) },
   crosshair:{ mode:0 },
-  localization:{ timeFormatter:crosshairTimeFmt },   // crosshair bottom tag → selected timezone
+  // priceFormatter drives every price-axis tick label, the last-value tag, and the
+  // crosshair price — fmtPrice keeps 4–5 decimals for sub-$1 symbols instead of the
+  // library default's 2, so tags like 0.4213 show full precision.
+  localization:{ timeFormatter:crosshairTimeFmt, priceFormatter:v=>fmtPrice(v) },
   // Pan + zoom are handled manually on the overlay canvas (dcanvas), which hides
   // these gestures from the chart's built-in handlers, so disable them here.
   handleScroll:false, handleScale:false,
@@ -881,6 +1035,38 @@ function applyChartType(data){
 }
 function setChartType(t){ chartType=t; applyChartType(); if(typeof syncChartTypeUI==="function") syncChartTypeUI(); }
 function setScaleMode(m){ scaleMode=m; try{ chart.priceScale("right").applyOptions({ mode:m }); }catch(e){} if(typeof syncScaleUI==="function") syncScaleUI(); }
+// Invert the price scale (flip the chart vertically) — TradingView's "Invert scale".
+let _scaleInverted=false;
+function toggleInvertScale(){ _scaleInverted=!_scaleInverted; try{ chart.priceScale("right").applyOptions({ invertScale:_scaleInverted }); }catch(e){} }
+
+// ── Chart settings (candle colors, background, gridlines) ──
+const CHART_SETTINGS = { up:"#26a69a", down:"#ef5350", bg:"#131722", grid:"#1e222d", gridVisible:true };
+try{ const s=localStorage.getItem("fv_chart_settings"); if(s) Object.assign(CHART_SETTINGS, JSON.parse(s)); }catch(e){}
+function applyChartSettings(){
+  const c=CHART_SETTINGS;
+  try{ candle.applyOptions({ upColor:c.up, downColor:c.down, wickUpColor:c.up, wickDownColor:c.down, borderUpColor:c.up, borderDownColor:c.down }); }catch(e){}
+  try{ chart.applyOptions({ layout:{ background:{color:c.bg} }, grid:{ vertLines:{color:c.grid, visible:c.gridVisible}, horzLines:{color:c.grid, visible:c.gridVisible} } }); }catch(e){}
+  try{ localStorage.setItem("fv_chart_settings", JSON.stringify(c)); }catch(e){}
+}
+function openChartSettings(){
+  const dlg=document.getElementById("settingsDlg");
+  const c=CHART_SETTINGS;
+  dlg.innerHTML='<div class="ph">Chart settings <span class="cl" id="csClose">×</span></div>'
+    +'<div class="pb" style="padding:12px 16px">'
+    +'<div class="field"><label>Up candle</label><input type="color" id="cs_up" value="'+c.up+'"></div>'
+    +'<div class="field"><label>Down candle</label><input type="color" id="cs_down" value="'+c.down+'"></div>'
+    +'<div class="field"><label>Background</label><input type="color" id="cs_bg" value="'+c.bg+'"></div>'
+    +'<div class="field"><label>Gridlines</label><input type="color" id="cs_grid" value="'+c.grid+'"></div>'
+    +'<div class="field"><label>Show grid</label><input type="checkbox" id="cs_gridvis" '+(c.gridVisible?"checked":"")+'></div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" id="cs_reset">Reset</button><button class="btn primary" id="cs_ok" style="flex:1">Done</button></div>'
+    +'</div>';
+  dlg.classList.add("open"); document.getElementById("dlgBackdrop").style.display="block";
+  const upd=()=>{ c.up=dlg.querySelector("#cs_up").value; c.down=dlg.querySelector("#cs_down").value; c.bg=dlg.querySelector("#cs_bg").value; c.grid=dlg.querySelector("#cs_grid").value; c.gridVisible=dlg.querySelector("#cs_gridvis").checked; applyChartSettings(); };
+  dlg.querySelectorAll("input").forEach(i=>i.addEventListener("input",upd));
+  dlg.querySelector("#csClose").onclick=()=>closeDlg();
+  dlg.querySelector("#cs_ok").onclick=()=>closeDlg();
+  dlg.querySelector("#cs_reset").onclick=()=>{ Object.assign(CHART_SETTINGS,{up:"#26a69a",down:"#ef5350",bg:"#131722",grid:"#1e222d",gridVisible:true}); applyChartSettings(); openChartSettings(); };
+}
 
 // TradingView shows 7/25/99 MAs + SMA 150/200/300 — recreate all six.
 // MA colors matched to the TradingView screenshot:
@@ -934,8 +1120,20 @@ const rsiMa   = rsiChart.addLineSeries({ color:"#e6b400", lineWidth:2, priceLine
 
 // sync the two time scales
 let _rsiSyncing=false;   // reentrancy guard so the two scales don't ping-pong
-chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r&&!_rsiSyncing){ _rsiSyncing=true; try{rsiChart.timeScale().setVisibleLogicalRange(r);}catch(e){} _rsiSyncing=false; } });
-rsiChart.timeScale().subscribeVisibleLogicalRangeChange(r=>{ if(r&&!_rsiSyncing){ _rsiSyncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} _rsiSyncing=false; } });
+// Only re-apply when the target range actually differs — pushing an identical
+// range still emits a change event, and tiny float drift between the two scales
+// can otherwise echo back and forth (the visible "bouncing" on zoom).
+function _rangesDiffer(a,b){ return !b || Math.abs(a.from-b.from)>1e-4 || Math.abs(a.to-b.to)>1e-4; }
+function _syncRange(target, r){
+  if(_rsiSyncing || !r) return;
+  const cur = target.getVisibleLogicalRange();
+  if(!_rangesDiffer(r, cur)) return;   // already aligned — don't nudge, don't echo
+  _rsiSyncing=true;
+  try{ target.setVisibleLogicalRange(r); }catch(e){}
+  _rsiSyncing=false;
+}
+chart.timeScale().subscribeVisibleLogicalRangeChange(r=>_syncRange(rsiChart.timeScale(), r));
+rsiChart.timeScale().subscribeVisibleLogicalRangeChange(r=>_syncRange(chart.timeScale(), r));
 
 // ── Crosshair sync hub ──────────────────────────────────────────────
 // TradingView shows one crosshair across every pane: hover an indicator/RSI pane
@@ -1167,14 +1365,26 @@ function sanitize(bars){
 // `end===null` means "newest".
 
 // Coinbase: [time(s), low, high, open, close, volume], ≤300/page.
+// Coinbase throttles hard (HTTP 429) when a deep TF fans out ~168 pages back-to-back.
+// A 429 previously fell through to [] and looked like "end of history", so the very
+// first page could silently fail and NOTHING painted — the switch appeared to hang.
+// Retry 429/5xx a few times with backoff so at least the first page reliably lands.
 async function fetchPageCoinbase(product, g, span, end){
   const qs = end===null
     ? `granularity=${g}`
     : `granularity=${g}&start=${end-span}&end=${end}`;
-  try{
-    const res = await fetch(`${API}/products/${product}/candles?${qs}`);
-    return parseCandlesAgg(await res.json());
-  }catch{ return []; }
+  const url = `${API}/products/${product}/candles?${qs}`;
+  for(let attempt=0; attempt<3; attempt++){
+    try{
+      const res = await fetch(url);
+      if(res.status===429 || res.status>=500){
+        await new Promise(r=>setTimeout(r, 250*(attempt+1)));   // 250ms, 500ms backoff
+        continue;
+      }
+      return parseCandlesAgg(await res.json());
+    }catch{ /* network error — retry */ await new Promise(r=>setTimeout(r, 200)); }
+  }
+  return [];
 }
 
 // Binance spot (api) or USDⓈ-M futures (fapi): kline =
@@ -1271,7 +1481,14 @@ async function fetchKlinesProgressive(leg, tfKey, onPage){
   // Enough pages to reach MAX_BARS (50k) output candles. Each output bar rolls up
   // bucket/base raw base-bars, so raw bars needed = MAX_BARS * bucket/base.
   const rollup = Math.max(1, Math.round(tf.bucket / tf.base));
-  const maxPages = Math.max(2, Math.ceil(MAX_BARS * rollup / pageMax) + 1);
+  const fullPages = Math.max(2, Math.ceil(MAX_BARS * rollup / pageMax) + 1);
+  // Cap the EAGER load. Fetching all ~334 pages up front on every TF switch took
+  // seconds and hammered Coinbase into HTTP 429 (which looked like a hang). We fetch
+  // only enough to fill the initial ~420-bar view plus scrollback headroom, then let
+  // loadOlderHistory() deepen the rest on demand as the user pans left. Enough raw
+  // bars for ~2000 output candles is plenty for the first screen and a few pans.
+  const initialPages = Math.min(fullPages, Math.max(2, Math.ceil(2000 * rollup / pageMax) + 1));
+  const maxPages = initialPages;
   let end = null;                       // null = newest
   const all = [];
   for(let i=0; i<maxPages; i++){
@@ -1320,6 +1537,7 @@ async function loadOlderHistory(){
   if(lastData.length >= MAX_BARS){ _historyExhausted=true; return; }  // 50k-bar ceiling reached
   _loadingOlder=true;
   const sym=activeSymbol, tf=activeTF, oldest=lastData[0].time;
+  const startToken=loadToken;   // if a symbol/TF switch happens mid-fetch, this stale prepend must abort
   const tfMeta=TF[tf]||TF["1d"];
   try{
     let older=[];
@@ -1334,7 +1552,9 @@ async function loadOlderHistory(){
     // keep only bars strictly older than what we already have
     older=older.filter(b=>b.time<oldest);
     if(!older.length){ _historyExhausted=true; return; }
-    if(sym!==activeSymbol || tf!==activeTF) return;   // user switched mid-fetch
+    // user switched symbol/TF mid-fetch — token bumped by the new loadChart. Abort
+    // so we never prepend the previous TF's bars onto the new chart (the "glitch").
+    if(startToken!==loadToken || sym!==activeSymbol || tf!==activeTF) return;
     // don't prepend past the 50k ceiling — trim the older batch if it would overflow
     const room = MAX_BARS - lastData.length;
     if(older.length > room){ older = older.slice(older.length - room); _historyExhausted=true; }
@@ -1453,6 +1673,12 @@ function withFuture(data, pts){ return pts.concat(futureWhitespace(data)); }
 // progressive page as well as on the final result, so the chart stays live
 // while history keeps deepening underneath it.
 function renderData(data, keepView){
+  // Bar replay: when active, keep the full series but only reveal up to _replayIdx.
+  if(_replay.active){
+    _replay.full = data;                                  // remember the complete series
+    const n = Math.min(_replay.idx||data.length, data.length);
+    data = data.slice(0, n);
+  }
   lastData = data;                 // expose to the drawing engine (magnet/measure/extrapolation)
   applyChartType(data);            // route into the active chart style (candles/HA/line/…)
   if(typeof redraw==="function") redraw();
@@ -1523,6 +1749,29 @@ function renderData(data, keepView){
 // streaming in via progressive callbacks).
 let loadToken = 0;
 
+// ── Series cache (per symbol+timeframe) ──
+// Every TF/symbol switch previously re-fetched the whole series from the network
+// before ANYTHING appeared — the first-page round-trip alone cost 1.5–4s, so a
+// switch felt sluggish. We cache the last finalized series per (symbol, tf) and
+// paint it INSTANTLY on switch, then still fetch in the background to refresh with
+// live bars. Bounded LRU so memory can't grow unbounded across many symbols/TFs.
+const _seriesCache = new Map();          // key "SYM|tf" → finalized bar array
+const _SERIES_CACHE_MAX = 40;
+function _cacheKey(sym, tf){ return sym + "|" + tf; }
+function cacheSeries(sym, tf, data){
+  if(!data || !data.length) return;
+  const k = _cacheKey(sym, tf);
+  if(_seriesCache.has(k)) _seriesCache.delete(k);       // refresh LRU position
+  _seriesCache.set(k, data);
+  while(_seriesCache.size > _SERIES_CACHE_MAX){ _seriesCache.delete(_seriesCache.keys().next().value); }
+}
+function getCachedSeries(sym, tf){
+  const k = _cacheKey(sym, tf);
+  const v = _seriesCache.get(k);
+  if(v){ _seriesCache.delete(k); _seriesCache.set(k, v); }  // LRU touch
+  return v;
+}
+
 // Auto-snap state. While a fresh load streams pages in, each page prepends older
 // history and reindexes the logical scale, so we re-snap to the latest candle
 // on every page to keep it centred. But the SECOND the user pans/zooms we must
@@ -1562,10 +1811,20 @@ async function loadChart(symbol, tf, keepView){
   if(legSym) legSym.textContent = symbol.includes("/") ? symbol : legShort(symbol);
   if(legMeta) legMeta.textContent = "· "+((TF[tf]||{}).label||tf)+" · "+(document.getElementById("exName").textContent||"");
   // clear any stale "No data" error from the previous symbol and show progress.
+  let paintedFromCache = false;
   if(!keepView){
     document.getElementById("ohlc").innerHTML = "";
-    document.getElementById("status").innerHTML = `<span class="dot"></span>Loading ${escHtml(symbol)}…`;
     _autoSnap = true;   // a fresh load may snap to the latest candle until the user pans/zooms
+    // Instant switch: if we've charted this symbol+tf before, paint the cached
+    // series NOW so the TF change is immediate, then refresh from the network below.
+    const cached = getCachedSeries(symbol, tf);
+    if(cached && cached.length){
+      renderData(cached, false);   // false ⇒ snap to latest, matches a fresh switch
+      paintedFromCache = true;
+      document.getElementById("status").innerHTML = `<span class="dot"></span>Updating ${escHtml(symbol)}…`;
+    } else {
+      document.getElementById("status").innerHTML = `<span class="dot"></span>Loading ${escHtml(symbol)}…`;
+    }
   }
   const fresh = ()=> myToken===loadToken;       // still the active load?
   // On a fresh (non-keepView) load, snap to the latest candle on EVERY
@@ -1576,6 +1835,29 @@ async function loadChart(symbol, tf, keepView){
     if(!fresh() || !data.length) return;
     renderData(data, keepView);   // keepView=false ⇒ re-snap to the latest bar
   };
+  // First-page-then-final paint. A single Coinbase intraday TF streams ~168
+  // pages (50k bars ÷ 300/page); painting each one fired ~168 full re-renders
+  // (candle + 6 MAs + RSI) back-to-back. That render thrash both froze the UI
+  // for ~20s AND intermittently tripped the Lightweight Charts "Value is null"
+  // race that permanently wedges the chart — so switching a timeframe often
+  // looked like it "didn't change". We paint ONLY the first page (instant switch
+  // + snap to latest) here; the loop's trailing paint(data) below renders the
+  // complete series once. History still deepens in the background between them,
+  // just without repainting on every page. Mirrors the spread path's fix.
+  // If we already painted a cached series, the chart is showing the full series
+  // already — skip the first-page progressive paint (it holds only one page and
+  // would visibly shrink the history) and let only the final complete paint land.
+  let _painted = paintedFromCache ? 1 : 0;
+  const paintProgressive = (data)=>{
+    if(_painted || !fresh() || !data.length) return;
+    _painted = 1; paint(data);   // first page only
+  };
+  // When refreshing over a cached paint, keep the user's view instead of re-snapping
+  // to latest — the cache paint already snapped, and the user may have panned since.
+  const paintFinal = (data)=>{
+    if(!fresh() || !data.length) return;
+    renderData(data, paintedFromCache ? true : keepView);
+  };
   try{
     if(symbol.includes("/")){
       const [a,b] = symbol.split("/");
@@ -1583,22 +1865,27 @@ async function loadChart(symbol, tf, keepView){
       // whatever both sides have so far; the chart fills out as history deepens.
       let lastA=[], lastB=[];
       const tfMeta = TF[tf] || TF["1d"];
-      const repaintRatio = ()=>{
-        if(lastA.length && lastB.length)
-          paint(makeRatio(finalizeBars(lastA,tfMeta), finalizeBars(lastB,tfMeta)));
-      };
+      // Spread symbols paint ONCE, at the end — not per progressive page. Both legs
+      // stream ~8 pages each, so per-page repaints fire ~16 full re-renders (candle
+      // + 6 MAs + RSI series) back-to-back. On a wide-range ratio (0.06–2.6) that
+      // render thrash trips an intermittent Lightweight Charts race ("Value is null"
+      // inside the line renderer) that permanently freezes the chart. One clean
+      // render of the complete series avoids the thrash entirely. Legs are fast
+      // enough that the brief "Loading…" is barely visible.
       const [ka,kb] = await Promise.all([
-        fetchKlinesProgressive(a, tf, raw=>{ lastA=raw; repaintRatio(); }),
-        fetchKlinesProgressive(b, tf, raw=>{ lastB=raw; repaintRatio(); }),
+        fetchKlinesProgressive(a, tf, raw=>{ lastA=raw; }),
+        fetchKlinesProgressive(b, tf, raw=>{ lastB=raw; }),
       ]);
       const data = makeRatio(ka, kb);
       if(!data.length) throw new Error("No overlapping data for "+symbol);
-      paint(data);
+      cacheSeries(symbol, tf, data);   // remember for instant re-switch
+      paintFinal(data);
     } else {
       const data = await fetchKlinesProgressive(symbol, tf, raw=>{
-        if(fresh()) paint(finalizeBars(raw, TF[tf]||TF["1d"]));
+        if(fresh()) paintProgressive(finalizeBars(raw, TF[tf]||TF["1d"]));
       });
-      paint(data);
+      cacheSeries(symbol, tf, data);   // remember for instant re-switch
+      paintFinal(data);   // final, complete series
     }
     if(fresh() && typeof reloadAllCompares==="function") reloadAllCompares();  // refresh overlays for new TF
   }catch(e){
@@ -1613,6 +1900,19 @@ chart.subscribeCrosshairMove(p=>{
   const col = c.close>=c.open ? "var(--green)":"var(--red)";
   document.getElementById("ohlc").innerHTML =
     `O<b>${fmt(c.open)}</b> H<b>${fmt(c.high)}</b> L<b>${fmt(c.low)}</b> C<b style="color:${col}">${fmt(c.close)}</b>`;
+  // Embed panel: relay crosshair time to the grid host for cross-panel sync.
+  if(IS_EMBED && p.time!=null && !_xhairFromParent){ try{ parent.postMessage({fvx:"crosshair", time:p.time}, "*"); }catch(e){} }
+});
+// Grid-panel message sync: receive crosshair (draw a matching vertical) + symbol changes.
+let _xhairFromParent=false;
+window.addEventListener("message", e=>{
+  const d=e.data; if(!d||!d.fvx) return;
+  if(d.fvx==="crosshair" && IS_EMBED){
+    _xhairFromParent=true;
+    try{ if(d.time==null) chart.clearCrosshairPosition(); else chart.setCrosshairPosition(0, d.time, candle); }catch(err){}
+    setTimeout(()=>{ _xhairFromParent=false; },0);
+  }
+  if(d.fvx==="setsym" && IS_EMBED && d.sym){ activeSymbol=d.sym; loadChart(d.sym, activeTF); }
 });
 rsiChart.subscribeCrosshairMove(p=>{
   const v = p.seriesData.get(rsiLine);
@@ -2611,6 +2911,8 @@ const TOOLS = [
   { key:"arrowmark",name:"Arrow Marker (up/down)", icon:icArrowMark },
   { key:"polyline",name:"Polyline / Path", icon:icPolyline },
   { key:"brush",  name:"Brush (freehand)", icon:icBrush },
+  { key:"elliott",name:"Elliott Wave (1-5)", icon:icElliott },
+  { key:"xabcd",  name:"XABCD Pattern",    icon:icXabcd },
   { key:"sep" },
   { key:"fib",    name:"Fib Retracement",  icon:icFib },
   { key:"fibext", name:"Fib Extension",    icon:icFibExt },
@@ -2666,6 +2968,8 @@ function icRegression(){ return svg('<line x1="4" y1="18" x2="20" y2="6"/><circl
 function icGannBox(){ return svg('<rect x="4" y="5" width="16" height="14" rx="1"/><line x1="4" y1="19" x2="20" y2="5"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="12" y1="5" x2="12" y2="19"/>'); }
 function icCircle(){  return svg('<circle cx="12" cy="12" r="8"/>'); }
 function icArrowMark(){ return svg('<line x1="12" y1="4" x2="12" y2="20"/><path d="M7 9l5-5 5 5"/>'); }
+function icElliott(){ return svg('<path d="M3 18l3-6 3 3 3-9 3 6 3-3"/>'); }
+function icXabcd(){ return svg('<path d="M4 6l5 12 5-10 5 8"/>'); }
 function icLock(){   return svg('<rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'); }
 function icEye(){    return svg('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.5"/>'); }
 function icTrash(){  return svg('<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>'); }
@@ -2731,6 +3035,14 @@ const dcanvas = document.getElementById("draw");
 const dctx = dcanvas.getContext("2d");
 
 const DEFAULT_STYLE = { color:"#2962ff", width:2, dash:0, fill:"rgba(41,98,255,0.10)", showLabel:true };
+// Drawing templates: persist a shape's style as the default for new drawings.
+try{ const t=localStorage.getItem("fv_draw_default"); if(t) Object.assign(DEFAULT_STYLE, JSON.parse(t)); }catch(e){}
+function saveDrawTemplate(s){
+  if(!s||!s.style) return;
+  Object.assign(DEFAULT_STYLE, { color:s.style.color, width:s.style.width, dash:s.style.dash, fill:s.style.fill, showLabel:s.style.showLabel });
+  try{ localStorage.setItem("fv_draw_default", JSON.stringify(DEFAULT_STYLE)); }catch(e){}
+  if(typeof toast==="function") toast("Drawing style saved as default","ok");
+}
 
 // number of clicks each tool needs to complete
 const CLICKS = {
@@ -2742,6 +3054,7 @@ const CLICKS = {
   prange:2, drange:2, dprange:2, fibtbext:3, pitchfork:3, gannfan:2,
   regression:2, gannbox:2, circle:2, arrowmark:1,
   flag:1, pricelabel:1,
+  elliott:6, xabcd:5,     // labeled multi-point patterns
   polyline:0, brush:0,   // 0 = freehand/multi-point, finished by dblclick/release
 };
 
@@ -2757,7 +3070,7 @@ const TOOL_CATEGORIES = [
   { id:"cursor",  name:"Cursors",        tools:["cross"] },
   { id:"lines",   name:"Trend line tools", tools:["trend","ray","ext","info","angle","hline","hray","vline","crossline","channel","regression","pitchfork"] },
   { id:"fib",     name:"Gann & Fibonacci", tools:["fib","fibext","fibtbext","fibfan","fibtime","gannfan","gannbox"] },
-  { id:"patterns",name:"Geometric shapes", tools:["rect","ellipse","circle","triangle","arrow","arrowmark","polyline","brush"] },
+  { id:"patterns",name:"Patterns & shapes", tools:["rect","ellipse","circle","triangle","arrow","arrowmark","polyline","brush","elliott","xabcd"] },
   { id:"position",name:"Forecasting & positions", tools:["long","short","prange","drange","dprange","measure"] },
   { id:"text",    name:"Annotation",     tools:["text","callout","flag","pricelabel"] },
 ];
@@ -2765,9 +3078,22 @@ const catCurrent = {};   // category id → currently-selected tool key
 TOOL_CATEGORIES.forEach(c=> catCurrent[c.id]=c.tools[0]);
 const toolMeta = k=>TOOLS.find(t=>t.key===k);
 
+// Favorited drawing tools pinned to the top of the rail.
+let TOOL_FAVS=[];
+try{ const f=localStorage.getItem("fv_tool_favs"); if(f) TOOL_FAVS=JSON.parse(f)||[]; }catch(e){}
+function toggleToolFav(k){ const i=TOOL_FAVS.indexOf(k); if(i>=0) TOOL_FAVS.splice(i,1); else TOOL_FAVS.push(k); try{ localStorage.setItem("fv_tool_favs", JSON.stringify(TOOL_FAVS)); }catch(e){} buildToolbar(); }
 function buildToolbar(){
   const tb = document.getElementById("toolbar");
   tb.innerHTML="";
+  // Favorited tools pinned at the top (each a direct-select button).
+  if(TOOL_FAVS.length){
+    TOOL_FAVS.forEach(k=>{ const t=toolMeta(k); if(!t) return;
+      const el=document.createElement("div"); el.className="tool"+(draw.tool===k?" active":"");
+      el.dataset.tool=k; el.title="★ "+t.name; el.innerHTML=t.icon();
+      el.onclick=()=>selectTool(k); tb.appendChild(el);
+    });
+    const fsep=document.createElement("div"); fsep.className="tool-sep"; tb.appendChild(fsep);
+  }
   // One button per category
   TOOL_CATEGORIES.forEach(cat=>{
     const cur=toolMeta(catCurrent[cat.id]);
@@ -2799,9 +3125,12 @@ function openToolFlyout(cat, anchorEl){
   const fly=document.createElement("div"); fly.className="tool-flyout"; fly.id="toolFlyout";
   cat.tools.forEach(k=>{
     const t=toolMeta(k); if(!t) return;
+    const fav=TOOL_FAVS.includes(k);
     const row=document.createElement("div"); row.className="tfrow"+(catCurrent[cat.id]===k?" sel":"");
-    row.innerHTML='<span class="tfi">'+t.icon()+'</span><span class="tfn">'+t.name+'</span>';
-    row.onclick=()=>{ catCurrent[cat.id]=k; closeToolFlyout(); buildToolbar(); selectTool(k); };
+    row.innerHTML='<span class="tfi">'+t.icon()+'</span><span class="tfn">'+t.name+'</span><span class="tfstar'+(fav?" on":"")+'">'+(fav?"★":"☆")+'</span>';
+    row.querySelector(".tfn").onclick=()=>{ catCurrent[cat.id]=k; closeToolFlyout(); buildToolbar(); selectTool(k); };
+    row.querySelector(".tfi").onclick=()=>{ catCurrent[cat.id]=k; closeToolFlyout(); buildToolbar(); selectTool(k); };
+    row.querySelector(".tfstar").onclick=(e)=>{ e.stopPropagation(); toggleToolFav(k); const st=row.querySelector(".tfstar"); st.textContent=TOOL_FAVS.includes(k)?"★":"☆"; st.classList.toggle("on",TOOL_FAVS.includes(k)); };
     fly.appendChild(row);
   });
   document.body.appendChild(fly);
@@ -2951,6 +3280,83 @@ function doAxisDrag(p){
   candle.applyOptions({});                        // nudge LWC to re-run autoscaleInfoProvider
   redraw();
 }
+// ── Bottom time-axis horizontal drag (TradingView-style bar-spacing stretch) ──
+// Mirror of the price-axis drag but on the X axis: drag LEFT expands the span
+// (zoom out / more bars visible), drag RIGHT compresses it (zoom in). Anchored at
+// the right edge so the latest bar stays put. Double-click the strip → fit all.
+//
+// NOTE: the date axis is only drawn under the BOTTOM-most pane (RSI / indicator /
+// script pane when present, else the main chart). That strip is NOT under the
+// #draw overlay, so this is wired at the document level and hit-tested in PAGE
+// coordinates against the bottom pane's own timeScale().height() gutter.
+let timeDrag=null;
+// DOM element that hosts a given pane chart (for page-coordinate hit-testing).
+function paneElFor(c){
+  if(c===chart) return chartEl;
+  if(c===rsiChart) return rsiEl;
+  try{ const ind=indicators.find(i=>i.subChart===c); if(ind&&ind.paneEl) return ind.paneEl; }catch(e){}
+  try{ const s=scripts.find(x=>x.subChart===c); if(s&&s.paneEl) return s.paneEl; }catch(e){}
+  return null;
+}
+// The bottom-most visible pane chart — the one that actually renders the date axis.
+function bottomPaneChart(){
+  const list=allPaneCharts();
+  return list[list.length-1] || chart;
+}
+// If the page point (client coords) lands in the bottom pane's date-axis strip,
+// return {chart, el}; otherwise null. Excludes the right price-axis gutter.
+function timeAxisHitPage(clientX, clientY){
+  const c=bottomPaneChart(); const el=paneElFor(c); if(!el) return null;
+  const r=el.getBoundingClientRect();
+  let taxH=28, axisW=64;
+  try{ const h=c.timeScale().height(); if(h>0) taxH=h; }catch(e){}
+  try{ const w=c.priceScale("right").width(); if(w>0) axisW=w; }catch(e){}
+  const inStrip = clientY >= r.bottom - taxH && clientY <= r.bottom
+               && clientX >= r.left && clientX <= r.right - axisW;
+  return inStrip ? { chart:c, el } : null;
+}
+function startTimeDrag(clientX){
+  const range=chart.timeScale().getVisibleLogicalRange(); if(!range) return false;
+  timeDrag={ startX:clientX, from:range.from, to:range.to, span:range.to-range.from };
+  document.body.classList.add("time-resize");
+  return true;
+}
+function doTimeDrag(clientX){
+  if(!timeDrag) return;
+  const w=chartEl.clientWidth||dcanvas.clientWidth||1;
+  // Drag distance as a fraction of plot width → exponential factor, symmetric feel.
+  // Drag LEFT (dx<0) → factor>1 (expand span / zoom out). Anchor on the right edge.
+  const dx=clientX-timeDrag.startX;
+  const factor=Math.exp(-dx/w * 2.2);            // 2.2 ≈ TradingView sensitivity
+  const loadedBars=(lastData&&lastData.length)?lastData.length:w;
+  const maxSpan=Math.max(30, Math.min(loadedBars, w) * 2.0);
+  const span=Math.min(maxSpan, Math.max(8, timeDrag.span*factor));
+  chart.timeScale().setVisibleLogicalRange({ from:timeDrag.to-span, to:timeDrag.to });
+  redraw();
+}
+// Document-level listeners: the date strip lives outside #draw, so bind globally.
+document.addEventListener("mousedown", e=>{
+  if(e.button!==0 || timeDrag) return;
+  if(timeAxisHitPage(e.clientX, e.clientY)){
+    stopAutoSnap();
+    if(startTimeDrag(e.clientX)){ e.preventDefault(); }
+  }
+}, true);
+document.addEventListener("mousemove", e=>{
+  if(timeDrag){ doTimeDrag(e.clientX); return; }   // class stays on for the whole drag
+  // hover cursor when idling over the strip
+  if(timeAxisHitPage(e.clientX, e.clientY)){ document.body.classList.add("time-resize"); }
+  else{ document.body.classList.remove("time-resize"); }
+});
+document.addEventListener("mouseup", ()=>{
+  if(timeDrag){ timeDrag=null; document.body.classList.remove("time-resize"); }
+});
+document.addEventListener("dblclick", e=>{
+  if(timeAxisHitPage(e.clientX, e.clientY)){
+    try{ chart.timeScale().fitContent(); }catch(err){}
+    redraw();
+  }
+}, true);
 function resetPriceScale(){
   manualPriceRange=null;
   // Restore auto-scale AND the default breathing-room margins removed during a
@@ -3111,6 +3517,7 @@ dcanvas.addEventListener("mousedown", e=>{
   // ── Right price-axis: vertical drag stretches the price scale (any mode). ──
   if(inPriceAxis(p) && startAxisDrag(p)){ downPt=null; return; }
 
+
   // ── Alert delete icon takes priority in any mode (it's only shown on hover). ──
   const trashId=alertTrashHit(p);
   if(trashId){ removeAlert(trashId); draw.alertHover=null; downPt=null; return; }
@@ -3172,7 +3579,13 @@ dcanvas.addEventListener("wheel", e=>{
   const frac = Math.min(1, Math.max(0, p.x / w));   // 0=left edge, 1=right edge
   const anchor = from + span * frac;                // logical index under cursor
   const factor = e.deltaY > 0 ? 1.1 : 1/1.1;        // wheel down = zoom out
-  const newSpan = Math.max(8, span * factor);       // never fewer than ~8 bars
+  // Clamp span: never fewer than ~8 bars. On the wide end, allow bar spacing down to
+  // ~1px (TradingView-like) so the user can zoom out to the full loaded history; the
+  // available bar count is the real ceiling, so cap at whatever data is loaded.
+  const loadedBars = (lastData && lastData.length) ? lastData.length : (dcanvas.clientWidth||1);
+  const maxSpan = Math.max(30, Math.min(loadedBars, (dcanvas.clientWidth||1) / 1) * 2.0);
+  const newSpan = Math.min(maxSpan, Math.max(8, span * factor));
+  if(newSpan === span){ redraw(); return; }          // already at a clamp edge — don't nudge
   ts.setVisibleLogicalRange({
     from: anchor - (anchor - from) * (newSpan/span),
     to:   anchor + (to - anchor) * (newSpan/span),
@@ -3380,7 +3793,9 @@ window.addEventListener("keydown", e=>{
     const r=ts.getVisibleLogicalRange(); if(!r) return;
     const span=r.to-r.from, mid=(r.from+r.to)/2;
     const zoomIn = (e.key==="+"||e.key==="=");
-    const newSpan=Math.max(8, span*(zoomIn?1/1.2:1.2));
+    const loadedBars = (lastData && lastData.length) ? lastData.length : (dcanvas.clientWidth||1);
+    const maxSpan = Math.max(30, Math.min(loadedBars, (dcanvas.clientWidth||1) / 1) * 2.0);   // zoom out 2x past full history
+    const newSpan=Math.min(maxSpan, Math.max(8, span*(zoomIn?1/1.2:1.2)));
     ts.setVisibleLogicalRange({ from:mid-newSpan/2, to:mid+newSpan/2 });
     redraw();
   }
@@ -3442,7 +3857,7 @@ function nearShape(s,p){
   if(s.type==="pricelabel") return Math.abs(p.x-a.x)<70 && Math.abs(p.y-a.y)<12;
   if(s.type==="text"||s.type==="callout") return Math.abs(p.x-a.x)<60 && Math.abs(p.y-a.y)<14;
   // multi-point freehand / polygon: near any segment
-  if(s.type==="polyline"||s.type==="brush"||s.type==="triangle"){
+  if(s.type==="polyline"||s.type==="brush"||s.type==="triangle"||s.type==="elliott"||s.type==="xabcd"){
     const Q=s.pts.map(px).filter(q=>q.x!=null);
     for(let i=0;i<Q.length-1;i++) if(distToSeg(p.x,p.y,Q[i].x,Q[i].y,Q[i+1].x,Q[i+1].y)<6) return true;
     if(s.type==="triangle" && Q.length>=3 && distToSeg(p.x,p.y,Q[Q.length-1].x,Q[Q.length-1].y,Q[0].x,Q[0].y)<6) return true;
@@ -3530,6 +3945,7 @@ function showShapeMenu(id,x,y){
   showCtx(x,y,[
     mi("⚙ Settings…", ()=>openSettings(id)),
     mi("Clone", ()=>{ snapshotDraw(); const c=JSON.parse(JSON.stringify(s)); c.id=newId(); c.pts=c.pts.map(p=>({time:p.time, price:p.price*0.99})); draw.shapes.push(c); draw.sel=c.id; persist(); redraw(); }),
+    mi("⭐ Save style as default", ()=>saveDrawTemplate(s)),
     mi(s.locked?"🔓 Unlock":"🔒 Lock", ()=>{ snapshotDraw(); s.locked=!s.locked; persist(); redraw(); }),
     msep(),
     mi("🎨 Blue",   ()=>setStyle(id,{color:"#2962ff"}), "#2962ff"),
@@ -3551,6 +3967,12 @@ function showChartMenu(x,y,p){
     mi("⊞ Add indicator…", ()=>toggleIndicatorsMenu(true)),
     mi("Reset chart view", ()=>chart.timeScale().fitContent()),
     msep(),
+    mi((scaleMode===0?"✓ ":"")+"Auto scale", ()=>setScaleMode(0)),
+    mi((scaleMode===1?"✓ ":"")+"㏒ Log scale", ()=>setScaleMode(1)),
+    mi((scaleMode===2?"✓ ":"")+"% Percent scale", ()=>setScaleMode(2)),
+    mi((_scaleInverted?"✓ ":"")+"⇅ Invert scale", ()=>toggleInvertScale()),
+    msep(),
+    mi("⚙ Chart settings…", ()=>openChartSettings()),
     mi("Remove all drawings", ()=>{ if(confirm("Remove all drawings?")){ snapshotDraw(); draw.shapes=[]; draw.sel=null; persist(); redraw(); } }),
   ]);
 }
@@ -3618,12 +4040,13 @@ function openAlertDialog(opts={}){
     value: opts.price!=null ? opts.price : cur,
     trigger:"once", expiry:defaultExpiry(), message:"", notify:{...ALERT_DEFAULT_NOTIFY}, active:true, _last:null,
   };
-  const srcOpts = ALERT_SOURCES.map(s=>`<option value="${s.key}" ${s.key===a.source?"selected":""}>${s.label}</option>`).join("");
+  const srcList = alertSourcesWithDrawings();
+  const srcOpts = srcList.map(s=>`<option value="${s.key}" ${s.key===a.source?"selected":""}>${s.label}</option>`).join("");
   const opOpts = [["crossing","Crossing"],["crossUp","Crossing Up"],["crossDown","Crossing Down"],["gt","Greater Than"],["lt","Less Than"]]
     .map(([v,l])=>`<option value="${v}" ${v===a.op?"selected":""}>${l}</option>`).join("");
-  // target = "Value" + every series (so price-vs-MA, MA-vs-MA, etc. all work)
+  // target = "Value" + every series + line drawings (so price-vs-MA, price-vs-trendline, etc. all work)
   const tgtOpts = `<option value="value" ${a.target==="value"?"selected":""}>Value</option>`+
-    ALERT_SOURCES.map(s=>`<option value="${s.key}" ${s.key===a.target?"selected":""}>${s.label}</option>`).join("");
+    srcList.map(s=>`<option value="${s.key}" ${s.key===a.target?"selected":""}>${s.label}</option>`).join("");
   const expVal = a.expiry ? toLocalInput(a.expiry) : "";
 
   alertDlg.innerHTML=`
@@ -3641,6 +4064,7 @@ function openAlertDialog(opts={}){
       <div class="arow"><div class="alabel">Trigger</div><div class="actl">
         <select id="ad_trigger">
           <option value="once" ${a.trigger==="once"?"selected":""}>Once only</option>
+          <option value="perbar" ${a.trigger==="perbar"?"selected":""}>Once per bar</option>
           <option value="every" ${a.trigger==="every"?"selected":""}>Every time</option>
         </select>
       </div></div>
@@ -3855,6 +4279,8 @@ function drawShape(s, selected, hovered){
     case "angle": if(b){ strokeLine(a.x,a.y,b.x,b.y,st); drawAngleLabel(s,a,b); } break;
     case "crossline": strokeLine(0,a.y,W,a.y,st); strokeLine(a.x,0,a.x,H,st); break;
     case "triangle": if(P[2]) drawPolygon(P.slice(0,3),st,true); break;
+    case "elliott": drawLabeledPath(P,st,["0","1","2","3","4","5"]); break;
+    case "xabcd": drawLabeledPath(P,st,["X","A","B","C","D"]); break;
     case "arrow": if(b){ strokeLine(a.x,a.y,b.x,b.y,st); arrowHeadAt(a,b,st.color); } break;
     case "polyline": drawPolygon(P,st,false); break;
     case "brush": drawBrush(P,st); break;
@@ -4009,6 +4435,21 @@ function drawAngleLabel(s,a,b){
   pill(b.x, b.y, deg.toFixed(1)+"°", "#2962ff");
 }
 // Filled/open polygon (triangle = closed+fill, polyline = open path).
+// Labeled multi-point path (Elliott 0-5, XABCD X-A-B-C-D): connect points + label each vertex.
+function drawLabeledPath(P, st, labels){
+  const pts=P.filter(p=>p.x!=null); if(pts.length<1) return;
+  dctx.save(); dctx.strokeStyle=st.color; dctx.lineWidth=st.width||2; dctx.setLineDash([]);
+  if(pts.length>=2){ dctx.beginPath(); dctx.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++) dctx.lineTo(pts[i].x,pts[i].y); dctx.stroke(); }
+  dctx.font="bold 12px sans-serif"; dctx.textAlign="center";
+  pts.forEach((p,i)=>{
+    const lbl=labels[i]||String(i);
+    const up = i>0 ? p.y<=pts[i-1].y : true;   // label above if this point is higher than the previous
+    const ly = up ? p.y-8 : p.y+16;
+    dctx.fillStyle="rgba(19,23,34,.85)"; dctx.beginPath(); dctx.arc(p.x,ly-4,9,0,7); dctx.fill();
+    dctx.fillStyle=st.color; dctx.fillText(lbl, p.x, ly);
+  });
+  dctx.restore();
+}
 function drawPolygon(P,st,closed){
   const pts=P.filter(p=>p.x!=null); if(pts.length<2) return;
   dctx.save(); dctx.strokeStyle=st.color; dctx.lineWidth=st.width||2;
@@ -4661,6 +5102,20 @@ const INDICATORS_KEY = ()=>"fv_indicators_"+activeSymbol;
 function saveIndicators(){
   try{ localStorage.setItem(INDICATORS_KEY(), JSON.stringify(indicators.map(i=>({type:i.type, params:i.params, hidden:!!i.hidden})))); }catch(e){}
 }
+// ── Indicator templates: save/load a set of indicators as one named template ──
+function indTemplates(){ try{ return JSON.parse(localStorage.getItem("fv_ind_templates")||"{}"); }catch(e){ return {}; } }
+function saveIndTemplate(){
+  const name=prompt("Save indicator template as:", "Template "+(Object.keys(indTemplates()).length+1));
+  if(!name) return;
+  const all=indTemplates(); all[name]=indicators.map(i=>({type:i.type, params:i.params, hidden:!!i.hidden}));
+  try{ localStorage.setItem("fv_ind_templates", JSON.stringify(all)); }catch(e){}
+}
+function loadIndTemplate(name){
+  const tpl=indTemplates()[name]; if(!tpl) return;
+  [...indicators].forEach(i=>removeIndicator(i.id, true)); indicators.length=0;
+  tpl.forEach(r=>addIndicator(r.type,{params:r.params, hidden:r.hidden, silent:true}));
+  renderIndLegend(); layoutPanes(); saveIndicators();
+}
 function loadIndicators(){
   // tear down existing, then rebuild from storage (silent = don't re-save while loading)
   [...indicators].forEach(i=>removeIndicator(i.id, true));
@@ -4700,6 +5155,18 @@ function toggleIndicatorHidden(id){
 }
 // Drag a pane divider to resize. Adjusts the pane's flex-basis (height) live; the
 // LWC chart inside is re-sized on each move so its plot fills the new box.
+// Collapse a sub-pane to a thin strip (label only) / restore. Maximize expands it.
+function resizeSubChart(el){ const ind=indicators.find(i=>i.paneEl===el)||scripts.find(s=>s.paneEl===el); const c=ind&&(ind.subChart); if(c){ try{ c.applyOptions({width:el.clientWidth, height:el.clientHeight}); }catch(e){} } }
+function togglePaneCollapse(el){
+  const collapsed=el.classList.toggle("pane-collapsed");
+  el.style.flex="0 0 "+(collapsed?"22px":"120px"); el.style.height=(collapsed?22:120)+"px";
+  setTimeout(()=>{ resizeSubChart(el); if(typeof alignPriceAxes==="function") alignPriceAxes(); },0);
+}
+function togglePaneMaximize(el){
+  const maxed=el.classList.toggle("pane-maxed");
+  el.style.flex="0 0 "+(maxed?"70vh":"120px"); el.style.height=(maxed?"70vh":"120px");
+  setTimeout(()=>{ resizeSubChart(el); if(typeof alignPriceAxes==="function") alignPriceAxes(); },0);
+}
 function wirePaneResize(grip, el){
   grip.addEventListener("mousedown", e=>{
     e.preventDefault(); e.stopPropagation();
@@ -4790,18 +5257,21 @@ function buildIndicatorSeries(ind){
   const el=document.createElement("div"); el.className="subpane";
   const label=document.createElement("div"); label.className="subLabel"; label.textContent=ind.name;
   const eye=document.createElement("span"); eye.className="subEye"; eye.textContent=ind.hidden?"🚫":"👁"; eye.title="Hide / show"; eye.onclick=()=>toggleIndicatorHidden(ind.id);
+  const collapse=document.createElement("span"); collapse.className="subClose"; collapse.textContent="▁"; collapse.title="Collapse / restore"; collapse.onclick=()=>togglePaneCollapse(el);
+  const maxi=document.createElement("span"); maxi.className="subClose"; maxi.textContent="⤢"; maxi.title="Maximize / restore"; maxi.onclick=()=>togglePaneMaximize(el);
   const gear=document.createElement("span"); gear.className="subClose"; gear.textContent="⚙"; gear.title="Settings"; gear.onclick=()=>openIndicatorSettings(ind.id);
   const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeIndicator(ind.id);
-  label.appendChild(eye); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
+  label.appendChild(eye); label.appendChild(collapse); label.appendChild(maxi); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
   const grip=document.createElement("div"); grip.className="paneResize"; grip.title="Drag to resize pane"; wirePaneResize(grip,el); el.appendChild(grip);
   wrap.appendChild(el); ind.paneEl=el;
   const sc=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc",fontFamily:"'Trebuchet MS', Roboto, Ubuntu, sans-serif"},
     grid:{vertLines:{visible:false},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39",minimumWidth:PRICE_AXIS_W},
     timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false,tickMarkFormatter:(t,type)=>tickLabel(t,type)}, crosshair:{mode:0} });
   ind.subChart=sc;
-  let syncing=false;
-  ind.syncMain=r=>{ if(r&&!syncing){ syncing=true; try{sc.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
-  ind.syncSub =r=>{ if(r&&!syncing){ syncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
+  // Route every pane↔main hop through the one global guard + already-aligned check
+  // (see _syncRange) so multiple open panes can't ping-pong the time scale.
+  ind.syncMain=r=>_syncRange(sc.timeScale(), r);
+  ind.syncSub =r=>_syncRange(chart.timeScale(), r);
   chart.timeScale().subscribeVisibleLogicalRangeChange(ind.syncMain);
   sc.timeScale().subscribeVisibleLogicalRangeChange(ind.syncSub);
   ind.series=specs.map(sp=> recordData(alignSubSeries(sp.k==="hist"
@@ -4996,9 +5466,13 @@ function toggleIndicatorsMenu(force){
   const m=document.getElementById("indicatorsMenu");
   const open = force!==undefined ? force : !m.classList.contains("open");
   if(open){
+    const tplNames=Object.keys(indTemplates());
+    const tplOpts='<option value="">Templates…</option>'+tplNames.map(n=>'<option value="'+escHtml(n)+'">📁 '+escHtml(n)+'</option>').join("")+'<option value="__save">＋ Save current…</option>';
     m.innerHTML='<div class="ph">Indicators <span class="cl" id="indClose">×</span></div>'
-      +'<div class="indtabs"><span class="indtab" data-tab="technicals">Technicals</span><span class="indtab" data-tab="favorites">★ Favorites</span></div>'
+      +'<div class="indtabs"><span class="indtab" data-tab="technicals">Technicals</span><span class="indtab" data-tab="favorites">★ Favorites</span>'
+      +'<select id="indTpl" style="margin-left:auto;background:#131722;color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:11px">'+tplOpts+'</select></div>'
       +'<input class="search" id="indSearch" placeholder="Search…"><div class="pb" id="indList"></div>';
+    m.querySelector("#indTpl").onchange=(e)=>{ const v=e.target.value; if(v==="__save"){ saveIndTemplate(); toggleIndicatorsMenu(true); } else if(v){ loadIndTemplate(v); toggleIndicatorsMenu(false); } };
     const list=m.querySelector("#indList");
     const fill=(q)=>{
       q=(q||"").toLowerCase(); list.innerHTML="";
@@ -5108,6 +5582,20 @@ function runScript(code, data){
   const ta=makeTA(data);
   const plot=(arr,opts={})=>plots.push({kind:"line", arr, color:opts.color||"#2962ff", pane:opts.pane||"main", width:opts.width||2, title:opts.title});
   const plotHist=(arr,opts={})=>plots.push({kind:"hist", arr, color:opts.color||"#26a69a", pane:opts.pane||"sub", title:opts.title});
+  // plotshape: mark bars where cond[i] is truthy (▲ below / ▼ above). Rendered as a line
+  // series with markers at the price. hline: a constant horizontal level. fill: shade
+  // between two arrays (approximated as a translucent band via two edge lines).
+  const plotshape=(cond,opts={})=>{ const arr=cond.map((x,i)=> x? (opts.location==="above"?h[i]:l[i]) : null); plots.push({kind:"markers", arr, color:opts.color||"#ff9800", shape:opts.style||(opts.location==="above"?"▼":"▲"), pane:opts.pane||"main", title:opts.title}); };
+  const hline=(level,opts={})=>{ const arr=c.map(()=>level); plots.push({kind:"line", arr, color:opts.color||"#787b86", pane:opts.pane||"main", width:opts.width||1, dash:true, title:opts.title||("hline "+level)}); };
+  const fill=(a,b,opts={})=>{ plots.push({kind:"line", arr:a, color:opts.color||"rgba(41,98,255,.4)", pane:opts.pane||"main", width:1, title:opts.title}); plots.push({kind:"line", arr:b, color:opts.color||"rgba(41,98,255,.4)", pane:opts.pane||"main", width:1}); };
+  // Strategy API: mark entry/exit signals per bar; the backtester (runBacktest) walks
+  // them to simulate a long-only strategy. entry(cond[]) opens a long when cond is
+  // truthy & flat; exit(cond[]) closes when truthy & in a position.
+  const _sig={ entry:null, exit:null };
+  const strategy={
+    entry:(cond)=>{ _sig.entry=cond; plots.push({kind:"markers", arr:cond.map((x,i)=>x?l[i]:null), color:"#26a69a", shape:"▲", pane:"main", title:"Long"}); },
+    exit:(cond)=>{ _sig.exit=cond; plots.push({kind:"markers", arr:cond.map((x,i)=>x?h[i]:null), color:"#ef5350", shape:"▼", pane:"main", title:"Exit"}); },
+  };
   // Build a function with ONLY the curated API in scope. We can't fully sandbox
   // arbitrary JS, but we SHADOW the dangerous globals so a casual script can't
   // reach the network / storage / DOM. (This is the user's own code on their own
@@ -5122,11 +5610,38 @@ function runScript(code, data){
     "fetch","XMLHttpRequest","WebSocket","EventSource","localStorage","sessionStorage",
     "indexedDB","caches","navigator","location","history","Function",
     "setTimeout","setInterval","requestAnimationFrame","postMessage","Worker"];
-  const params=["open","high","low","close","volume","hl2","hlc3","ohlc4","time","ta","plot","plotHist","Math","na",...BLOCKED];
-  const args=[o,h,l,c,v,hl2,hlc3,ohlc4,data.map(d=>d.time),ta,plot,plotHist,Math,NaN,...BLOCKED.map(()=>undefined)];
+  const params=["open","high","low","close","volume","hl2","hlc3","ohlc4","time","ta","plot","plotHist","plotshape","hline","fill","strategy","Math","na",...BLOCKED];
+  const args=[o,h,l,c,v,hl2,hlc3,ohlc4,data.map(d=>d.time),ta,plot,plotHist,plotshape,hline,fill,strategy,Math,NaN,...BLOCKED.map(()=>undefined)];
   const fn=new Function(...params, '"use strict";\n'+code);
   fn(...args);
+  plots._signals=_sig;   // carry strategy signals out for the backtester
   return plots;
+}
+// ── Strategy backtester ──
+// Long-only sim: enter at next bar's open when entry fires & flat, exit at next
+// open when exit fires & long. Returns trades + net %, win rate, equity curve.
+function runBacktest(data, signals){
+  if(!signals || !signals.entry) return null;
+  const trades=[]; let pos=null; const equity=[]; let eq=1;
+  for(let i=1;i<data.length;i++){
+    // act on the PREVIOUS bar's signal at this bar's open (no look-ahead)
+    if(pos===null && signals.entry[i-1]){ pos={ entryIdx:i, entryPrice:data[i].open, entryTime:data[i].time }; }
+    else if(pos && signals.exit && signals.exit[i-1]){
+      const ret=(data[i].open/pos.entryPrice)-1;
+      eq*=(1+ret);
+      trades.push({ entryTime:pos.entryTime, exitTime:data[i].time, entry:pos.entryPrice, exit:data[i].open, retPct:ret*100 });
+      pos=null;
+    }
+    equity.push({ time:data[i].time, value:(pos? eq*(data[i].close/pos.entryPrice) : eq) });
+  }
+  // close any open position at the last bar
+  if(pos){ const last=data[data.length-1]; const ret=(last.close/pos.entryPrice)-1; eq*=(1+ret);
+    trades.push({ entryTime:pos.entryTime, exitTime:last.time, entry:pos.entryPrice, exit:last.close, retPct:ret*100 }); }
+  const wins=trades.filter(t=>t.retPct>0).length;
+  return {
+    trades, netPct:(eq-1)*100, winRate: trades.length? (wins/trades.length*100):0,
+    numTrades:trades.length, equity,
+  };
 }
 // Attach time stamps, dropping null/NaN, for LWC setData.
 function scriptPair(data,arr){ const out=[]; for(let i=0;i<arr.length;i++){ const x=arr[i]; out.push(x!=null&&isFinite(x) ? {time:data[i].time,value:x} : {time:data[i].time}); } return out; }
@@ -5151,6 +5666,8 @@ function renderScript(sc){
   let plots;
   try{ plots=runScript(sc.code,d); sc.error=null; }
   catch(e){ sc.error=e.message; renderScriptLegend(); return; }
+  // If the script defines strategy signals, run the backtester and stash results.
+  sc.backtest = (plots._signals && plots._signals.entry) ? runBacktest(d, plots._signals) : null;
   // tear down old series (plot count/pane can change between edits)
   sc.series.forEach(s=>{ try{ (sc.subChart||chart).removeSeries(s); }catch(e){} });
   sc.series=[];
@@ -5165,11 +5682,12 @@ function renderScript(sc){
     const sChart=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc",fontFamily:"'Trebuchet MS', Roboto, Ubuntu, sans-serif"},
       grid:{vertLines:{visible:false},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39",minimumWidth:PRICE_AXIS_W},
       timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false,tickMarkFormatter:(t,type)=>tickLabel(t,type)}, crosshair:{mode:0} });
-    sc.subChart=sChart; let syncing=false;
-    sc.syncMain=r=>{ if(r&&!syncing){ syncing=true; try{sChart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
+    sc.subChart=sChart;
+    // Route through the one global guard + already-aligned check (see _syncRange).
+    sc.syncMain=r=>_syncRange(sChart.timeScale(), r);
     chart.timeScale().subscribeVisibleLogicalRangeChange(sc.syncMain);
     // Store the reverse handler too so removeScript can unsubscribe it (was anonymous → leaked).
-    sc.syncSub=r=>{ if(r&&!syncing){ syncing=true; try{chart.timeScale().setVisibleLogicalRange(r);}catch(e){} syncing=false; } };
+    sc.syncSub=r=>_syncRange(chart.timeScale(), r);
     sChart.timeScale().subscribeVisibleLogicalRangeChange(sc.syncSub);
     registerPane(sChart, null);   // share the crosshair; anchor series set below after rebuild
     // New bottom pane → move the date axis down to it (and off the pane now above it).
@@ -5181,14 +5699,48 @@ function renderScript(sc){
   plots.forEach(p=>{
     const tgt = p.pane==="sub" ? sc.subChart : chart;
     if(!tgt) return;
+    if(p.kind==="markers"){
+      // invisible carrier series + LWC markers at each flagged bar
+      const s = tgt.addLineSeries({ color:"rgba(0,0,0,0)", lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false });
+      s.setData(scriptPair(d,p.arr)); sc.series.push(s);
+      const above = p.shape==="▼";
+      const mk=[]; d.forEach((bar,i)=>{ if(p.arr[i]!=null) mk.push({ time:bar.time, position: above?"aboveBar":"belowBar", color:p.color, shape: above?"arrowDown":"arrowUp", text:p.title||"" }); });
+      try{ s.setMarkers(mk); }catch(e){}
+      return;
+    }
     const s = p.kind==="hist"
       ? tgt.addHistogramSeries({ color:p.color, priceLineVisible:false })
-      : tgt.addLineSeries({ color:p.color, lineWidth:p.width, priceLineVisible:false, lastValueVisible:p.pane==="main" });
+      : tgt.addLineSeries({ color:p.color, lineWidth:p.width, lineStyle:p.dash?2:0, priceLineVisible:false, lastValueVisible:p.pane==="main" });
     s.setData(scriptPair(d,p.arr)); sc.series.push(s);
     if(p.pane==="sub") setPaneSeries(sc.subChart, s);   // anchor the shared crosshair to a live sub series
   });
+  renderStrategyResults(sc);
   layoutPanes();
 }
+// Show a compact strategy backtest summary (net %, win rate, #trades) as a floating
+// strip, with a click to expand the trades list.
+function renderStrategyResults(sc){
+  let box=document.getElementById("strategyPanel");
+  const anyBt = scripts.find(s=>s.backtest);
+  if(!anyBt){ if(box) box.style.display="none"; return; }
+  if(!box){ box=document.createElement("div"); box.id="strategyPanel"; document.body.appendChild(box); }
+  const bt=anyBt.backtest;
+  const net=bt.netPct, col=net>=0?"var(--green)":"var(--red)";
+  box.innerHTML='<div class="sp-head">📊 Strategy: '+escHtml(anyBt.name)
+    +' <span class="sp-x" title="Close">×</span></div>'
+    +'<div class="sp-stats">'
+    +'<span>Net <b style="color:'+col+'">'+(net>=0?"+":"")+net.toFixed(2)+'%</b></span>'
+    +'<span>Win rate <b>'+bt.winRate.toFixed(0)+'%</b></span>'
+    +'<span>Trades <b>'+bt.numTrades+'</b></span>'
+    +'</div>'
+    +'<div class="sp-trades">'+bt.trades.slice(-8).reverse().map(t=>{
+      const tc=t.retPct>=0?"var(--green)":"var(--red)";
+      return '<div class="sp-row"><span>'+tzFmtDate(t.exitTime)+'</span><span style="color:'+tc+'">'+(t.retPct>=0?"+":"")+t.retPct.toFixed(2)+'%</span></div>';
+    }).join("")+'</div>';
+  box.style.display="block";
+  box.querySelector(".sp-x").onclick=()=>{ box.style.display="none"; };
+}
+function tzFmtDate(t){ const d=tzShift(t*1000); return String(d.getUTCDate()).padStart(2,"0")+" "+_MONTHS[d.getUTCMonth()]; }
 function renderAllScripts(){ scripts.forEach(renderScript); }
 function saveScripts(){ try{ localStorage.setItem(SCRIPTS_KEY(), JSON.stringify(scripts.map(s=>({name:s.name,code:s.code})))); }catch(e){} }
 function loadScripts(){
@@ -5292,15 +5844,53 @@ const ALERT_SOURCES = [
   { key:"price", label:"Price" },
   ...MAS.map(m=>({ key:"ma"+m.p, label:"MA "+m.p })),
   { key:"rsi", label:"RSI 14" },
+  { key:"macd", label:"MACD line" },
+  { key:"macdsig", label:"MACD signal" },
+  { key:"atr", label:"ATR 14" },
+  { key:"cci", label:"CCI 20" },
+  { key:"vwap", label:"VWAP" },
+  { key:"willr", label:"Williams %R" },
+  { key:"volume", label:"Volume" },
 ];
-function sourceLabel(k){ const s=ALERT_SOURCES.find(s=>s.key===k); return s?s.label:k; }
+// ALERT_SOURCES plus any line drawings on the chart (for "alert on drawing").
+function alertSourcesWithDrawings(){
+  const drawSrcs = draw.shapes
+    .filter(s=>["hline","hray","trend","ray","ext"].includes(s.type))
+    .map((s,i)=>({ key:"draw:"+s.id, label:"◈ "+({hline:"H-Line",hray:"H-Ray",trend:"Trend",ray:"Ray",ext:"Ext-Line"}[s.type])+" #"+(i+1) }));
+  return ALERT_SOURCES.concat(drawSrcs);
+}
+function sourceLabel(k){
+  if(k && k.indexOf("draw:")===0){ const f=alertSourcesWithDrawings().find(s=>s.key===k); return f?f.label:"Drawing"; }
+  const s=ALERT_SOURCES.find(s=>s.key===k); return s?s.label:k;
+}
 // Latest value of a source (null if not enough data).
 function sourceValue(key){
   if(!lastData.length) return null;
   if(key==="price") return lastData[lastData.length-1].close;
   if(key==="rsi"){ const r=rsiSeries(lastData,14); return r.length?r[r.length-1].value:null; }
+  // Alert on a drawing: horizontal line = its level; trend/ray = value at the last bar.
+  if(key && key.indexOf("draw:")===0){
+    const s=draw.shapes.find(x=>x.id===key.slice(5)); if(!s||!s.pts||!s.pts.length) return null;
+    if(s.type==="hline"||s.type==="hray") return s.pts[0].price;
+    if((s.type==="trend"||s.type==="ray"||s.type==="ext") && s.pts.length>=2){
+      const [a,b]=s.pts, t=lastData[lastData.length-1].time;
+      if(b.time===a.time) return b.price;
+      return a.price + (b.price-a.price)*((t-a.time)/(b.time-a.time));   // linear extrapolation
+    }
+    return s.pts[0].price;
+  }
   const m=MAS.find(m=>("ma"+m.p)===key);
   if(m){ const sd=smaSeries(lastData,m.p); return sd.length?sd[sd.length-1].value:null; }
+  const last=arr=>{ for(let i=arr.length-1;i>=0;i--){ if(arr[i]!=null&&isFinite(arr[i])) return arr[i]; } return null; };
+  const lastP=pts=>pts&&pts.length?pts[pts.length-1].value:null;
+  try{
+    if(key==="volume") return lastData[lastData.length-1].volume||0;
+    if(key==="atr"){ return last(rmaA(trA(lastData),14)); }
+    if(key==="vwap"){ return lastP(vwapCalc(lastData)); }
+    if(key==="cci"){ const src=lastData.map(d=>(d.high+d.low+d.close)/3); const sm=smaA(src,20); const arr=src.map((tp,i)=>{ if(sm[i]==null) return null; let md=0; for(let j=0;j<20;j++) md+=Math.abs(src[i-j]-sm[i]); md/=20; return md?(tp-sm[i])/(0.015*md):0; }); return last(arr); }
+    if(key==="willr"){ const hh=highestA(lastData.map(d=>d.high),14), ll=lowestA(lastData.map(d=>d.low),14); const arr=lastData.map((d,i)=>(hh[i]!=null&&ll[i]!=null&&hh[i]!==ll[i])?((hh[i]-d.close)/(hh[i]-ll[i]))*-100:null); return last(arr); }
+    if(key==="macd"||key==="macdsig"){ const c=lastData.map(d=>d.close); const ef=emaA(c,12), es=emaA(c,26); const macd=ef.map((v,i)=>(v!=null&&es[i]!=null)?v-es[i]:null); if(key==="macd") return last(macd); const sig=emaA(macd.map(x=>x==null?0:x),9); return last(sig); }
+  }catch(e){}
   return null;
 }
 // The RHS scalar an alert compares against right now.
@@ -5410,16 +6000,27 @@ function checkAlerts(){
     if(a.expiry && now > a.expiry){ a.active=false; saveAlerts(); renderAlertsPanel(); redraw(); return; }
     const lhs = sourceValue(a.source), rhs = alertTargetValue(a);
     if(alertTriggered(a, lhs, rhs)){
-      fireAlert(a, lhs, rhs);
-      if(a.trigger==="once"){ a.active=false; }
-      saveAlerts(); renderAlertsPanel(); redraw();
+      // "once per bar": suppress additional fires within the same forming bar.
+      const curBar = lastData[lastData.length-1].time;
+      if(a.trigger==="perbar" && a._lastBar===curBar){ /* already fired this bar */ }
+      else {
+        fireAlert(a, lhs, rhs);
+        a._lastBar = curBar;
+        if(a.trigger==="once"){ a.active=false; }
+        saveAlerts(); renderAlertsPanel(); redraw();
+      }
     }
     if(lhs!=null && rhs!=null) a._last = lhs - rhs;   // remember side for next cross test
   });
 }
+// Persistent alert history log (last 100 fires), per symbol.
+let ALERT_LOG = [];
+try{ const raw=localStorage.getItem("fv_alert_log"); if(raw) ALERT_LOG=JSON.parse(raw)||[]; }catch(e){}
+function logAlert(entry){ ALERT_LOG.unshift(entry); if(ALERT_LOG.length>100) ALERT_LOG.length=100; try{ localStorage.setItem("fv_alert_log", JSON.stringify(ALERT_LOG)); }catch(e){} }
 function fireAlert(a, lhs, rhs){
   const base = a.message && a.message.trim() ? a.message : defaultAlertMessage(a);
   const msg = `${base} — now ${fmt(lhs)}`;
+  logAlert({ ts: Date.now(), symbol: activeSymbol, text: msg });   // history
   const n = a.notify || ALERT_DEFAULT_NOTIFY;
   if(n.browser && window.Notification && Notification.permission==="granted"){ try{ new Notification("Freeview Alert",{body:msg}); }catch(e){} }
   if(n.popup){
@@ -5445,13 +6046,30 @@ function renderAlertsPanel(){
     '<div class="pb" id="alList"></div>';
   const list=m.querySelector("#alList");
   if(!alerts.length) list.innerHTML='<div class="pi" style="color:var(--muted)">No alerts. Click “Create alert” or right-click the chart.</div>';
+  const freqLbl={once:"once",perbar:"per bar",every:"every"};
   alerts.forEach(a=>{ const it=document.createElement("div"); it.className="pi"; it.style.cursor="pointer";
     const desc=defaultAlertMessage(a);
-    it.innerHTML='<span>'+desc+' <span class="meta">('+(a.trigger==="every"?"every":"once")+(a.active?"":" · triggered")+')</span></span><span class="x" style="cursor:pointer;color:var(--muted)">×</span>';
-    it.onclick=e=>{ if(e.target.classList.contains("x")) return; openAlertDialog({existing:a}); };
+    it.innerHTML='<span>'+desc+' <span class="meta">('+(freqLbl[a.trigger]||"once")+(a.active?"":" · paused/triggered")+')</span></span>'
+      +'<span class="al-pause" title="Pause / resume" style="cursor:pointer;color:var(--muted);margin-right:6px">'+(a.active?"⏸":"▶")+'</span>'
+      +'<span class="x" style="cursor:pointer;color:var(--muted)">×</span>';
+    it.onclick=e=>{ if(e.target.classList.contains("x")||e.target.classList.contains("al-pause")) return; openAlertDialog({existing:a}); };
+    it.querySelector(".al-pause").onclick=e=>{ e.stopPropagation(); a.active=!a.active; if(a.active) a._last=null; saveAlerts(); renderAlertsPanel(); redraw(); };
     it.querySelector(".x").onclick=e=>{ e.stopPropagation(); removeAlert(a.id); };
     list.appendChild(it);
   });
+  // Alert history log
+  const logHead=document.createElement("div"); logHead.className="indcat"; logHead.textContent="HISTORY";
+  logHead.style.cssText="display:flex;justify-content:space-between;align-items:center";
+  logHead.innerHTML='HISTORY <span id="alClearLog" style="cursor:pointer;color:var(--muted);font-weight:400;text-transform:none">clear</span>';
+  list.appendChild(logHead);
+  if(!ALERT_LOG.length){ const e=document.createElement("div"); e.className="pi"; e.style.color="var(--muted)"; e.textContent="No alerts fired yet."; list.appendChild(e); }
+  ALERT_LOG.slice(0,20).forEach(entry=>{
+    const e=document.createElement("div"); e.className="pi"; e.style.fontSize="11px";
+    const d=new Date(entry.ts);
+    e.innerHTML='<span class="meta">'+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+"</span><span style='flex:1;margin-left:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'>"+escHtml(entry.text)+"</span>";
+    list.appendChild(e);
+  });
+  const clr=m.querySelector("#alClearLog"); if(clr) clr.onclick=()=>{ ALERT_LOG=[]; try{localStorage.setItem("fv_alert_log","[]");}catch(e){} renderAlertsPanel(); };
   m.querySelector("#alClose").onclick=()=>toggleAlertsPanel(false);
   m.querySelector("#alCreate").onclick=()=>openAlertDialog({});
 }
@@ -5479,6 +6097,7 @@ function saveScreenshot(){
       const a=document.createElement("a");
       a.href=url; a.download="freeview-"+activeSymbol.replace(/[^\w-]/g,"_")+"-"+activeTF+".png";
       document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      if(typeof toast==="function") toast("Screenshot saved 📷","ok");
     },"image/png");
   }catch(e){ alert("Screenshot failed: "+e.message); }
 }
@@ -5492,6 +6111,257 @@ function toggleFullscreen(){
 }
 document.getElementById("btnFull").onclick=toggleFullscreen;
 document.addEventListener("fullscreenchange", ()=>{ setTimeout(()=>{ resize(); sizeCanvas(); },100); });
+
+// ── Light / dark theme ──
+// Toggles <html class="light"> (CSS vars flip) and re-themes every LWC chart's
+// background / text / grid colors to match. Persisted in localStorage["fv_theme"].
+function applyTheme(light){
+  document.documentElement.classList.toggle("light", light);
+  const btn=document.getElementById("btnTheme"); if(btn) btn.textContent=light?"☀":"🌙";
+  const bg = light?"#ffffff":"#131722", txt = light?"#131722":"#d1d4dc";
+  const grid = light?"#e0e3eb":"#1e222d", border = light?"#e0e3eb":"#2a2e39";
+  const opts={ layout:{ background:{color:bg}, textColor:txt },
+    grid:{ vertLines:{color:grid}, horzLines:{color:grid} },
+    rightPriceScale:{ borderColor:border }, timeScale:{ borderColor:border } };
+  const all=new Set([chart]);
+  try{ if(typeof charts!=="undefined") charts.forEach(c=>all.add(c)); }catch(e){}
+  try{ if(typeof rsiChart!=="undefined") all.add(rsiChart); }catch(e){}
+  try{ if(typeof indicators!=="undefined") indicators.forEach(i=>{ if(i.subChart) all.add(i.subChart); }); }catch(e){}
+  try{ if(typeof scripts!=="undefined") scripts.forEach(s=>{ if(s.subChart) all.add(s.subChart); }); }catch(e){}
+  all.forEach(c=>{ try{ c.applyOptions(opts); }catch(e){} });
+  try{ if(typeof redraw==="function") redraw(); }catch(e){}
+  try{ localStorage.setItem("fv_theme", light?"light":"dark"); }catch(e){}
+}
+document.getElementById("btnTheme").onclick=()=>applyTheme(!document.documentElement.classList.contains("light"));
+// restore persisted theme (default dark)
+try{ if(localStorage.getItem("fv_theme")==="light") applyTheme(true); }catch(e){}
+
+// ── Object tree panel ──
+// Lists all drawings + indicators + scripts with per-item hide / delete. Reads the
+// live draw.shapes / indicators / scripts arrays and rebuilds on open + on change.
+function renderObjectTree(){
+  let box=document.getElementById("objTree");
+  if(!box){ box=document.createElement("div"); box.id="objTree"; box.className="panel"; document.body.appendChild(box); }
+  const drow=(label,onDel,onHide,hidden)=>'<div class="ot-row"><span class="ot-nm">'+escHtml(label)+'</span>'
+    +(onHide!==false?'<span class="ot-eye" data-act="hide">'+(hidden?"🚫":"👁")+'</span>':'')
+    +'<span class="ot-x" data-act="del">×</span></div>';
+  let html='<div class="ph">Object tree <span class="cl" id="otClose">×</span></div><div class="pb">';
+  html+='<div class="indcat">DRAWINGS ('+draw.shapes.length+')</div>';
+  html+= draw.shapes.length ? draw.shapes.map(s=>'<div class="ot-row" data-kind="draw" data-id="'+s.id+'"><span class="ot-nm">'+(s.type)+(s.locked?" 🔒":"")+'</span><span class="ot-x" data-act="del">×</span></div>').join("")
+        : '<div class="ot-empty">none</div>';
+  html+='<div class="indcat">INDICATORS ('+indicators.length+')</div>';
+  html+= indicators.length ? indicators.map(i=>'<div class="ot-row" data-kind="ind" data-id="'+i.id+'"><span class="ot-nm">'+escHtml(i.name)+'</span><span class="ot-eye" data-act="hide">'+(i.hidden?"🚫":"👁")+'</span><span class="ot-x" data-act="del">×</span></div>').join("")
+        : '<div class="ot-empty">none</div>';
+  if(typeof scripts!=="undefined" && scripts.length){
+    html+='<div class="indcat">SCRIPTS ('+scripts.length+')</div>';
+    html+= scripts.map(s=>'<div class="ot-row" data-kind="script" data-id="'+s.id+'"><span class="ot-nm">ƒ '+escHtml(s.name)+'</span><span class="ot-x" data-act="del">×</span></div>').join("");
+  }
+  html+='</div>';
+  box.innerHTML=html;
+  box.querySelector("#otClose").onclick=()=>{ box.style.display="none"; };
+  box.querySelectorAll(".ot-row").forEach(row=>{
+    const kind=row.dataset.kind, id=row.dataset.id;
+    const del=row.querySelector('[data-act="del"]'), eye=row.querySelector('[data-act="hide"]');
+    if(del) del.onclick=()=>{ if(kind==="draw"){ deleteShape(id); } else if(kind==="ind"){ removeIndicator(id); } else if(kind==="script"){ removeScript(id); } renderObjectTree(); };
+    if(eye) eye.onclick=()=>{ if(kind==="ind"){ toggleIndicatorHidden(id); renderObjectTree(); } };
+  });
+}
+document.getElementById("btnObjTree").onclick=()=>{
+  const box=document.getElementById("objTree");
+  if(box && box.style.display==="block"){ box.style.display="none"; return; }
+  renderObjectTree(); document.getElementById("objTree").style.display="block";
+};
+document.getElementById("btnSettings").onclick=()=>openChartSettings();
+
+// ── Toast notifications (TradingView-style, bottom-center) ──
+function toast(msg, kind){
+  let wrap=document.getElementById("toastWrap");
+  if(!wrap){ wrap=document.createElement("div"); wrap.id="toastWrap"; document.body.appendChild(wrap); }
+  const t=document.createElement("div"); t.className="toast"+(kind?" "+kind:""); t.textContent=msg;
+  wrap.appendChild(t);
+  setTimeout(()=>{ t.classList.add("out"); setTimeout(()=>t.remove(),300); }, 2600);
+}
+
+// ── Stub panels: News / Screener / Paper trading ──
+// Explicitly stubs per features.md — a placeholder panel each, reachable from the
+// right-side icon rail. Real data would need a backend / feed.
+function openStubPanel(kind){
+  let box=document.getElementById("stubPanel");
+  if(!box){ box=document.createElement("div"); box.id="stubPanel"; box.className="panel"; document.body.appendChild(box); }
+  const meta={
+    news:{ t:"News", body:"📰 News feed — a real feed requires a news API/backend. This is a stub panel matching TradingView's News tab layout.", rows:["Market headlines would appear here","Filtered by the active symbol","Click-through to source"] },
+    screener:{ t:"Screener", body:"🔎 Screener — a full screener needs a scan backend. This stub shows the panel shell.", rows:["Columns: Symbol / Price / Chg% / Volume","Filters: price, %chg, volume","Sortable, click to load chart"] },
+    paper:{ t:"Paper Trading", body:"📝 Paper trading — a simulated broker needs an order/position store (backend for cross-device). Stub shell shown.", rows:["Buy / Sell at market","Positions + P&L","Order history"] },
+  }[kind]||{t:"Panel",body:"",rows:[]};
+  box.innerHTML='<div class="ph">'+meta.t+' <span class="cl" id="stubClose">×</span></div>'
+    +'<div class="pb" style="padding:12px 14px"><div style="color:var(--muted);font-size:12px;line-height:1.5">'+escHtml(meta.body)+'</div>'
+    +'<div style="margin-top:10px">'+meta.rows.map(r=>'<div style="padding:6px 0;border-top:1px solid var(--border);font-size:12px;color:var(--text)">• '+escHtml(r)+'</div>').join("")+'</div>'
+    +'<div style="margin-top:12px;font-size:11px;color:var(--muted)">Stub — no backend in this single-file build.</div></div>';
+  box.style.display="block";
+  box.querySelector("#stubClose").onclick=()=>{ box.style.display="none"; };
+}
+// Far-right vertical icon rail: quick access to panels (Watchlist/Alerts/Object tree/News/Screener/Paper).
+(function buildRightRail(){
+  const rail=document.createElement("div"); rail.id="rightRail";
+  const items=[
+    { ic:"📋", title:"Watchlist", fn:()=>{ document.getElementById("watchlist").scrollIntoView(); } },
+    { ic:"🔔", title:"Alerts", fn:()=>toggleAlertsPanel(true) },
+    { ic:"🗂", title:"Object tree", fn:()=>{ renderObjectTree(); document.getElementById("objTree").style.display="block"; } },
+    { ic:"📰", title:"News", fn:()=>openStubPanel("news") },
+    { ic:"🔎", title:"Screener", fn:()=>openStubPanel("screener") },
+    { ic:"📝", title:"Paper trading", fn:()=>openStubPanel("paper") },
+  ];
+  items.forEach(it=>{ const b=document.createElement("div"); b.className="rr-btn"; b.textContent=it.ic; b.title=it.title; b.onclick=it.fn; rail.appendChild(b); });
+  document.getElementById("app").appendChild(rail);
+})();
+
+// ── Bar replay mode ──
+// Rewind to a chosen bar, then step / play forward. renderData() slices lastData to
+// _replay.idx while active. Entering arms a one-shot "click a bar to start" picker.
+const _replay = { active:false, picking:false, idx:0, full:[], timer:null };
+const rbBar=document.getElementById("replayBar");
+function replayEnter(){
+  if(!lastData.length) return;
+  _replay.picking=true; _replay.full=lastData.slice();
+  rbBar.classList.add("picking");
+  document.getElementById("rbHint").style.display="";
+  document.getElementById("btnReplay").classList.add("active");
+}
+function replayStartAt(idx){
+  _replay.active=true; _replay.picking=false;
+  _replay.idx=Math.max(2, Math.min(idx, _replay.full.length));
+  document.getElementById("rbHint").style.display="none";
+  rbBar.classList.add("active");
+  renderData(_replay.full, true); updateReplayPos();
+}
+function replayExit(){
+  replayPause();
+  _replay.active=false; _replay.picking=false;
+  rbBar.classList.remove("active","picking");
+  document.getElementById("btnReplay").classList.remove("active");
+  if(_replay.full.length){ const full=_replay.full; _replay.full=[]; renderData(full, false); }  // reveal all + re-snap
+}
+function updateReplayPos(){ const el=document.getElementById("rbPos"); if(el) el.textContent=_replay.idx+" / "+_replay.full.length; }
+function replayStep(dir){
+  if(!_replay.active) return;
+  _replay.idx=Math.max(2, Math.min(_replay.idx+dir, _replay.full.length));
+  renderData(_replay.full, true); updateReplayPos();
+  if(_replay.idx>=_replay.full.length) replayPause();
+}
+function replayPlay(){
+  if(!_replay.active || _replay.timer) return;
+  document.getElementById("rbPlay").textContent="⏸";
+  _replay.timer=setInterval(()=>replayStep(1), 400);
+}
+function replayPause(){ if(_replay.timer){ clearInterval(_replay.timer); _replay.timer=null; } const b=document.getElementById("rbPlay"); if(b) b.textContent="▶"; }
+// ── Multi-chart grid (iframe panels) ──
+// Each panel is an independent Freeview instance loaded as ?embed=1&sym=&tf=. Grid
+// layouts: 1 (single, normal app), 2h/2v (two), 4 (quad). The chosen layout +
+// per-panel symbols persist in localStorage["fv_layout"].
+let _gridPanels = [];          // [{sym, tf}]
+let _gridLayout = "1";
+let _gridSyncCrosshair = true; // relay crosshair between panels
+// Host relays a panel's crosshair time to all OTHER panels (crosshair sync).
+if(!IS_EMBED){
+  window.addEventListener("message", e=>{
+    const d=e.data; if(!d||d.fvx!=="crosshair"||!_gridSyncCrosshair) return;
+    document.querySelectorAll("#chartGrid iframe").forEach(f=>{
+      if(f.contentWindow!==e.source){ try{ f.contentWindow.postMessage(d, "*"); }catch(err){} }
+    });
+  });
+}
+const GRID_COUNTS = { "1":1, "2h":2, "2v":2, "4":4 };
+function buildGrid(layout){
+  _gridLayout = layout;
+  const grid=document.getElementById("chartGrid");
+  const n = GRID_COUNTS[layout]||1;
+  if(layout==="1"){
+    document.documentElement.classList.remove("grid-on");
+    grid.innerHTML=""; grid.removeAttribute("data-layout");
+    setTimeout(()=>{ resize(); sizeCanvas(); },50);
+    persistLayout(); syncLayoutUI(); return;
+  }
+  // seed panel symbols: first = current active symbol, rest from watchlist / repeats
+  const wl = allSymbols();
+  while(_gridPanels.length < n){
+    const i=_gridPanels.length;
+    _gridPanels.push({ sym: i===0?activeSymbol : (wl[i%wl.length]||activeSymbol), tf: activeTF });
+  }
+  _gridPanels = _gridPanels.slice(0,n);
+  grid.setAttribute("data-layout", layout);
+  grid.innerHTML="";
+  _gridPanels.forEach((p,i)=>{
+    const f=document.createElement("iframe");
+    f.src = "index.html?embed=1&sym="+encodeURIComponent(p.sym)+"&tf="+encodeURIComponent(p.tf);
+    f.dataset.panel=i;
+    f.onload=()=>{ /* panel ready */ };
+    grid.appendChild(f);
+  });
+  document.documentElement.classList.add("grid-on");
+  persistLayout(); syncLayoutUI();
+}
+function persistLayout(){ try{ localStorage.setItem("fv_layout", JSON.stringify({layout:_gridLayout, panels:_gridPanels})); }catch(e){} }
+// Named layouts: save the current grid (layout + panel symbols) under a name, reload later.
+function savedLayouts(){ try{ return JSON.parse(localStorage.getItem("fv_layouts_named")||"{}"); }catch(e){ return {}; } }
+function saveNamedLayout(){
+  const name=prompt("Save layout as:", "Layout "+ (Object.keys(savedLayouts()).length+1));
+  if(!name) return;
+  const all=savedLayouts(); all[name]={ layout:_gridLayout, panels:_gridPanels.slice() };
+  try{ localStorage.setItem("fv_layouts_named", JSON.stringify(all)); }catch(e){}
+  rebuildLayoutMenu();
+}
+function loadNamedLayout(name){
+  const l=savedLayouts()[name]; if(!l) return;
+  _gridPanels = (l.panels||[]).slice();
+  buildGrid(l.layout||"1");
+}
+function rebuildLayoutMenu(){
+  const menu=document.getElementById("layoutMenu"); if(!menu) return;
+  let html='<div class="tf-opt" data-layout="1">▢&nbsp; Single</div>'
+    +'<div class="tf-opt" data-layout="2h">◫&nbsp; Two (side by side)</div>'
+    +'<div class="tf-opt" data-layout="2v">⊟&nbsp; Two (stacked)</div>'
+    +'<div class="tf-opt" data-layout="4">⊞&nbsp; Four (grid)</div>'
+    +'<div class="tf-sec">SAVED LAYOUTS</div>';
+  const names=Object.keys(savedLayouts());
+  html += names.length ? names.map(n=>'<div class="tf-opt" data-named="'+escHtml(n)+'">💾 '+escHtml(n)+'</div>').join("")
+                       : '<div class="tf-opt" style="color:var(--muted)">none yet</div>';
+  html += '<div class="tf-opt" data-save="1">＋ Save current…</div>';
+  menu.innerHTML=html;
+}
+function syncLayoutUI(){
+  const lbl={ "1":"▢ 1", "2h":"◫ 2", "2v":"⊟ 2", "4":"⊞ 4" }[_gridLayout]||"▢ 1";
+  const el=document.getElementById("layoutSelLabel"); if(el) el.textContent=lbl;
+  document.querySelectorAll("#layoutMenu .tf-opt").forEach(o=>o.classList.toggle("active", o.dataset.layout===_gridLayout));
+}
+(function wireLayout(){
+  const sel=document.getElementById("layoutSel"), btn=document.getElementById("layoutSelBtn"), menu=document.getElementById("layoutMenu");
+  rebuildLayoutMenu();
+  btn.addEventListener("click", e=>{ e.stopPropagation(); sel.classList.toggle("open"); });
+  menu.addEventListener("click", e=>{ const o=e.target.closest(".tf-opt"); if(!o) return; sel.classList.remove("open");
+    if(o.dataset.save){ saveNamedLayout(); return; }
+    if(o.dataset.named){ loadNamedLayout(o.dataset.named); return; }
+    if(o.dataset.layout) buildGrid(o.dataset.layout);
+  });
+  document.addEventListener("click", e=>{ if(!e.target.closest("#layoutSel")) sel.classList.remove("open"); });
+  // restore persisted layout (embedded panels never restore a grid — no nested grids)
+  if(!IS_EMBED){ try{ const raw=localStorage.getItem("fv_layout"); if(raw){ const s=JSON.parse(raw); if(s&&s.panels)_gridPanels=s.panels; if(s&&s.layout&&s.layout!=="1") buildGrid(s.layout); } }catch(e){} }
+  syncLayoutUI();
+})();
+
+document.getElementById("btnReplay").onclick=()=>{ _replay.active||_replay.picking ? replayExit() : replayEnter(); };
+document.getElementById("rbPlay").onclick=()=>{ _replay.timer?replayPause():replayPlay(); };
+document.getElementById("rbStep").onclick=()=>replayStep(1);
+document.getElementById("rbStepBack").onclick=()=>replayStep(-1);
+document.getElementById("rbExit").onclick=replayExit;
+// While picking, a click on the chart chooses the replay start bar.
+dcanvas.addEventListener("click", e=>{
+  if(!_replay.picking) return;
+  const p=evtPt(e), t=xToTime(p.x);
+  if(t==null) return;
+  let idx=_replay.full.findIndex(b=>b.time>=t);
+  if(idx<0) idx=_replay.full.length;
+  replayStartAt(idx);
+}, true);   // capture phase so it runs before the drawing engine
 function closeAllPopups(){ hideCtx(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); closeDlg(); closeAlertDlg(); closeScriptDlg(); closeSymDlg(); }
 
 // ── Watchlist: add affordances ──
@@ -5499,6 +6369,35 @@ function closeAllPopups(){ hideCtx(); toggleIndicatorsMenu(false); toggleAlertsP
 document.getElementById("wlAdd").onclick = ()=>openAddSymbolDlg(null);
 // Clicking the symbol name in the top bar opens the symbol-search dialog (TradingView).
 document.getElementById("symbolBox").onclick = ()=>openAddSymbolDlg(null);
+// Resizable watchlist: drag its left edge to widen/narrow (200px … 50% of window).
+(function wireWlResize(){
+  const grip=document.getElementById("wlResize"); if(!grip) return;
+  try{ const w=localStorage.getItem("fv_wl_width"); if(w) document.documentElement.style.setProperty("--wl-w", w+"px"); }catch(e){}
+  grip.addEventListener("mousedown", e=>{
+    e.preventDefault();
+    const onMove=ev=>{
+      const w=Math.max(200, Math.min(window.innerWidth*0.5, window.innerWidth-ev.clientX));
+      document.documentElement.style.setProperty("--wl-w", w+"px");
+      resize(); sizeCanvas();
+    };
+    const onUp=()=>{ document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp);
+      const cur=getComputedStyle(document.getElementById("watchlist")).width; try{ localStorage.setItem("fv_wl_width", parseInt(cur)); }catch(e){} };
+    document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
+  });
+})();
+// Watchlist name dropdown: switch between named watchlists or create a new one.
+syncWlHead();
+document.getElementById("wlNameBtn").onclick = (e)=>{
+  e.stopPropagation();
+  const menu=document.getElementById("wlNameMenu");
+  if(menu.style.display==="block"){ menu.style.display="none"; return; }
+  let html="";
+  Object.keys(WATCHLISTS).forEach(n=>{ html+='<div class="mi" data-wl="'+escHtml(n)+'">'+(n===ACTIVE_WL?"✓ ":"")+escHtml(n)+'</div>'; });
+  html+='<div class="msep"></div><div class="mi" data-newwl="1">＋ New watchlist…</div>';
+  menu.innerHTML=html; menu.style.display="block";
+  menu.querySelectorAll(".mi").forEach(it=>it.onclick=()=>{ menu.style.display="none"; if(it.dataset.newwl) createWatchlist(); else switchWatchlist(it.dataset.wl); });
+};
+document.addEventListener("click", e=>{ if(!e.target.closest("#wlHead")){ const m=document.getElementById("wlNameMenu"); if(m) m.style.display="none"; } });
 // Collapse / expand the floating on-chart legend.
 document.getElementById("legCollapse").onclick = (e)=>{
   e.stopPropagation();
@@ -5589,6 +6488,25 @@ document.getElementById("symbolBox").addEventListener("contextmenu", e=>{ e.prev
 document.querySelectorAll("#wlCols span[data-sort]").forEach(h=>{
   h.onclick = ()=>sortWatchlist(h.dataset.sort);
 });
+// Resizable watchlist columns: drag grips at the left edge of Last/Chg/Chg% to
+// resize each (min 40px), applied via --wl-c2/c3/c4 CSS vars + persisted.
+(function wireColResize(){
+  const cols=document.getElementById("wlCols"); if(!cols) return;
+  ["c2","c3","c4"].forEach(cls=>{
+    const cell=cols.querySelector("."+cls); if(!cell) return;
+    try{ const w=localStorage.getItem("fv_wl_"+cls); if(w) document.documentElement.style.setProperty("--wl-"+cls, w+"px"); }catch(e){}
+    const grip=document.createElement("div"); grip.className="colgrip";
+    cell.appendChild(grip);
+    grip.addEventListener("mousedown", e=>{
+      e.preventDefault(); e.stopPropagation();
+      const startX=e.clientX, startW=cell.getBoundingClientRect().width;
+      const onMove=ev=>{ const w=Math.max(40, startW-(ev.clientX-startX)); document.documentElement.style.setProperty("--wl-"+cls, w+"px"); };
+      const onUp=()=>{ document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp);
+        try{ localStorage.setItem("fv_wl_"+cls, parseInt(getComputedStyle(cell).width)); }catch(e){} };
+      document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
+    });
+  });
+})();
 
 // ── Watchlist import / export (.txt) ──
 // Format: "###SECTION NAME" lines start a section; other non-blank lines are symbols.
@@ -5667,6 +6585,7 @@ document.getElementById("wlBody").addEventListener("contextmenu", e=>{
   function nearestBarIndex(t){ let bi=0,bd=Infinity; for(let i=0;i<lastData.length;i++){ const d=Math.abs(lastData[i].time-t); if(d<bd){bd=d;bi=i;} } return bi; }
 })();
 
+if(IS_EMBED){ document.documentElement.classList.add("embed"); }   // grid panel: hide watchlist chrome
 buildWatchlist();
 installHoverTracker();     // lets crosshair mode select/edit shapes while still panning
 loadPersisted();           // restore saved drawings for current symbol+tf
@@ -5675,6 +6594,7 @@ loadScripts();             // restore saved custom indicator scripts for current
 loadIndicators();          // restore saved indicators for current symbol
 applyTimeGranularity();    // fewer vertical grid lines on daily+ (TradingView parity)
 loadChart(activeSymbol, activeTF);
+if(typeof applyChartSettings==="function") applyChartSettings();   // restore saved candle/bg/grid colors
 resize();
 sizeCanvas();
 // Hold the watchlist price sweep until the chart has had a head start on the
@@ -5712,13 +6632,25 @@ function applyTick(prodPrice){
   }
   if(price==null || !isFinite(price)) return;
   const bar=lastData[lastData.length-1];
+  const prevClose=bar.close;
   bar.close=price; if(price>bar.high)bar.high=price; if(price<bar.low)bar.low=price;
   try{
-    if(chartType==="candles"||chartType==="hollow"||chartType==="heikin"||chartType==="bars"||chartType==="hlcbars"){
-      candle.update({time:bar.time, open:bar.open, high:bar.high, low:bar.low, close:bar.close});
-    }
+    // Re-route the live tick through applyChartType so the ~4-month future
+    // whitespace tail is re-supplied every update. Calling candle.update()
+    // directly throws ("cannot update oldest data") because the series' last
+    // point is the future whitespace, NOT the bar we're updating — and that
+    // failed update TRUNCATES the whitespace tail, which leaves the time scale
+    // scrolled into a now-empty future region and blanks the visible candles.
+    applyChartType(lastData);
   }catch(e){}
   updateOhlcLegend(bar.time);
+  flashLastPrice(price>=prevClose);   // last-price label flashes green/red on tick
+}
+// Brief flash on the last-price pill (the countdown badge sits there), colored by tick.
+function flashLastPrice(up){
+  const el=document.getElementById("barCountdown"); if(!el) return;
+  el.classList.remove("flash-up","flash-down"); void el.offsetWidth;
+  el.classList.add(up?"flash-up":"flash-down");
 }
 function wsConnect(){
   const prods=wsProductsForActive();
