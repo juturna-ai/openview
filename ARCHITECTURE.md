@@ -138,7 +138,7 @@ low   = A.low   / B.low      (then envelope to include open/close)
 
 This matches TradingView's ratio convention. Cross-term division (e.g. A.high/B.low) is deliberately avoided as it produces artificially inflated wicks.
 
-**Spread symbols paint once, not per page.** Like single symbols (which now paint only the first + final page — see the progressive loader above), a spread renders only after **both** legs have fully loaded — a single `paint(makeRatio(ka, kb))`. Per-page repainting of a spread fires ~16 full re-renders (candle + 6 MAs + RSI series) back-to-back while `makeRatio` runs on partial, misaligned legs. On a wide-range ratio (NEAR/INJ spans ~0.06–2.6) that render thrash trips an **intermittent Lightweight Charts race** — `Error: Value is null` thrown inside the line renderer during an animation frame — which permanently **freezes the chart's render + time-scale pipeline** (blank candles, "bouncing" zoom that never settles). One clean render of the complete, timestamp-aligned series avoids the thrash entirely. The single paint also yields the correct bar count (the true leg overlap, e.g. NEAR/INJ = 2022-09-20→present), where the old per-page path could leave a stale, inflated count from a partial paint. See `test/regression_chart_render.mjs`.
+**Spread symbols paint the first combined page, then once at the end.** Like single symbols, a spread paints the **first combined page** as soon as both legs have their first page (`tryFirstPaint` → `paintProgressive(makeRatio(...))`, guarded to fire only once), then renders the complete series once after **both** legs fully load. This makes a spread TF switch feel instant (~270 ms to first paint) instead of blank until every page of both legs finished (~3–4.5 s), which read as "the TF change hangs". Crucially it still paints only **twice** (first + final), never per page: per-page repainting fires dozens of full re-renders (candle + 6 MAs + RSI) back-to-back while `makeRatio` runs on partial, misaligned legs, and on a wide-range ratio (NEAR/INJ spans ~0.06–2.6) that thrash trips an **intermittent Lightweight Charts race** — `Error: Value is null` in the line renderer during an animation frame — which permanently **freezes the chart's render + time-scale pipeline** (blank candles, "bouncing" zoom that never settles). The final paint yields the correct bar count (the true leg overlap, e.g. NEAR/INJ = 2022-09-20→present). See `test/regression_chart_render.mjs` and `test/verify_spread_paint.mjs`.
 
 ### Yahoo Finance stats
 
@@ -152,8 +152,8 @@ This matches TradingView's ratio convention. Cross-term division (e.g. A.high/B.
 
 | Instance | Element | Purpose |
 |---|---|---|
-| `chart` | `#chart` | Main candle chart + 6 MAs + aux series |
-| `rsiChart` | `#rsi` | RSI(14) panel (fixed, always visible) |
+| `chart` | `#chart` | Main candle chart + editable MAs (`MAS`: type/period/source/color/width/style, gear-editable, persisted in `localStorage["fv_mas"]`) + aux series |
+| `rsiChart` | `#rsi` | RSI panel (always visible). Right-click **Settings** (`openRsiSettings`) opens the SAME TradingView-style **Inputs / Style / Visibility** tabbed dashboard as the dynamic indicators. It edits `RSI_PARAMS {len, src, divergence, smooth, maType, bbStdDev, waitClose, style{…}}`. **Inputs** has full TradingView parity: RSI Length + **Source** (`rsiSeries(data,len,src)` honors it), **Calculate Divergence** (`rsiDivergenceMarkers` marks regular bull/bear pivots on `rsiLine`), a SMOOTHING section with **Type** (SMA/EMA/WMA/RMA/VWMA/Bollinger Bands via `rsiSmoothMA`) + Length + **BB StdDev** (enabled only for the BB type), and a CALCULATION section (Timeframe/Wait-for-closes, shown but inert — the app always uses the chart TF + closed bars). **Style/Visibility** = per-plot color + width + line-style + show/hide for the RSI line, RSI-based MA, and 70/50/30 bands. `applyRsiStyle()` pushes the style onto the 5 live series (`rsiLine`/`rsiMa`/`band70`/`band50`/`band30`) and runs at boot so persisted looks restore; persisted in `localStorage["fv_rsi_params"]`; `updateRsiLabel()` keeps the `#rsiName` header in sync |
 | `ind.subChart` (per indicator) | `.subpane` in `#subPanes` | Dynamically created for sub-pane indicators |
 | `sc.subChart` (per script) | `.subpane` in `#subPanes` | Dynamically created for script sub-pane plots |
 
@@ -258,7 +258,7 @@ Each shape is stored as:
 | `mouseup` | End pan / axis drag / drag-edit; commit 2-pt shape on release; switch to click-click mode on a pure click |
 | `dblclick` | Reset price scale (on axis), commit pending polyline (drops floating endpoint), open settings dialog on shape, reset scale on empty chart |
 | `wheel` | Zoom anchored under cursor (keep bar under pointer fixed); shift+wheel = horizontal pan. Span is clamped to `[8, width/4.5]` bars so candles never shrink below ~3–4px (a too-wide view reads as an "empty" chart); the same clamp applies to keyboard `+/-` zoom |
-| `contextmenu` | Shape context menu, alert context menu, or chart context menu |
+| `contextmenu` | On the main chart (`dcanvas`): shape / alert / chart context menu. On each sub-pane element (RSI + indicator/script panes): `attachPaneContextMenu` shows Settings / Add alert on `<indicator>` / Reset view / Remove — sub-panes are separate LWC charts with no overlay canvas, so without this the browser's native menu showed instead |
 | `keydown` | Esc: cancel / deselect; Delete/Backspace: delete selected shape |
 
 **Auto-snap** (`_autoSnap`): during a fresh progressive load, `renderData` snaps the view to the latest bars on each page. The first real pan or zoom gesture calls `stopAutoSnap()` to stop re-snapping.
@@ -289,15 +289,18 @@ The `TOOLS` array and `CLICKS` map define every tool. Tool names from Wave 1/2 (
 
 **Vertical grid — `drawTimeGrid`.** LWC's built-in vertical grid is disabled (`grid.vertLines.visible:false`) because it draws a line at ~every bar and turns into a dense grey wall on small timeframes. Instead `drawTimeGrid(W,H)` reads the visible time span (`xToTime(0)`→`xToTime(W)`), picks a "nice" step from `_GRID_STEPS` (1m…1y) so ~8–12 lines span the range, then draws one line per round boundary at `timeToX(t)` — count is bar-independent (matches TradingView). Boundaries align to the selected timezone (`tzOffsetMin`). Horizontal grid lines stay with LWC (already at price-axis labels). Sub-panes (RSI/indicators) keep LWC's grid since they're outside the `#draw` overlay. Verified: `test/audit_timegrid.mjs` (1d → 6 lines, 1m zoomed-out → 10 lines).
 
-**Undo / redo.** `snapshotDraw()` pushes a `JSON.stringify(draw.shapes)` onto `_undoStack` (cap `UNDO_MAX=100`) and clears `_redoStack`; it's called *before* every mutation — add (finishPending/finishOneClick), delete, clone, reorder, setStyle, lock-toggle, remove-all, and drag/resize (snapshotted at drag *start*; a no-op click pops the snapshot back on mouseup so undo isn't cluttered). `undoDraw`/`redoDraw` swap between the stacks via `restoreShapes`. Bound to Ctrl/Cmd+Z (undo) and Ctrl+Y / Ctrl+Shift+Z (redo), suppressed while typing in an input.
+**Undo / redo.** `snapshotDraw()` pushes a `JSON.stringify(draw.shapes)` onto `_undoStack` (cap `UNDO_MAX=100`) and clears `_redoStack`; it's called *before* every mutation — add (finishPending/finishOneClick), delete, clone, reorder, setStyle, lock-toggle, remove-all, and drag/resize (snapshotted at drag *start*; a no-op click pops the snapshot back on mouseup so undo isn't cluttered). `undoDraw`/`redoDraw` swap between the stacks via `restoreShapes`. Bound to Ctrl/Cmd+Z (undo) and Ctrl+Y / Ctrl+Shift+Z (redo), suppressed while typing in an input, **and to the topbar ↩/↪ buttons** (`#btnUndo`/`#btnRedo`, placed after Replay). `updateUndoButtons()` — called from `snapshotDraw`, `restoreShapes`, the drag no-op pop, and at boot — greys out (`disabled`) each button when its stack is empty, matching TradingView.
 
 **Per-drawing lock.** Each shape may carry `s.locked`. The context menu shows 🔒 Lock / 🔓 Unlock. A locked shape can't be dragged, resized, or deleted (guards in the crosshair-mode mousedown, the handle-resize path, and the Delete-key handler). Distinct from the global `draw.locked` ("Lock All Drawings") toolbar toggle.
 
 **Stay-in-drawing-mode.** Toolbar toggle sets `draw.stay`. Normally a completed shape reverts the tool to crosshair (`selectTool("cross")`); when `draw.stay` is on, `selectTool(tool)` re-arms the same tool so the user can draw repeatedly (TradingView's "stay in drawing mode").
 
-### Settings dialog — `openSettings`
+### Settings dialog — `openSettings` / `openFibSettings` (TradingView-parity, tabbed)
 
-Double-clicking a shape (or choosing "Settings…" from the context menu) opens `#settingsDlg` with live-preview fields: line color (color picker), width (range), line style (solid/dashed/dotted), fill opacity (for rect/ellipse/position), text (for text/callout), and "show price label" checkbox.
+Double-clicking a shape (or "Settings…" from the context menu) opens `#settingsDlg` as a **tabbed dialog** (`Style` / `Coordinates` / `Visibility`, reusing the `.dtabs/.dtab/.dpane` CSS).
+
+- **Generic tools** → `openSettings(id)`. The **Style** tab renders line color/width/style plus per-tool extras driven by `TOOL_CAPS[type]` (`fill` → fill color+opacity for rect/ellipse/position/etc.; `text` → text + text-color + font-size for text/callout/patterns; `arrow` → arrow-head toggle; `extend` → don't-extend/right/left/both for trend lines; `label:false` hides the price-label checkbox). The **Coordinates** tab lists one editable *(price, bar)* row per anchor point in `s.pts`. The **Visibility** tab holds the 8 TradingView time-scope toggles (Ticks/Seconds/…/Ranges) stored on `s.style.visibility`. All fields live-preview and persist. New render properties honored: `style.fillColor`, `style.textColor`, `style.fontSize`, `style.extend` (trend), `style.arrow`.
+- **Fib Retracement / Extension** → `openFibSettings(id)`. Full TradingView parity. Fib config is now **per-shape** (`s.fib`, seeded by `defaultFibConfig()` on creation; legacy shapes migrate lazily via `getFib(s)`). **Style** tab: Trend line (show + color + dash), Levels line (width + dash), Extend, Reverse, show-level-values / show-prices, then the **24 default levels** (`FIB_DEFAULT_LEVELS`) each as checkbox + editable value + color in a 2-column `.fib-grid` filled **column-major** (`grid-auto-flow:column` + a per-page `gridTemplateRows` of ceil(n/2)) so values read top-to-bottom down the left column then down the right, in ascending order, plus "Use one color". The default level set spans **48 levels** (`FIB_DEFAULT_LEVELS` + `FIB_PAGE2_LEVELS`), merged and **sorted ascending** so the grid reads in order (0, 0.236, 0.382, …). Split into two fixed pages of 24: page 1 = 0→3.382 (only **0→1** checked), page 2 = 3.5→8 continuation (**all unchecked** until the user ticks them). The level grid is **paginated** by fixed 24-row slices; a ‹ / › pager (`fib_prev`/`fib_next`) swaps pages, committing edits first and remapping via each row's original `data-i` index.  **Templates** — a `Template ▾` menu in the footer offers **Save as…** (name → store to `fv_fib_templates`), **Save as default** (store to `fv_fib_default`; `defaultFibConfig()` returns a clone of it for new fibs, else `builtinFibConfig()`), **Apply defaults** (reset the shape to factory config), and each saved template (click to apply, ✕ to delete). The dialog gets a `.fib-dialog` class (wider 460px) with `overflow-x:hidden` + dark-themed scrollbars, and the level grid uses `minmax(0,1fr)` tracks so it never scrolls sideways. **Coordinates** and **Visibility** tabs as above. `drawFib` renders from the per-shape config (levels/colors/extend/reverse/one-color/trend line) instead of the old global `FIB_LEVELS`/`FIB_COLORS` (still used only as a fallback).
 
 ### Manual pan and price-axis drag
 
@@ -333,15 +336,24 @@ Calc helpers return shorter arrays (they start at `i = period - 1`). A sub-pane 
 
 ### Hardwired indicators
 
-Six MAs (7/25/99/150/200/300) are rendered directly in `renderData` via `smaSeries`. RSI(14) is rendered via `rsiSeries` / `maOfSeries` into the always-visible `#rsiWrap` pane (not part of `indicators[]`).
+MAs (default 7/25/99/150/200/300) are held in the mutable `MAS` array (`{p, color, w, on, type, src, ls}`) and rendered directly in `renderData` via `renderMaLegend` → `maLine`. `maLine(data, m)` picks the source column (`src`: close/open/high/low/hl2/hlc3/ohlc4) and MA kind (`type`: sma/ema/wma/rma via `smaA`/`emaA`/`wmaA`/`rmaA`). They are **editable**: the `#maLegend` row ends with a ⚙ gear (`#maGear`) opening `openMaSettings` — a dialog to change each MA's type, period, source, color, width, line style, toggle visibility, add/remove, and Reset to defaults (`DEFAULT_MAS`). Add/remove rebuilds the line series via `rebuildMaSeries` (`maSeriesOpts` shares the option shape); edits persist to `localStorage["fv_mas"]` (`saveMas`). The legend label reflects the type (e.g. `EMA25`, `SMMA99`) via `maTag`. RSI(14) is rendered via `rsiSeries` / `maOfSeries` into the always-visible `#rsiWrap` pane (not part of `indicators[]`).
 
 ### Indicators dialog — `toggleIndicatorsMenu`
 
 Two tabs: **Technicals** (full catalog, grouped by `cat`) and **★ Favorites** (filtered to `indFavorites`). Live search filters by name/category. Each row has a star toggle (`toggleFavorite` → persisted in `localStorage["fv_ind_favorites"]`); clicking the name adds the indicator. "Community" tab is omitted (no backend). `_indTab` holds the active tab.
 
-### Indicator settings — `openIndicatorSettings`
+### Indicator settings — `openIndicatorSettings` (TradingView-style dashboard)
 
-Dynamically builds a dialog from `Object.entries(ind.params)`. Number inputs use `step=1` or `step=0.01` (for `FLOAT_PARAMS`). Color inputs recolor the series in real time. Source inputs (`src`) use a `<select>` over `SRC_OPTS = ["close","open","high","low","hl2","hlc3","ohlc4"]`.
+A tabbed dialog (**Inputs / Style / Visibility**), driven by two data sources:
+
+- **`IND_META[type]`** — hand-authored per indicator: `inputs` (`{key,label,type:"num"|"src",min,step}` in TradingView order/labels, e.g. MACD → "Fast Length"/"Slow Length"/"Signal Smoothing") and `plots` (readable names index-aligned to `plotSpec`, e.g. `["Histogram","MACD","Signal"]`). Any type missing meta falls back to auto-labelled params (`autoLabel`) + "Plot N".
+- **`plotSpec(ind)`** — the existing per-plot descriptors (line/hist, default color, width), used to build the Style/Visibility rows.
+
+**Inputs** tab edits `ind.params` (source via `<select>` over `SRC_OPTS`). **Style** tab edits per-plot `ind.plotStyle[i] = {color, width, style}` (line plots get width + line-style from `LINE_STYLES = Solid/Dotted/Dashed`; histograms get color only) plus an output **Precision** (`ind.precision`, Default | 0–8). **Visibility** tab toggles `ind.plotHidden[i]`; its checkboxes mirror the Style-tab ones live.
+
+- **`ensurePlotState(ind)`** seeds `plotStyle`/`plotHidden` from `plotSpec` defaults (width rounded to an integer 1–6) the first time, and grows the arrays if the plot count changes (e.g. ribbon `count`).
+- **`applyIndicatorStyle(ind)`** applies the stored style/visibility/precision onto the live LWC series; called after every `renderIndicator` (which only `setData`s, never recreates series) and on `addIndicator`.
+- Persistence: `saveIndicators()` serializes `plotStyle`, `plotHidden`, `precision` alongside `params`/`hidden`; `loadIndicators` restores them through `addIndicator` opts. Legacy single `color` param stays synced to `plotStyle[0].color` so the legend swatch matches. See `test/regression_ind_settings.mjs`.
 
 ---
 
@@ -388,6 +400,7 @@ Client-side price-crossing alerts. Backed by `alerts[]` (per-symbol, in-memory);
   expiry,    // epoch ms | null
   message,
   notify: { popup, sound, browser, email },
+  webhook,   // user-defined URL | "" — POSTed on trigger (no backend needed)
   active, _last
 }
 ```
@@ -400,7 +413,7 @@ Called from `renderData` on every paint. `sourceValue(key)` computes the current
 
 ### Firing — `fireAlert`
 
-On trigger: browser `Notification` (if permission granted and `notify.browser`), in-app toast div with 6-second auto-remove (if `notify.popup`), Web Audio API beep at 880 Hz (if `notify.sound`). Email requires a backend and is silently no-op.
+On trigger: browser `Notification` (if permission granted and `notify.browser`), in-app toast div with 6-second auto-remove (if `notify.popup`), Web Audio API beep at 880 Hz (if `notify.sound`). If `a.webhook` is set, a fire-and-forget `fetch()` POSTs `{symbol, message, value, source, op, target, time}` JSON to that URL (`mode:"no-cors"`, `keepalive:true`) — no backend required, works from any static host. Email requires a backend and is silently no-op.
 
 ### Visual — `drawAlertLines`
 
@@ -415,7 +428,8 @@ For `price`-vs-`value` alerts, `redraw` calls `drawAlertLines()` which draws a d
 | `fv_watchlist` | `GROUPS[]` — array of `{name, symbols[], collapsed?}` | `saveGroups()` | `loadGroups()` at boot |
 | `fv_draw_<symbol>_<tf>` | `draw.shapes[]` — array of `{id, type, pts, style, text?}` | `persist()` | `loadPersisted()` on symbol/TF change and at boot |
 | `fv_scripts_<symbol>` | `[{name, code}]` — user script name and source | `saveScripts()` | `loadScripts()` on symbol change and at boot |
-| `fv_alerts_<symbol>` | `[{id, source, op, target, value, trigger, expiry, message, notify, active}]` | `saveAlerts()` | `loadAlerts()` on symbol change and at boot |
+| `fv_alerts_<symbol>` | `[{id, source, op, target, value, trigger, expiry, message, notify, webhook, active}]` | `saveAlerts()` | `loadAlerts()` on symbol change and at boot |
+| `fv_recent_wl` | `RECENT_WL[]` — watchlist names, most-recent-first (drives the list-menu RECENTLY USED section) | `pushRecentWL()` on every `switchWatchlist` | read at boot |
 | `fv_indicators_<symbol>` | `[{type, params, hidden}]` — active indicators | `saveIndicators()` on add/remove/hide/settings | `loadIndicators()` on symbol change and at boot |
 | `fv_active_symbol` / `fv_active_tf` | last-viewed symbol + timeframe key | `saveActiveState()` on symbol/TF change | read at boot (before first `loadChart`); `validateRestoredTF` rebuilds a custom `c<sec>` TF entry or falls back to `1d` |
 | `fv_tz` | timezone offset (minutes east of UTC) | `applyTz()` | read at boot |
@@ -446,13 +460,13 @@ For `price`-vs-`value` alerts, `redraw` calls `drawAlertLines()` which draws a d
 
 **Object tree** — the 🗂 button opens `#objTree`, a panel listing all `draw.shapes`, `indicators`, and `scripts` with per-item 👁 hide (indicators) and × delete (routes to `deleteShape`/`removeIndicator`/`removeScript`).
 
-**Named watchlists** — `WATCHLISTS = {name: groups[]}` with `ACTIVE_WL`; the legacy single `fv_watchlist` migrates in as "comeback". `saveGroups` writes both the legacy key and `fv_watchlists`/`fv_active_wl`. The `#wlNameBtn` header dropdown switches (`switchWatchlist`) or creates (`createWatchlist`) lists; `GROUPS` is swapped to the active list and the view rebuilt.
+**Named watchlists** — `WATCHLISTS = {name: groups[]}` with `ACTIVE_WL`; the legacy single `fv_watchlist` migrates in as "comeback". `saveGroups` writes both the legacy key and `fv_watchlists`/`fv_active_wl`. The `#wlNameBtn` header dropdown is a full TradingView-style list menu: Share list (`shareWatchlist`, clipboard stub), Add alert on the list (`alertOnList`), Make a copy (`copyWatchlist`, deep-clone), Rename (`renameWatchlist`), Add section (`addGroup`), Clear list (`clearWatchlist`), Create new list (`createWatchlist`), Upload list .txt (`#wlImportFile` → `importWatchlistText`), Open list / Shift+W (`openListBrowser` dialog), plus a RECENTLY USED section (from `RECENT_WL`, click to switch). Switching swaps `GROUPS` to the active list and rebuilds the view.
 
 **Invert / percent scale** — the chart right-click menu offers Auto/Log/Percent (`setScaleMode` → priceScale `mode`) and Invert (`toggleInvertScale` → priceScale `invertScale`, flips the chart vertically).
 
 **Right rail + stubs** — a far-right vertical icon rail (`#rightRail`) gives quick access to Watchlist / Alerts / Object tree / News / Screener / Paper trading. News/Screener/Paper open `openStubPanel(kind)` — explicitly placeholder panels (no backend / feed in this single-file build). **Resizable watchlist**: `#wlResize` grip drags the panel width (200px–50%, `--wl-w` CSS var, persisted `fv_wl_width`); the topbar/grid use `right:0` inside `#main` so they follow the resize.
 
-**Pattern tools / tool favorites** — `elliott` (6-click 0-1-2-3-4-5) and `xabcd` (5-click X-A-B-C-D) are labeled multi-point tools rendered by `drawLabeledPath` (connected segments + a label bubble at each vertex). `TOOL_FAVS` (persisted `fv_tool_favs`) pins favorited drawing tools to a cluster at the top of the left rail; the flyout rows have a ☆/★ star (`toggleToolFav`).
+**Pattern tools / tool favorites** — `elliott` (6-click 0-1-2-3-4-5), `xabcd` (5-click X-A-B-C-D), and `headshoulders` (7-click LS/T1/H/T2/RS + 2 neckline points) are labeled multi-point tools rendered by `drawLabeledPath` (connected segments + a label bubble at each vertex); all three share the polyline-style multi-point hit-test and persistence. `TOOL_FAVS` (persisted `fv_tool_favs`) pins favorited drawing tools to a cluster at the top of the left rail; the flyout rows have a ☆/★ star (`toggleToolFav`).
 
 **Toasts / settings gear** — `toast(msg, kind)` shows a bottom-center notification (`#toastWrap`, ok/err variants, auto-dismiss), wired to screenshot-save and drawing-template-save. A ⚙ topbar button opens the chart-settings dialog.
 

@@ -70,7 +70,8 @@
 - [x] Date range — edge hit-test
 - [x] Date & price range measure — Date&Price Range + Measure tools
 - [x] Elliott wave tools — new "elliott" tool (6-click 0-1-2-3-4-5 labeled path via drawLabeledPath). Verified 6-point shape renders with labels
-- [x] XABCD patterns — new "xabcd" tool (5-click X-A-B-C-D labeled path). Verified 5-point shape renders with X/A/B/C/D labels. (Head- [ ] Head & shoulders / XABCD patterns — not implementedshoulders approximable via XABCD/elliott multi-point)
+- [x] XABCD patterns — new "xabcd" tool (5-click X-A-B-C-D labeled path). Verified 5-point shape renders with X/A/B/C/D labels
+- [x] Head & shoulders — new "headshoulders" tool (7-click labeled path LS/T1/H/T2/RS + 2 neckline points via drawLabeledPath). Verified 7-point shape renders with labels, hit-test + persistence via multi-point path handling
 - [x] Drawing settings: color — context-menu swatches + settings color field
 - [x] Drawing settings: line width — settings width control
 - [x] Drawing settings: style (solid/dash/dot) — settings line-style select
@@ -186,7 +187,7 @@ _Audit method: each item driven in a headless Chromium (Playwright, `test/` harn
 - [x] Drawing templates: save a drawing's style as reusable default — shape context-menu "⭐ Save style as default" → saveDrawTemplate updates DEFAULT_STYLE + persists fv_draw_default (restored at boot). Verified orange/width-4/dashed saved + survives reload
 - [x] Indicator templates: save/load a set of indicators as one template — fv_ind_templates + Templates dropdown in indicators dialog (Save current / load). Verified save "My Setup" (3 inds), clear, load restores rsi/macd/bb
 - [x] Session breaks: vertical lines between trading days — drawSessionBreaks() draws faint tz-adjusted day-boundary verticals on intraday TFs only (early-returns on 1D+). Verified 115 breaks on 1h, none on 1D
-- [ ] Alert webhooks: POST alert payload to a user-defined URL  — BLOCKED: needs backend (Supabase/server); skipped per standing rule
+- [x] Alert webhooks: POST alert payload to a user-defined URL — no backend needed: alert dialog has a "Webhook URL" field (persisted per alert); on trigger fireAlert() does fetch() POST (mode:no-cors, keepalive) of {symbol,message,value,source,op,target,time} JSON. Verified via route interception — payload delivered on fire
 - [x] Watchlist import/export (.txt) — ⭱ export downloads ###SECTION-format .txt; ⭳ import parses + rebuilds GROUPS. Verified export content correct + import of custom .txt built CRYPTO/ALTS sections (4 symbols) rendering
 
 
@@ -305,15 +306,15 @@ _Audit method: each item driven in a headless Chromium (Playwright, `test/` harn
 - [x] Resizable columns: drag dividers between Symbol/Last/Chg/Chg% headers, widths persist — .colgrip on c2/c3/c4 → --wl-c2/c3/c4 vars (header + rows) + fv_wl_c2/3/4. Verified Last col 72→114px, rows follow, persists
 - [x] Full symbol names visible when panel widened — verified at 422px "NEAR-USD/INJ-USD"/"RENDER-USD"/"ASTER-USD" render untruncated
 - [x] Watchlist name dropdown — #wlNameBtn dropdown lists named watchlists + New. Verified switch/create works
-  - [ ] Share list (toggle, stub OK)
-  - [ ] Add alert on the list...
-  - [ ] Make a copy...
-  - [ ] Rename
-  - [ ] Add section
-  - [ ] Clear list
-  - [ ] Create new list...
-  - [ ] Upload list... (import .txt)
-  - [ ] RECENTLY USED section listing other lists (click to switch)
-  - [ ] Open list... (Shift+W) — full list browser
+  - [x] Share list — stub: copies the list's symbols to clipboard (shareWatchlist)
+  - [x] Add alert on the list... — opens the alert dialog (alertOnList → openAlertDialog)
+  - [x] Make a copy... — deep-clones active list to "<name> copy" and switches (copyWatchlist). Verified
+  - [x] Rename — prompt renames active list, updates recents (renameWatchlist)
+  - [x] Add section — addGroup(null) adds a new section to the active list
+  - [x] Clear list — empties symbols in all sections, keeps sections (clearWatchlist, confirm-guarded)
+  - [x] Create new list... — createWatchlist prompt
+  - [x] Upload list... (import .txt) — triggers #wlImportFile → importWatchlistText
+  - [x] RECENTLY USED section listing other lists (click to switch) — RECENT_WL tracked on every switch (fv_recent_wl), rendered under header. Verified TESTLIST appears + click switches
+  - [x] Open list... (Shift+W) — full list browser dialog with per-list symbol counts, click to switch (openListBrowser). Verified Shift+W opens + close
 - [x] Menu styling matches TV — .popmenu/.panel #1e222d rounded + shadow, icons per row (mi swatch), hover highlight, msep dividers. Verified in context menus + dialogs
 - [x] Sidebar/pane sections resizable by dragging shared edges — sub-pane dividers (wirePaneResize, 70–500px) + watchlist left edge (#wlResize, --wl-w) + columns (.colgrip). Verified pane resize 120→190px + watchlist 300→422px earlier. (Far-right rail items are popovers, not stacked sections)

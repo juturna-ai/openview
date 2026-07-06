@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Free Chart — Live Crypto (Coinbase)</title>
+<title>OpenView — Live Crypto Charts</title>
+<link rel="icon" type="image/x-icon" href="assets/freeview.ico">
+<link rel="icon" type="image/png" sizes="256x256" href="assets/freeview.png">
+<link rel="apple-touch-icon" href="assets/freeview.png">
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   :root{
@@ -145,8 +148,9 @@
   #subPanes{flex:0 1 auto; min-height:0;}
   #rsiLabel{position:absolute; top:6px; left:10px; font-size:11px; color:var(--muted); z-index:5;}
   /* Countdown-to-bar-close pill, pinned to the right price axis at the last price. */
-  #barCountdown{position:absolute; right:2px; z-index:6; display:none; transform:translateY(-50%);
-    background:#363a45; color:#d1d4dc; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;
+  #barCountdown{position:absolute; right:0; z-index:6; display:none;
+    width:72px; text-align:center; box-sizing:border-box;
+    background:#2962ff; color:#fff; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;
     padding:2px 6px; border-radius:3px; pointer-events:none; white-space:nowrap;}
   #rsiLabel b{font-weight:600;}
   #rsi{width:100%; height:100%;}
@@ -234,6 +238,7 @@
   .tbtn{background:transparent; border:none; color:#d1d4dc; font-size:12px; cursor:pointer;
     padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:4px; height:28px;}
   .tbtn:hover{background:var(--hover);}
+  .tbtn:disabled{opacity:.35; cursor:default;} .tbtn:disabled:hover{background:transparent;}
 
   /* ── sub-panes for separate-pane indicators (MACD, Stoch, etc.) ── */
   #subPanes{display:none; flex-direction:column; flex:0 1 auto; min-height:0;}
@@ -303,11 +308,18 @@
   .dialog{position:fixed; display:none; z-index:401; top:50%; left:50%; transform:translate(-50%,-50%);
     width:360px; background:#1e222d; border:1px solid var(--border); border-radius:10px;
     box-shadow:0 12px 48px #000c; flex-direction:column;}
+  /* Fib settings needs room for the 2-column level grid — widen it and never scroll sideways. */
+  .dialog.fib-dialog{width:460px;}
+  .dialog .db{scrollbar-width:thin; scrollbar-color:#3a3f4b #131722;}
+  .dialog .db::-webkit-scrollbar{width:10px;}
+  .dialog .db::-webkit-scrollbar-track{background:#131722;}
+  .dialog .db::-webkit-scrollbar-thumb{background:#3a3f4b; border-radius:5px; border:2px solid #131722;}
+  .dialog .db::-webkit-scrollbar-thumb:hover{background:#4a505e;}
   .dialog.open{display:flex;}
   .dialog .dh{padding:14px 16px; font-weight:600; font-size:15px; border-bottom:1px solid var(--border);
     display:flex; justify-content:space-between; align-items:center;}
   .dialog .dh .cl{cursor:pointer; color:var(--muted); font-size:20px;}
-  .dialog .db{padding:14px 16px; display:flex; flex-direction:column; gap:12px; max-height:60vh; overflow-y:auto;}
+  .dialog .db{padding:14px 16px; display:flex; flex-direction:column; gap:12px; max-height:64vh; overflow-y:auto; overflow-x:hidden;}
   .dialog .field{display:flex; justify-content:space-between; align-items:center; gap:10px;}
   .dialog .field label{font-size:13px; color:#d1d4dc;}
   .dialog .field input[type=number], .dialog .field input[type=text], .dialog .field select{
@@ -316,6 +328,57 @@
   .dialog .field input[type=color]{width:34px; height:26px; padding:0; border:1px solid var(--border);
     border-radius:4px; background:#131722; cursor:pointer;}
   .dialog .field input[type=range]{width:120px;}
+  /* Indicator settings dashboard — TradingView-style Inputs/Style/Visibility tabs */
+  .dialog .dtabs{display:flex; gap:18px; padding:0 16px; border-bottom:1px solid var(--border);}
+  .dialog .dtab{padding:10px 0; font-size:13px; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px;}
+  .dialog .dtab:hover{color:#d1d4dc;}
+  .dialog .dtab.active{color:#d1d4dc; border-bottom-color:var(--accent);}
+  .dialog .dpane{display:none;} .dialog .dpane.active{display:flex; flex-direction:column; gap:12px;}
+  .dialog .dsec{font-size:11px; letter-spacing:.4px; color:var(--muted); text-transform:uppercase; margin-top:4px;}
+  .dialog .prow{display:flex; align-items:center; gap:8px; justify-content:space-between;}
+  .dialog .prow .pl{display:flex; align-items:center; gap:8px; font-size:13px; color:#d1d4dc; flex:1; min-width:0;}
+  .dialog .prow .pl input[type=checkbox]{flex:none;}
+  .dialog .prow .pc{display:flex; align-items:center; gap:6px; flex:none;}
+  .dialog .prow input[type=color]{width:34px; height:26px; padding:0; border:1px solid var(--border); border-radius:4px; background:#131722; cursor:pointer;}
+  .dialog .prow select{padding:5px 6px; background:#131722; border:1px solid var(--border); border-radius:5px; color:#d1d4dc; font-size:12px; outline:none;}
+  .dialog .prow input[type=number], .dialog .prow input[type=text]{padding:5px 6px; background:#131722; border:1px solid var(--border); border-radius:5px; color:#d1d4dc; font-size:12px; outline:none;}
+  .dialog .prow .pw{width:52px;}
+  .dialog.ma-dlg{width:520px;}
+  .dialog .ma-editrow{gap:6px; justify-content:flex-start;}
+  .dialog .ma-editrow .ma_type, .dialog .ma-editrow .ma_src{flex:none; width:72px;}
+  .dialog .ma-editrow .ma_ls{flex:none; width:66px;}
+  .dialog .ma-editrow .ma_p{width:64px;}
+  .dialog .ma-editrow .ma_w{width:46px;}
+  .dialog .ma-editrow .ma_del{margin-left:auto;}
+  /* ── Fib retracement level editor (2-column grid) ── */
+  .dialog .fib-grid{display:grid; grid-auto-flow:column; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:6px 14px; width:100%; box-sizing:border-box;}
+  .dialog .fib-lvl{display:flex; align-items:center; gap:6px;}
+  .dialog .fib-lvl{gap:8px;}
+  .dialog .fib-lvl input[type=number]{flex:1; width:auto; min-width:0; padding:5px 8px; background:#131722; border:1px solid var(--border); border-radius:5px; color:#d1d4dc; font-size:12px; outline:none;}
+  .dialog .fib-lvl input[type=color]{width:28px; height:24px; padding:0; border:1px solid var(--border); border-radius:4px; background:#131722; cursor:pointer;}
+  .dialog .fib-lvl input[type=checkbox]{flex:none;}
+  .dialog .fib-pager{display:flex; align-items:center; justify-content:center; gap:14px; margin-top:4px;}
+  .dialog .fib-pager span{font-size:12px; color:var(--muted);}
+  .dialog .fib-parrow{width:26px; height:24px; border-radius:5px; border:1px solid var(--border); background:#131722; color:#d1d4dc; cursor:pointer; font-size:15px; line-height:1;}
+  .dialog .fib-parrow:hover:not(:disabled){background:var(--hover);}
+  .dialog .fib-parrow:disabled{opacity:.35; cursor:default;}
+  /* ── Template menu ── */
+  .dialog .df{position:relative;}
+  .dialog .fib-tpl-wrap{position:relative;}
+  .dialog .fib-tpl-menu{display:none; position:absolute; bottom:calc(100% + 6px); left:0; min-width:200px;
+    background:#1e222d; border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 28px #000b;
+    padding:6px 0; z-index:410; max-height:300px; overflow-y:auto;
+    scrollbar-width:thin; scrollbar-color:#3a3f4b #131722;}
+  .dialog .fib-tpl-menu.open{display:block;}
+  .dialog .fib-tpl-menu::-webkit-scrollbar{width:10px;}
+  .dialog .fib-tpl-menu::-webkit-scrollbar-track{background:#131722;}
+  .dialog .fib-tpl-menu::-webkit-scrollbar-thumb{background:#3a3f4b; border-radius:5px; border:2px solid #131722;}
+  .dialog .fib-tpl-menu .tpli{padding:8px 14px; font-size:13px; color:#d1d4dc; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .dialog .fib-tpl-menu .tpli:hover{background:var(--hover);}
+  .dialog .fib-tpl-menu .tpli-sep{height:1px; background:var(--border); margin:5px 0;}
+  .dialog .fib-tpl-menu .tpli-del{color:var(--muted); font-size:11px; opacity:0;}
+  .dialog .fib-tpl-menu .tpli-named:hover .tpli-del{opacity:1;}
+  .dialog .fib-tpl-menu .tpli-del:hover{color:#ef5350;}
   .dialog .df{padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px;}
   .dialog .btn{padding:7px 16px; border-radius:5px; border:none; cursor:pointer; font-size:13px;}
   .dialog .btn.primary{background:var(--accent); color:#fff;}
@@ -467,7 +530,7 @@
       <span class="tbdiv"></span>
       <button class="tbtn" id="btnIndicators">⊞ Indicators</button>
       <button class="tbtn" id="btnAlert" title="Click: create alert · Right-click: manage alerts">🔔 Alert</button>
-      <button class="tbtn" id="btnScript" title="Write a custom indicator (Freeview Script)">ƒ Script</button>
+      <button class="tbtn" id="btnScript" title="Write a custom indicator (OpenView Script)">ƒ Script</button>
       <!-- Price-scale mode toggle + timezone selector are relocated to the bottom bar by JS at boot -->
       <button class="tbtn" id="btnScale" title="Price scale: Normal / Log / Percent">⤢ Auto</button>
       <div class="tf-sel" id="tzSel" title="Chart timezone">
@@ -489,6 +552,9 @@
         </div>
       </div>
       <button class="tbtn" id="btnReplay" title="Bar replay">⏮ Replay</button>
+      <div class="tbdiv"></div>
+      <button class="tbtn" id="btnUndo" title="Undo (Ctrl+Z)" disabled>↩</button>
+      <button class="tbtn" id="btnRedo" title="Redo (Ctrl+Y)" disabled>↪</button>
       <button class="tbtn" id="btnObjTree" title="Object tree (drawings & indicators)">🗂</button>
       <button class="tbtn" id="btnSettings" title="Chart settings">⚙</button>
       <button class="tbtn" id="btnTheme" title="Toggle light / dark theme">🌙</button>
@@ -517,7 +583,7 @@
       </div>
     </div>
     <div id="rsiWrap">
-      <div id="rsiLabel">RSI 14 close <b id="rsiVal" style="color:#7e57c2">—</b> <b id="rsiMaVal" style="color:#e0a82e">—</b></div>
+      <div id="rsiLabel"><span id="rsiName">RSI 14 close</span> <b id="rsiVal" style="color:#7e57c2">—</b> <b id="rsiMaVal" style="color:#e0a82e">—</b></div>
       <div id="rsi"></div>
     </div>
     <div id="subPanes"></div>
@@ -714,12 +780,73 @@ function saveGroups(){
        localStorage.setItem("fv_watchlists", JSON.stringify(WATCHLISTS));
        localStorage.setItem("fv_active_wl", ACTIVE_WL); }catch{}
 }
+// Recently-used watchlists: names in most-recent-first order (excludes the active one).
+let RECENT_WL = [];
+try{ const r=localStorage.getItem("fv_recent_wl"); if(r) RECENT_WL=JSON.parse(r)||[]; }catch{}
+function pushRecentWL(name){
+  RECENT_WL=[name, ...RECENT_WL.filter(n=>n!==name)].slice(0,8);
+  try{ localStorage.setItem("fv_recent_wl", JSON.stringify(RECENT_WL)); }catch{}
+}
 function switchWatchlist(name){
-  if(!WATCHLISTS[name]) return;
-  WATCHLISTS[ACTIVE_WL]=GROUPS;   // stash current
+  if(!WATCHLISTS[name] || name===ACTIVE_WL) return;
+  pushRecentWL(ACTIVE_WL);         // the list we're leaving becomes "recently used"
+  WATCHLISTS[ACTIVE_WL]=GROUPS;    // stash current
   ACTIVE_WL=name; GROUPS=WATCHLISTS[name];
   saveGroups(); buildWatchlist(); syncWlHead();
 }
+// ── List-menu actions (TradingView #wlNameBtn dropdown) ──
+function copyWatchlist(){
+  let base=ACTIVE_WL+" copy", name=base, i=2;
+  while(WATCHLISTS[name]){ name=base+" "+(i++); }
+  WATCHLISTS[ACTIVE_WL]=GROUPS;
+  WATCHLISTS[name]=JSON.parse(JSON.stringify(GROUPS));   // deep clone
+  ACTIVE_WL=name; GROUPS=WATCHLISTS[name];
+  saveGroups(); buildWatchlist(); syncWlHead();
+}
+function renameWatchlist(){
+  const name=prompt("Rename watchlist:", ACTIVE_WL);
+  if(!name || name===ACTIVE_WL) return;
+  if(WATCHLISTS[name]){ alert("A list named “"+name+"” already exists."); return; }
+  WATCHLISTS[name]=GROUPS; delete WATCHLISTS[ACTIVE_WL];
+  RECENT_WL=RECENT_WL.map(n=>n===ACTIVE_WL?name:n);
+  ACTIVE_WL=name;
+  saveGroups(); syncWlHead();
+}
+function clearWatchlist(){
+  if(!confirm("Clear all symbols from “"+ACTIVE_WL+"”? Sections are kept.")) return;
+  GROUPS.forEach(g=>g.symbols=[]);
+  saveGroups(); buildWatchlist();
+}
+function shareWatchlist(){   // stub: copies a symbol list to the clipboard
+  const txt=allSymbols().join(", ");
+  try{ navigator.clipboard.writeText(txt); alert("Symbol list copied to clipboard."); }
+  catch{ alert("Symbols: "+txt); }
+}
+function alertOnList(){      // pre-fill the alert dialog for the active symbol
+  openAlertDialog({});
+}
+// Full list browser (Shift+W): grid of all watchlists, click to switch.
+function openListBrowser(){
+  const menu=document.getElementById("wlNameMenu"); if(menu) menu.style.display="none";
+  const dlg=document.createElement("div"); dlg.className="dialog open"; dlg.id="wlBrowser";
+  const rows=Object.keys(WATCHLISTS).map(n=>{
+    const count=(WATCHLISTS[n]||[]).reduce((a,g)=>a+g.symbols.length,0);
+    return '<div class="mi" data-wl="'+escHtml(n)+'" style="display:flex;justify-content:space-between">'
+      +'<span>'+(n===ACTIVE_WL?"✓ ":"")+escHtml(n)+'</span>'
+      +'<span style="color:var(--muted)">'+count+' symbols</span></div>';
+  }).join("");
+  dlg.innerHTML='<div class="dh"><span>Watchlists</span><span class="cl" id="wlbClose">×</span></div>'
+    +'<div class="db" style="max-height:60vh;overflow:auto">'+rows+'</div>';
+  document.body.appendChild(dlg); backdrop.classList.add("open");
+  const close=()=>{ dlg.remove(); backdrop.classList.remove("open"); };
+  dlg.querySelector("#wlbClose").onclick=close;
+  dlg.querySelectorAll(".mi").forEach(it=>it.onclick=()=>{ switchWatchlist(it.dataset.wl); close(); });
+}
+document.addEventListener("keydown", e=>{
+  if(e.shiftKey && (e.key==="W"||e.key==="w") && !/input|textarea|select/i.test(e.target.tagName)){
+    e.preventDefault(); openListBrowser();
+  }
+});
 function createWatchlist(){
   const name=prompt("New watchlist name:", "Watchlist "+(Object.keys(WATCHLISTS).length+1));
   if(!name || WATCHLISTS[name]) return;
@@ -766,6 +893,32 @@ function saveActiveState(){ if(IS_EMBED) return; try{ localStorage.setItem("fv_a
 // ── Chart setup ──
 const chartEl = document.getElementById("chart");
 const rsiEl   = document.getElementById("rsi");
+// Built-in RSI pane params (adjustable via its right-click Settings dialog). len =
+// RSI period, smooth = smoothing-MA period. Persisted so the choice survives reload.
+// Inputs (len/smooth) + per-plot style (color/width/lineStyle) + visibility for the
+// built-in RSI pane's Style/Visibility tabs. Plots: RSI line, RSI-based MA, 70/50/30 bands.
+const RSI_PARAMS = {
+  len:14, src:"close", divergence:false,
+  smooth:14, maType:"SMA", bbStdDev:2,
+  waitClose:true,   // CALCULATION section (inert: app always uses chart TF + closed bars)
+  style:{
+    rsi:   { color:"#7e57c2", width:2, ls:0, on:true },
+    ma:    { color:"#e6b400", width:2, ls:0, on:true },
+    upper: { color:"rgba(124,87,194,0.5)", width:1, ls:2, on:true },
+    middle:{ color:"#3a3e4a", width:1, ls:2, on:true },
+    lower: { color:"rgba(124,87,194,0.5)", width:1, ls:2, on:true },
+  },
+};
+try{ const raw=localStorage.getItem("fv_rsi_params"); if(raw){ const p=JSON.parse(raw);
+  if(p&&p.len>0) RSI_PARAMS.len=+p.len; if(p&&p.smooth>0) RSI_PARAMS.smooth=+p.smooth;
+  if(p&&p.src) RSI_PARAMS.src=p.src; if(p&&typeof p.divergence==="boolean") RSI_PARAMS.divergence=p.divergence;
+  if(p&&p.maType) RSI_PARAMS.maType=p.maType; if(p&&p.bbStdDev>0) RSI_PARAMS.bbStdDev=+p.bbStdDev;
+  if(p&&typeof p.waitClose==="boolean") RSI_PARAMS.waitClose=p.waitClose;
+  if(p&&p.style) for(const k in RSI_PARAMS.style){ if(p.style[k]) Object.assign(RSI_PARAMS.style[k], p.style[k]); }
+} }catch(e){}
+// MA types offered by the RSI smoothing selector (TradingView parity).
+const RSI_MA_TYPES = ["SMA","EMA","WMA","RMA","VWMA","Bollinger Bands"];
+function saveRsiParams(){ try{ localStorage.setItem("fv_rsi_params", JSON.stringify(RSI_PARAMS)); }catch(e){} }
 // Fixed right-axis gutter width shared by every pane so their plot areas align
 // horizontally (wide enough for "110,000.00"-class price labels).
 const PRICE_AXIS_W = 72;
@@ -1001,7 +1154,7 @@ function applyChartType(data){
   // series, so the time-based MA overlays don't align and are meaningless on them —
   // hide the MAs (TradingView does the same) and re-fit the view to the new series.
   const isTransform = (chartType==="renko"||chartType==="kagi"||chartType==="pnf"||chartType==="linebreak");
-  if(typeof maSeries!=="undefined") maSeries.forEach(s=>{ try{ s.applyOptions({ visible: !isTransform }); }catch(e){} });
+  if(typeof maSeries!=="undefined") maSeries.forEach((s,i)=>{ try{ s.applyOptions({ visible: !isTransform && (MAS[i]?MAS[i].on!==false:true) }); }catch(e){} });
   if(isTransform){ try{ chart.timeScale().fitContent(); }catch(e){} }
   if(!d || !d.length) return;
   // Pad every style's timeline with ~4 months of future whitespace so the time
@@ -1071,17 +1224,47 @@ function openChartSettings(){
 // TradingView shows 7/25/99 MAs + SMA 150/200/300 — recreate all six.
 // MA colors matched to the TradingView screenshot:
 // MA7 orange · MA25 red · MA99 green · MA150 cyan · MA200 magenta · MA300 white
-const MAS = [
-  { p:7,   color:"#ff9800", w:1 },   // orange
-  { p:25,  color:"#e53935", w:1 },   // red
-  { p:99,  color:"#43a047", w:1 },   // green
-  { p:150, color:"#26c6da", w:1 },   // cyan / light blue
-  { p:200, color:"#ec407a", w:1 },   // magenta / pink
-  { p:300, color:"#e0e0e0", w:1 },   // white / light gray
+// Editable via the MA legend's gear button (period / color / width / visibility,
+// add + remove). Persisted so edits survive reload.
+// type: sma | ema | wma | rma(smma) · src: close | open | high | low | hl2 | hlc3 | ohlc4
+let MAS = [
+  { p:7,   color:"#ff9800", w:1, on:true, type:"sma", src:"close" },   // orange
+  { p:25,  color:"#e53935", w:1, on:true, type:"sma", src:"close" },   // red
+  { p:99,  color:"#43a047", w:1, on:true, type:"sma", src:"close" },   // green
+  { p:150, color:"#26c6da", w:1, on:true, type:"sma", src:"close" },   // cyan / light blue
+  { p:200, color:"#ec407a", w:1, on:true, type:"sma", src:"close" },   // magenta / pink
+  { p:300, color:"#e0e0e0", w:1, on:true, type:"sma", src:"close" },   // white / light gray
 ];
-const maSeries = MAS.map(m => chart.addLineSeries({
-  color:m.color, lineWidth:m.w, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false,
-}));
+const MA_TYPES = [["SMA","sma"],["EMA","ema"],["WMA","wma"],["SMMA (RMA)","rma"]];
+const MA_SRCS  = [["Close","close"],["Open","open"],["High","high"],["Low","low"],["HL2","hl2"],["HLC3","hlc3"],["OHLC4","ohlc4"]];
+const DEFAULT_MAS = JSON.parse(JSON.stringify(MAS));   // for "Reset"
+try{ const raw=localStorage.getItem("fv_mas"); if(raw){ const arr=JSON.parse(raw);
+  if(Array.isArray(arr)&&arr.length) MAS=arr.map(m=>({ p:+m.p, color:m.color||"#e0e0e0", w:+m.w||1, on:m.on!==false, type:m.type||"sma", src:m.src||"close", ls:+m.ls||0 })).filter(m=>m.p>0);
+} }catch(e){}
+function saveMas(){ try{ localStorage.setItem("fv_mas", JSON.stringify(MAS)); }catch(e){} }
+// Compute one MA line as {time,value}[] honoring type + source column.
+function maLine(data, m){
+  const a = data.map(d=>{
+    switch(m.src){
+      case "open": return d.open; case "high": return d.high; case "low": return d.low;
+      case "hl2": return (d.high+d.low)/2;
+      case "hlc3": return (d.high+d.low+d.close)/3;
+      case "ohlc4": return (d.open+d.high+d.low+d.close)/4;
+      default: return d.close;
+    }
+  });
+  const fn = m.type==="ema"?emaA : m.type==="wma"?wmaA : m.type==="rma"?rmaA : smaA;
+  const o = fn(a, m.p);
+  const out=[]; for(let i=0;i<data.length;i++) if(o[i]!=null) out.push({ time:data[i].time, value:o[i] });
+  return out;
+}
+const maSeriesOpts = m => ({ color:m.color, lineWidth:m.w, lineStyle:m.ls||0, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false, visible:m.on!==false });
+let maSeries = MAS.map(m => chart.addLineSeries(maSeriesOpts(m)));
+// Tear down + recreate the MA line series to match the current MAS[] (after add/remove).
+function rebuildMaSeries(){
+  maSeries.forEach(s=>{ try{ chart.removeSeries(s); }catch(e){} });
+  maSeries = MAS.map(m => chart.addLineSeries(maSeriesOpts(m)));
+}
 
 // RSI panel — styled to match TradingView (overbought fill, RSI + MA, fixed scale)
 const rsiChart = LightweightCharts.createChart(rsiEl, { ...common });
@@ -1235,10 +1418,11 @@ function smaSeries(data, period){
   }
   return out;
 }
-function rsiSeries(data, period=14){
+function rsiSeries(data, period=14, src="close"){
   const out=[]; let gain=0, loss=0;
+  const px = srcArr(data, src);
   for(let i=1;i<data.length;i++){
-    const d = data[i].close - data[i-1].close;
+    const d = px[i] - px[i-1];
     const up = Math.max(d,0), dn = Math.max(-d,0);
     if(i<=period){ gain+=up; loss+=dn;
       if(i===period){ gain/=period; loss/=period;
@@ -1260,6 +1444,49 @@ function maOfSeries(series, period){
     if(i>=period-1) out.push({ time:series[i].time, value:sum/period });
   }
   return out;
+}
+// RSI smoothing MA, type-aware (TradingView parity). Operates on the RSI {time,value}[]
+// series. "Bollinger Bands" uses an SMA basis (bands are drawn separately if needed).
+function rsiSmoothMA(series, period, type){
+  if(!series.length) return [];
+  const vals=series.map(p=>p.value);
+  let out;
+  switch((type||"SMA")){
+    case "EMA": out=emaA(vals,period); break;
+    case "WMA": out=wmaA(vals,period); break;
+    case "RMA": out=rmaA(vals,period); break;
+    // VWMA needs volume we don't have per-RSI-point; fall back to SMA (same as basis).
+    case "VWMA": out=smaA(vals,period); break;
+    case "Bollinger Bands": out=smaA(vals,period); break;
+    default: out=smaA(vals,period);
+  }
+  const res=[]; for(let i=0;i<series.length;i++){ if(out[i]!=null&&isFinite(out[i])) res.push({time:series[i].time, value:out[i]}); }
+  return res;
+}
+// Regular RSI divergence markers. Compares consecutive price pivots vs RSI pivots:
+// bullish = price lower-low + RSI higher-low; bearish = price higher-high + RSI lower-high.
+function rsiDivergenceMarkers(data, rsi){
+  const markers=[]; if(rsi.length<6) return markers;
+  const rMap=new Map(rsi.map(p=>[p.time,p.value]));
+  const bars=data.filter(b=>rMap.has(b.time));
+  const L=2;  // pivot lookback/forward
+  const isPivotLow =i=>{ for(let j=1;j<=L;j++){ if(bars[i].low>=bars[i-j].low||bars[i].low>=bars[i+j].low) return false; } return true; };
+  const isPivotHigh=i=>{ for(let j=1;j<=L;j++){ if(bars[i].high<=bars[i-j].high||bars[i].high<=bars[i+j].high) return false; } return true; };
+  let lastLow=null,lastHigh=null;
+  for(let i=L;i<bars.length-L;i++){
+    const t=bars[i].time, rv=rMap.get(t);
+    if(isPivotLow(i)){
+      if(lastLow && bars[i].low<lastLow.price && rv>lastLow.rsi)
+        markers.push({time:t, position:"belowBar", color:"#26a69a", shape:"arrowUp", text:"Bull"});
+      lastLow={price:bars[i].low, rsi:rv};
+    }
+    if(isPivotHigh(i)){
+      if(lastHigh && bars[i].high>lastHigh.price && rv<lastHigh.rsi)
+        markers.push({time:t, position:"aboveBar", color:"#ef5350", shape:"arrowDown", text:"Bear"});
+      lastHigh={price:bars[i].high, rsi:rv};
+    }
+  }
+  return markers;
 }
 
 // ── Data loading (Coinbase) ──
@@ -1632,10 +1859,8 @@ function updateCountdown(){
   const step=tfStepSec();
   const now=Date.now()/1000;
   const closeAt=(Math.floor(now/step)+1)*step;   // next bucket boundary
-  const y=(typeof candle!=="undefined") ? candle.priceToCoordinate(lastData[lastData.length-1].close) : null;
-  if(y==null){ el.style.display="none"; return; }
   el.textContent=fmtCountdown(closeAt-now);
-  el.style.top=y+"px";
+  el.style.top="8px";   // pin to the top of the price axis, clear of the last-price + MA labels
   el.style.display="block";
 }
 
@@ -1685,14 +1910,7 @@ function renderData(data, keepView){
   if(data.length) updateOhlcLegend(data[data.length-1].time);   // default legend = latest bar
 
   // moving averages
-  const legend=[];
-  maSeries.forEach((s,i)=>{
-    const m = MAS[i];
-    const sd = smaSeries(data, m.p);
-    s.setData(sd);
-    if(sd.length) legend.push(`<span style="color:${m.color}">MA${m.p} ${fmt(sd[sd.length-1].value)}</span>`);
-  });
-  document.getElementById("maLegend").innerHTML = legend.slice(0,6).join("");
+  renderMaLegend(data);
 
   // RSI + smoothing MA + TradingView-style fills.
   // rsiSeries/maOfSeries drop the warmup bars, so they're SHORTER than `data`.
@@ -1701,8 +1919,8 @@ function renderData(data, keepView){
   // shifting the whole RSI plot left. Re-key every RSI series onto the full `data`
   // timeline, emitting whitespace ({time} only) for the warmup gap so each bar
   // keeps its index and the panes stay aligned.
-  const r = rsiSeries(data, 14);
-  const rm = maOfSeries(r, 14);
+  const r = rsiSeries(data, RSI_PARAMS.len, RSI_PARAMS.src);
+  const rm = rsiSmoothMA(r, RSI_PARAMS.smooth, RSI_PARAMS.maType);
   const rMap = new Map(r.map(d=>[d.time, d.value]));
   const rmMap = new Map(rm.map(d=>[d.time, d.value]));
   const rFull  = data.map(b=> rMap.has(b.time)  ? {time:b.time, value:rMap.get(b.time)}  : {time:b.time});
@@ -1718,6 +1936,8 @@ function renderData(data, keepView){
   band30.setData(withFuture(data, data.map(b=>({time:b.time, value:30}))));
   rsiLine.setData(withFuture(data, rFull));
   rsiMa.setData(withFuture(data, rmFull));
+  // Calculate Divergence: mark regular bullish/bearish RSI divergences at pivots.
+  try{ rsiLine.setMarkers(RSI_PARAMS.divergence ? rsiDivergenceMarkers(data, r) : []); }catch(e){}
   if(r.length)  document.getElementById("rsiVal").textContent   = r[r.length-1].value.toFixed(2);
   if(rm.length) document.getElementById("rsiMaVal").textContent = rm[rm.length-1].value.toFixed(2);
 
@@ -1865,16 +2085,23 @@ async function loadChart(symbol, tf, keepView){
       // whatever both sides have so far; the chart fills out as history deepens.
       let lastA=[], lastB=[];
       const tfMeta = TF[tf] || TF["1d"];
-      // Spread symbols paint ONCE, at the end — not per progressive page. Both legs
-      // stream ~8 pages each, so per-page repaints fire ~16 full re-renders (candle
-      // + 6 MAs + RSI series) back-to-back. On a wide-range ratio (0.06–2.6) that
-      // render thrash trips an intermittent Lightweight Charts race ("Value is null"
-      // inside the line renderer) that permanently freezes the chart. One clean
-      // render of the complete series avoids the thrash entirely. Legs are fast
-      // enough that the brief "Loading…" is barely visible.
+      // Spread symbols paint the FIRST combined page immediately (so the TF switch
+      // is instant), then paint ONCE more at the end — never per progressive page.
+      // Both legs stream ~28 pages each; per-page repaints fire dozens of full
+      // re-renders (candle + 6 MAs + RSI) back-to-back, and that thrash trips an
+      // intermittent Lightweight Charts race ("Value is null") that freezes the
+      // chart. First-page-only paint (guarded by paintProgressive's _painted flag)
+      // gives instant feedback with a single early render, then one clean final
+      // render — no thrash. Without this, a spread showed nothing until ALL pages
+      // for BOTH legs finished (~3s), which read as "the TF change hangs".
+      const tryFirstPaint = ()=>{
+        if(!fresh() || lastA.length<2 || lastB.length<2) return;
+        const d = makeRatio(finalizeBars(lastA, tfMeta), finalizeBars(lastB, tfMeta));
+        if(d.length) paintProgressive(d);   // paints only once (first combined page)
+      };
       const [ka,kb] = await Promise.all([
-        fetchKlinesProgressive(a, tf, raw=>{ lastA=raw; }),
-        fetchKlinesProgressive(b, tf, raw=>{ lastB=raw; }),
+        fetchKlinesProgressive(a, tf, raw=>{ lastA=raw; tryFirstPaint(); }),
+        fetchKlinesProgressive(b, tf, raw=>{ lastB=raw; tryFirstPaint(); }),
       ]);
       const data = makeRatio(ka, kb);
       if(!data.length) throw new Error("No overlapping data for "+symbol);
@@ -2913,6 +3140,7 @@ const TOOLS = [
   { key:"brush",  name:"Brush (freehand)", icon:icBrush },
   { key:"elliott",name:"Elliott Wave (1-5)", icon:icElliott },
   { key:"xabcd",  name:"XABCD Pattern",    icon:icXabcd },
+  { key:"headshoulders", name:"Head & Shoulders", icon:icHeadShoulders },
   { key:"sep" },
   { key:"fib",    name:"Fib Retracement",  icon:icFib },
   { key:"fibext", name:"Fib Extension",    icon:icFibExt },
@@ -2970,6 +3198,7 @@ function icCircle(){  return svg('<circle cx="12" cy="12" r="8"/>'); }
 function icArrowMark(){ return svg('<line x1="12" y1="4" x2="12" y2="20"/><path d="M7 9l5-5 5 5"/>'); }
 function icElliott(){ return svg('<path d="M3 18l3-6 3 3 3-9 3 6 3-3"/>'); }
 function icXabcd(){ return svg('<path d="M4 6l5 12 5-10 5 8"/>'); }
+function icHeadShoulders(){ return svg('<path d="M2 18l3-4 2 2 2-8 2 8 2-2 3 4"/>'); }
 function icLock(){   return svg('<rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'); }
 function icEye(){    return svg('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="2.5"/>'); }
 function icTrash(){  return svg('<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>'); }
@@ -3010,15 +3239,23 @@ const draw = {
 // Snapshot-based history of draw.shapes. snapshotDraw() is called BEFORE any
 // mutation (add/delete/move/style/clone/reorder); undo/redo swap between stacks.
 const _undoStack=[], _redoStack=[], UNDO_MAX=100;
+// Enable/disable the toolbar ↩/↪ buttons to reflect whether history exists —
+// TradingView greys them out when there's nothing to undo/redo.
+function updateUndoButtons(){
+  const u=document.getElementById("btnUndo"), r=document.getElementById("btnRedo");
+  if(u) u.disabled=!_undoStack.length;
+  if(r) r.disabled=!_redoStack.length;
+}
 function snapshotDraw(){
   _undoStack.push(JSON.stringify(draw.shapes));
   if(_undoStack.length>UNDO_MAX) _undoStack.shift();
   _redoStack.length=0;   // a fresh mutation invalidates the redo branch
+  updateUndoButtons();
 }
 function restoreShapes(json){
   try{ draw.shapes = JSON.parse(json); }catch(e){ draw.shapes=[]; }
   if(!draw.shapes.find(s=>s.id===draw.sel)) draw.sel=null;
-  persist(); redraw();
+  persist(); redraw(); updateUndoButtons();
 }
 function undoDraw(){
   if(!_undoStack.length) return;
@@ -3054,7 +3291,7 @@ const CLICKS = {
   prange:2, drange:2, dprange:2, fibtbext:3, pitchfork:3, gannfan:2,
   regression:2, gannbox:2, circle:2, arrowmark:1,
   flag:1, pricelabel:1,
-  elliott:6, xabcd:5,     // labeled multi-point patterns
+  elliott:6, xabcd:5, headshoulders:7,     // labeled multi-point patterns
   polyline:0, brush:0,   // 0 = freehand/multi-point, finished by dblclick/release
 };
 
@@ -3070,7 +3307,7 @@ const TOOL_CATEGORIES = [
   { id:"cursor",  name:"Cursors",        tools:["cross"] },
   { id:"lines",   name:"Trend line tools", tools:["trend","ray","ext","info","angle","hline","hray","vline","crossline","channel","regression","pitchfork"] },
   { id:"fib",     name:"Gann & Fibonacci", tools:["fib","fibext","fibtbext","fibfan","fibtime","gannfan","gannbox"] },
-  { id:"patterns",name:"Patterns & shapes", tools:["rect","ellipse","circle","triangle","arrow","arrowmark","polyline","brush","elliott","xabcd"] },
+  { id:"patterns",name:"Patterns & shapes", tools:["rect","ellipse","circle","triangle","arrow","arrowmark","polyline","brush","elliott","xabcd","headshoulders"] },
   { id:"position",name:"Forecasting & positions", tools:["long","short","prange","drange","dprange","measure"] },
   { id:"text",    name:"Annotation",     tools:["text","callout","flag","pricelabel"] },
 ];
@@ -3604,6 +3841,7 @@ function startPending(c){
     redraw(); return;
   }
   draw.pending={ id:newId(), type:tool, pts:[c, {...c}], style:{...DEFAULT_STYLE} };
+  if(tool==="fib"||tool==="fibext") draw.pending.fib=defaultFibConfig();
   draw.needClicks=need-1;           // points still to set after the first
   draw.pendingClickMode=false;      // becomes true if user releases without dragging
   redraw();
@@ -3715,7 +3953,7 @@ window.addEventListener("mouseup", e=>{
   // click that started a drag), discard the snapshot pushed at drag-start so undo
   // isn't cluttered with no-op entries.
   if(draw.drag){
-    if(_undoStack.length && _undoStack[_undoStack.length-1]===JSON.stringify(draw.shapes)) _undoStack.pop();
+    if(_undoStack.length && _undoStack[_undoStack.length-1]===JSON.stringify(draw.shapes)){ _undoStack.pop(); updateUndoButtons(); }
     else persist();
     draw.drag=null; downPt=null; return;
   }
@@ -3857,7 +4095,7 @@ function nearShape(s,p){
   if(s.type==="pricelabel") return Math.abs(p.x-a.x)<70 && Math.abs(p.y-a.y)<12;
   if(s.type==="text"||s.type==="callout") return Math.abs(p.x-a.x)<60 && Math.abs(p.y-a.y)<14;
   // multi-point freehand / polygon: near any segment
-  if(s.type==="polyline"||s.type==="brush"||s.type==="triangle"||s.type==="elliott"||s.type==="xabcd"){
+  if(s.type==="polyline"||s.type==="brush"||s.type==="triangle"||s.type==="elliott"||s.type==="xabcd"||s.type==="headshoulders"){
     const Q=s.pts.map(px).filter(q=>q.x!=null);
     for(let i=0;i<Q.length-1;i++) if(distToSeg(p.x,p.y,Q[i].x,Q[i].y,Q[i+1].x,Q[i+1].y)<6) return true;
     if(s.type==="triangle" && Q.length>=3 && distToSeg(p.x,p.y,Q[Q.length-1].x,Q[Q.length-1].y,Q[0].x,Q[0].y)<6) return true;
@@ -3948,11 +4186,6 @@ function showShapeMenu(id,x,y){
     mi("⭐ Save style as default", ()=>saveDrawTemplate(s)),
     mi(s.locked?"🔓 Unlock":"🔒 Lock", ()=>{ snapshotDraw(); s.locked=!s.locked; persist(); redraw(); }),
     msep(),
-    mi("🎨 Blue",   ()=>setStyle(id,{color:"#2962ff"}), "#2962ff"),
-    mi("🎨 Green",  ()=>setStyle(id,{color:"#26a69a"}), "#26a69a"),
-    mi("🎨 Red",    ()=>setStyle(id,{color:"#ef5350"}), "#ef5350"),
-    mi("🎨 Orange", ()=>setStyle(id,{color:"#ff9800"}), "#ff9800"),
-    msep(),
     mi("Bring to Front", ()=>{ snapshotDraw(); draw.shapes=draw.shapes.filter(z=>z.id!==id).concat(s); persist(); redraw(); }),
     mi("Send to Back",   ()=>{ snapshotDraw(); draw.shapes=[s].concat(draw.shapes.filter(z=>z.id!==id)); persist(); redraw(); }),
     msep(),
@@ -3977,6 +4210,29 @@ function showChartMenu(x,y,p){
   ]);
 }
 function setStyle(id,patch){ const s=getShape(id); if(s){ snapshotDraw(); Object.assign(s.style,patch); persist(); redraw(); } }
+// Sub-panes (RSI + indicator/script sub-charts) are separate LWC charts with no
+// overlay canvas, so the main chart's dcanvas contextmenu handler never fires there
+// — right-clicking showed only the browser's native menu. Attach an app menu to each
+// pane element. `spec` supplies: settings() opener, alertSource key + label, remove().
+function attachPaneContextMenu(el, spec){
+  el.addEventListener("contextmenu", e=>{
+    e.preventDefault(); e.stopPropagation();
+    const items=[];
+    if(spec.settings) items.push(mi("⚙ Settings…", spec.settings));
+    if(spec.alertSource){ const lbl=(typeof spec.alertLabel==="function"?spec.alertLabel():spec.alertLabel)||spec.alertSource;
+      items.push(mi("🔔 Add alert on "+lbl+"…", ()=>openAlertDialog({source:spec.alertSource}))); }
+    if(items.length) items.push(msep());
+    items.push(mi("Reset chart view", ()=>chart.timeScale().fitContent()));
+    if(spec.remove){ items.push(msep()); items.push(mi("🗑 "+(spec.removeLabel||"Remove indicator"), spec.remove)); }
+    showCtx(e.clientX, e.clientY, items);
+  });
+}
+// Built-in RSI pane (not in indicators[], permanent) — Settings edits RSI_PARAMS,
+// alert source is the fixed "rsi" key.
+attachPaneContextMenu(rsiEl, {
+  settings:()=>openRsiSettings(),
+  alertSource:"rsi", alertLabel:()=>"RSI ("+RSI_PARAMS.len+")",
+});
 document.addEventListener("mousedown", e=>{ if(!ctxMenu.contains(e.target)) hideCtx(); });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -3984,43 +4240,278 @@ document.addEventListener("mousedown", e=>{ if(!ctxMenu.contains(e.target)) hide
 // ─────────────────────────────────────────────────────────────────────
 const dlg=document.getElementById("settingsDlg");
 const backdrop=document.getElementById("dlgBackdrop");
+// Per-tool style capabilities for the generic tabbed settings dialog.
+// Flags: fill(has fill+opacity), text(text+color+size), arrow(arrow-head toggle),
+// extend(extend dropdown), label:false(hide "Show price label").
+const TOOL_CAPS={
+  trend:{extend:true}, ray:{}, ext:{}, info:{}, angle:{}, crossline:{}, arrow:{arrow:true}, arrowmark:{arrow:true},
+  hline:{}, hray:{}, vline:{label:false},
+  rect:{fill:true}, ellipse:{fill:true}, circle:{fill:true}, triangle:{fill:true}, polyline:{}, brush:{label:false},
+  gannbox:{fill:true}, gannfan:{}, pitchfork:{fill:true}, regression:{fill:true},
+  channel:{fill:true}, measure:{label:false},
+  fibfan:{}, fibtime:{},
+  long:{fill:true}, short:{fill:true},
+  text:{text:true,label:false}, callout:{text:true,label:false}, flag:{text:true,label:false}, pricelabel:{text:true},
+  prange:{fill:true}, drange:{fill:true}, dprange:{fill:true},
+  elliott:{text:true}, xabcd:{text:true}, headshoulders:{text:true},
+  fibtbext:{},
+};
+
 function openSettings(id){
   const s=getShape(id); if(!s) return;
+  if(s.type==="fib"||s.type==="fibext"){ openFibSettings(id); return; }
   const st=s.style;
+  if(!st.visibility) st.visibility={ ticks:true, seconds:true, minutes:true, hours:true, days:true, weeks:true, months:true, ranges:true };
   const dashOpts=[["Solid",0],["Dashed",6],["Dotted",2]];
+  const dashSel=(val)=>dashOpts.map(([n,v])=>`<option value="${v}" ${v===val?"selected":""}>${n}</option>`).join("");
+  const caps=TOOL_CAPS[s.type]||{};
+
+  // ── Style tab controls ──
+  let style=`
+    <div class="field"><label>Line color</label><input type="color" id="f_color" value="${toHex(st.color)}"></div>
+    <div class="field"><label>Line width</label><input type="range" id="f_width" min="1" max="6" value="${st.width}"></div>
+    <div class="field"><label>Line style</label><select id="f_dash">${dashSel(st.dash)}</select></div>`;
+  if(caps.fill)
+    style+=`<div class="field"><label>Fill</label><span class="pc"><input type="color" id="f_fillcol" value="${toHex(st.fillColor||st.color)}"><input type="range" id="f_fill" min="0" max="60" value="${fillOpacity(st.fill)}"></span></div>`;
+  if(caps.arrow)
+    style+=`<div class="field"><label>Arrow heads</label><input type="checkbox" id="f_arrow" ${st.arrow!==false?"checked":""}></div>`;
+  if(caps.extend)
+    style+=`<div class="field"><label>Extend</label><select id="f_extend">${[["Don't extend","none"],["Right","right"],["Left","left"],["Both","both"]].map(([n,v])=>`<option value="${v}" ${v===(st.extend||"none")?"selected":""}>${n}</option>`).join("")}</select></div>`;
+  if(caps.text){
+    style+=`<div class="field"><label>Text</label><input type="text" id="f_text" value="${(s.text||"").replace(/"/g,'&quot;')}"></div>`;
+    style+=`<div class="field"><label>Text color</label><input type="color" id="f_textcol" value="${toHex(st.textColor||st.color||"#d1d4dc")}"></div>`;
+    style+=`<div class="field"><label>Font size</label><input type="range" id="f_fontsize" min="9" max="28" value="${st.fontSize||12}"></div>`;
+  }
+  if(caps.label!==false)
+    style+=`<div class="field"><label>Show price label</label><input type="checkbox" id="f_label" ${st.showLabel?"checked":""}></div>`;
+
+  // ── Coordinates tab: one price/bar row per anchor point ──
+  const coords=s.pts.map((p,i)=>`
+    <div class="field"><label>#${i+1} (price, bar)</label>
+      <span class="pc"><input type="number" class="c-price" data-i="${i}" step="any" value="${p.price!=null?p.price:""}" style="width:110px"><input type="number" class="c-bar" data-i="${i}" step="1" value="${p.time!=null?Math.round(p.time):""}" style="width:80px"></span></div>`).join("");
+
+  // ── Visibility tab: 8 time-scope toggles (TradingView) ──
+  const visRows=[["ticks","Ticks"],["seconds","Seconds"],["minutes","Minutes"],["hours","Hours"],
+    ["days","Days"],["weeks","Weeks"],["months","Months"],["ranges","Ranges"]]
+    .map(([k,lbl])=>`<div class="field"><label><input type="checkbox" class="v-scope" data-k="${k}" ${st.visibility[k]!==false?"checked":""}> ${lbl}</label></div>`).join("");
+
   dlg.innerHTML=`
-    <div class="dh"><span>${prettyType(s.type)} settings</span><span class="cl" id="dlgClose">×</span></div>
+    <div class="dh"><span>${prettyType(s.type)}</span><span class="cl" id="dlgClose">×</span></div>
+    <div class="dtabs">
+      <div class="dtab active" data-p="style">Style</div>
+      <div class="dtab" data-p="coords">Coordinates</div>
+      <div class="dtab" data-p="vis">Visibility</div>
+    </div>
     <div class="db">
-      <div class="field"><label>Line color</label><input type="color" id="f_color" value="${toHex(st.color)}"></div>
-      <div class="field"><label>Line width</label><input type="range" id="f_width" min="1" max="6" value="${st.width}"></div>
-      <div class="field"><label>Line style</label><select id="f_dash">${dashOpts.map(([n,v])=>`<option value="${v}" ${v===st.dash?"selected":""}>${n}</option>`).join("")}</select></div>
-      ${["rect","ellipse","long","short"].includes(s.type)?`<div class="field"><label>Fill opacity</label><input type="range" id="f_fill" min="0" max="40" value="${fillOpacity(st.fill)}"></div>`:""}
-      ${["text","callout"].includes(s.type)?`<div class="field"><label>Text</label><input type="text" id="f_text" value="${(s.text||"").replace(/"/g,'&quot;')}"></div>`:""}
-      <div class="field"><label>Show price label</label><input type="checkbox" id="f_label" ${st.showLabel?"checked":""}></div>
+      <div class="dpane active" data-p="style">${style}</div>
+      <div class="dpane" data-p="coords">${coords||'<div class="field"><label>No coordinates</label></div>'}</div>
+      <div class="dpane" data-p="vis">${visRows}</div>
     </div>
     <div class="df">
       <button class="btn ghost" id="dlgDel">Delete</button>
       <button class="btn ghost" id="dlgCancel">Cancel</button>
-      <button class="btn primary" id="dlgOk">OK</button>
+      <button class="btn primary" id="dlgOk">Ok</button>
     </div>`;
-  dlg.classList.add("open"); backdrop.classList.add("open");
+  dlg.classList.remove("fib-dialog"); dlg.classList.add("open"); backdrop.classList.add("open");
+
+  dlg.querySelectorAll(".dtab").forEach(t=>t.onclick=()=>{
+    dlg.querySelectorAll(".dtab").forEach(x=>x.classList.remove("active"));
+    dlg.querySelectorAll(".dpane").forEach(x=>x.classList.remove("active"));
+    t.classList.add("active");
+    dlg.querySelector(`.dpane[data-p="${t.dataset.p}"]`).classList.add("active");
+  });
+
+  const g=id=>document.getElementById(id);
   const apply=()=>{
-    st.color=document.getElementById("f_color").value;
-    st.width=+document.getElementById("f_width").value;
-    st.dash=+document.getElementById("f_dash").value;
-    const ff=document.getElementById("f_fill"); if(ff) st.fill=withOpacity(st.color,+ff.value/100);
-    const ft=document.getElementById("f_text"); if(ft) s.text=ft.value;
-    st.showLabel=document.getElementById("f_label").checked;
+    st.color=g("f_color").value;
+    st.width=+g("f_width").value;
+    st.dash=+g("f_dash").value;
+    if(g("f_fill")){ st.fillColor=g("f_fillcol").value; st.fill=withOpacity(st.fillColor,+g("f_fill").value/100); }
+    if(g("f_arrow")) st.arrow=g("f_arrow").checked;
+    if(g("f_extend")) st.extend=g("f_extend").value;
+    if(g("f_text")!=null && caps.text) s.text=g("f_text").value;
+    if(g("f_textcol")) st.textColor=g("f_textcol").value;
+    if(g("f_fontsize")) st.fontSize=+g("f_fontsize").value;
+    if(g("f_label")) st.showLabel=g("f_label").checked;
+    dlg.querySelectorAll(".c-price").forEach(el=>{ const v=parseFloat(el.value); if(!isNaN(v)) s.pts[+el.dataset.i].price=v; });
+    dlg.querySelectorAll(".c-bar").forEach(el=>{ const v=parseFloat(el.value); if(!isNaN(v)) s.pts[+el.dataset.i].time=v; });
+    dlg.querySelectorAll(".v-scope").forEach(el=>{ st.visibility[el.dataset.k]=el.checked; });
     persist(); redraw();
   };
-  // live preview
   dlg.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",apply));
+  g("dlgOk").onclick=()=>{ apply(); closeDlg(); };
+  g("dlgCancel").onclick=closeDlg;
+  g("dlgClose").onclick=closeDlg;
+  g("dlgDel").onclick=()=>{ deleteShape(id); closeDlg(); };
+}
+function closeDlg(){ dlg.classList.remove("open","ma-dlg"); backdrop.classList.remove("open"); }
+
+// ─────────────────────────────────────────────────────────────────────
+//  FIB RETRACEMENT SETTINGS  (TradingView parity: Style / Coordinates / Visibility)
+// ─────────────────────────────────────────────────────────────────────
+function openFibSettings(id){
+  const s=getShape(id); if(!s) return;
+  const cfg=getFib(s);
+  const dashOpts=[["Solid",0],["Dashed",6],["Dotted",2]];
+  const extOpts=[["Don't extend","none"],["Extend right","right"],["Extend left","left"],["Extend both","both"]];
+  const dashSel=(val)=>dashOpts.map(([n,v])=>`<option value="${v}" ${v===val?"selected":""}>${n}</option>`).join("");
+
+  // Level pages: fixed 24-per-page slices of cfg.levels (page 1 = 0..1 range checked,
+  // page 2 = higher continuation levels, all unchecked). data-i references the
+  // original cfg.levels index so edits map back correctly.
+  const FIB_PAGES=[];
+  for(let i=0;i<cfg.levels.length;i+=FIB_PAGE_SIZE)
+    FIB_PAGES.push(cfg.levels.map((_,j)=>j).slice(i,i+FIB_PAGE_SIZE));
+  if(!FIB_PAGES.length) FIB_PAGES.push([]);
+  let fibPage=0;
+  const buildLevelRows=(order)=>order.map(i=>{ const lv=cfg.levels[i]; return `
+    <div class="fib-lvl">
+      <input type="checkbox" class="fib-lv-show" data-i="${i}" ${lv.show!==false?"checked":""}>
+      <input type="number" class="fib-lv-val" data-i="${i}" step="0.001" value="${lv.v}">
+      <input type="color" class="fib-lv-col" data-i="${i}" value="${toHex(lv.c)}">
+    </div>`; }).join("");
+  const levelRows=buildLevelRows(FIB_PAGES[0]);
+
+  const p1=s.pts[0], p2=s.pts[1]||s.pts[0];
+  const visRows=[["ticks","Ticks"],["seconds","Seconds"],["minutes","Minutes"],["hours","Hours"],
+    ["days","Days"],["weeks","Weeks"],["months","Months"],["ranges","Ranges"]]
+    .map(([k,lbl])=>`
+      <div class="field"><label><input type="checkbox" class="fib-vis" data-k="${k}" ${cfg.visibility?.[k]!==false?"checked":""}> ${lbl}</label></div>`).join("");
+
+  dlg.innerHTML=`
+    <div class="dh"><span>${prettyType(s.type)}</span><span class="cl" id="dlgClose">×</span></div>
+    <div class="dtabs">
+      <div class="dtab active" data-p="style">Style</div>
+      <div class="dtab" data-p="coords">Coordinates</div>
+      <div class="dtab" data-p="vis">Visibility</div>
+    </div>
+    <div class="db">
+      <div class="dpane active" data-p="style">
+        <div class="field"><label><input type="checkbox" id="fib_trend" ${cfg.trendLine?.show!==false?"checked":""}> Trend line</label>
+          <span class="pc"><input type="color" id="fib_trend_col" value="${toHex(cfg.trendLine?.color||TV_FIB_GRAY)}"><select id="fib_trend_dash" class="pw">${dashSel(cfg.trendLine?.dash??6)}</select></span></div>
+        <div class="field"><label>Levels line</label>
+          <span class="pc"><input type="range" id="fib_lw" min="1" max="4" value="${cfg.levelsLine?.width||1}"><select id="fib_ld">${dashSel(cfg.levelsLine?.dash||0)}</select></span></div>
+        <div class="field"><label>Extend</label>
+          <select id="fib_extend">${extOpts.map(([n,v])=>`<option value="${v}" ${v===cfg.extend?"selected":""}>${n}</option>`).join("")}</select></div>
+        <div class="field"><label>Reverse</label><input type="checkbox" id="fib_reverse" ${cfg.reverse?"checked":""}></div>
+        <div class="field"><label>Show level values</label><input type="checkbox" id="fib_showlevel" ${cfg.labels?.showLevel!==false?"checked":""}></div>
+        <div class="field"><label>Show prices</label><input type="checkbox" id="fib_showprice" ${cfg.labels?.showPrice!==false?"checked":""}></div>
+        <div class="dsec">Levels</div>
+        <div class="fib-grid" id="fib_grid">${levelRows}</div>
+        <div class="fib-pager"><button type="button" class="fib-parrow" id="fib_prev" disabled>‹</button>
+          <span id="fib_pageind">Page 1 / ${FIB_PAGES.length}</span>
+          <button type="button" class="fib-parrow" id="fib_next">›</button></div>
+        <div class="field"><label><input type="checkbox" id="fib_oneon" ${cfg.useOneColor?"checked":""}> Use one color</label>
+          <input type="color" id="fib_onecol" value="${toHex(cfg.oneColor||"#26a69a")}"></div>
+      </div>
+      <div class="dpane" data-p="coords">
+        <div class="field"><label>#1 (price, bar)</label>
+          <span class="pc"><input type="number" id="fib_p1" step="any" value="${p1.price!=null?p1.price:""}" style="width:110px"><input type="number" id="fib_b1" step="1" value="${p1.time!=null?Math.round(p1.time):""}" style="width:80px"></span></div>
+        <div class="field"><label>#2 (price, bar)</label>
+          <span class="pc"><input type="number" id="fib_p2" step="any" value="${p2.price!=null?p2.price:""}" style="width:110px"><input type="number" id="fib_b2" step="1" value="${p2.time!=null?Math.round(p2.time):""}" style="width:80px"></span></div>
+      </div>
+      <div class="dpane" data-p="vis">${visRows}</div>
+    </div>
+    <div class="df">
+      <div class="fib-tpl-wrap"><button class="btn ghost" id="fib_tpl_btn">Template ▾</button>
+        <div class="fib-tpl-menu" id="fib_tpl_menu"></div></div>
+      <div style="flex:1"></div>
+      <button class="btn ghost" id="dlgDel">Delete</button>
+      <button class="btn ghost" id="dlgCancel">Cancel</button>
+      <button class="btn primary" id="dlgOk">Ok</button>
+    </div>`;
+  dlg.classList.add("open"); dlg.classList.add("fib-dialog"); backdrop.classList.add("open");
+
+  dlg.querySelectorAll(".dtab").forEach(t=>t.onclick=()=>{
+    dlg.querySelectorAll(".dtab").forEach(x=>x.classList.remove("active"));
+    dlg.querySelectorAll(".dpane").forEach(x=>x.classList.remove("active"));
+    t.classList.add("active");
+    dlg.querySelector(`.dpane[data-p="${t.dataset.p}"]`).classList.add("active");
+  });
+
+  const apply=()=>{
+    cfg.trendLine={ show:document.getElementById("fib_trend").checked,
+      color:document.getElementById("fib_trend_col").value, dash:+document.getElementById("fib_trend_dash").value };
+    cfg.levelsLine={ width:+document.getElementById("fib_lw").value, dash:+document.getElementById("fib_ld").value };
+    cfg.extend=document.getElementById("fib_extend").value;
+    cfg.reverse=document.getElementById("fib_reverse").checked;
+    cfg.labels={ showLevel:document.getElementById("fib_showlevel").checked, showPrice:document.getElementById("fib_showprice").checked };
+    cfg.useOneColor=document.getElementById("fib_oneon").checked;
+    cfg.oneColor=document.getElementById("fib_onecol").value;
+    dlg.querySelectorAll(".fib-lv-show").forEach(el=>{ cfg.levels[+el.dataset.i].show=el.checked; });
+    dlg.querySelectorAll(".fib-lv-val").forEach(el=>{ const v=parseFloat(el.value); if(!isNaN(v)) cfg.levels[+el.dataset.i].v=v; });
+    dlg.querySelectorAll(".fib-lv-col").forEach(el=>{ cfg.levels[+el.dataset.i].c=el.value; });
+    dlg.querySelectorAll(".fib-vis").forEach(el=>{ cfg.visibility[el.dataset.k]=el.checked; });
+    const np1=parseFloat(document.getElementById("fib_p1").value), nb1=parseFloat(document.getElementById("fib_b1").value);
+    const np2=parseFloat(document.getElementById("fib_p2").value), nb2=parseFloat(document.getElementById("fib_b2").value);
+    if(!isNaN(np1)) s.pts[0].price=np1; if(!isNaN(nb1)) s.pts[0].time=nb1;
+    if(s.pts[1]){ if(!isNaN(np2)) s.pts[1].price=np2; if(!isNaN(nb2)) s.pts[1].time=nb2; }
+    persist(); redraw();
+  };
+  // Attach live-preview to the current level rows (re-run after a page swap).
+  const wireLevelRows=()=>dlg.querySelectorAll("#fib_grid input").forEach(el=>el.addEventListener("input",apply));
+  dlg.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",apply));
+
+  // Level pagination: commit current edits, swap to the target page, re-render + re-wire.
+  const grid=document.getElementById("fib_grid");
+  // Column-major fill: set the row count to ceil(n/2) so 2 columns read
+  // top-to-bottom (col 1 first, then col 2) in ascending order.
+  const setGridRows=(n)=>{ grid.style.gridTemplateRows=`repeat(${Math.max(1,Math.ceil(n/2))},auto)`; };
+  setGridRows(FIB_PAGES[0].length);
+  const showPage=(p)=>{
+    apply();                                   // keep edits from the page we're leaving
+    fibPage=Math.max(0,Math.min(FIB_PAGES.length-1,p));
+    grid.innerHTML=buildLevelRows(FIB_PAGES[fibPage]);
+    setGridRows(FIB_PAGES[fibPage].length);
+    wireLevelRows();
+    document.getElementById("fib_pageind").textContent=`Page ${fibPage+1} / ${FIB_PAGES.length}`;
+    document.getElementById("fib_prev").disabled=(fibPage===0);
+    document.getElementById("fib_next").disabled=(fibPage===FIB_PAGES.length-1);
+  };
+  document.getElementById("fib_prev").onclick=()=>showPage(fibPage-1);
+  document.getElementById("fib_next").onclick=()=>showPage(fibPage+1);
+
+  // ── Template menu (Save as… / Save as default / Apply defaults / named templates) ──
+  const tplBtn=document.getElementById("fib_tpl_btn"), tplMenu=document.getElementById("fib_tpl_menu");
+  const closeTplMenu=()=>tplMenu.classList.remove("open");
+  // Replace the shape's config in place with a template/config and rebuild the dialog.
+  const applyConfig=(newCfg)=>{ s.fib=JSON.parse(JSON.stringify(newCfg)); persist(); redraw(); openFibSettings(id); };
+  const buildTplMenu=()=>{
+    const tpls=loadFibTemplates();
+    const names=Object.keys(tpls).sort((a,b)=>a.localeCompare(b));
+    tplMenu.innerHTML=
+      `<div class="tpli" data-act="saveas">Save as…</div>`+
+      `<div class="tpli" data-act="savedef">Save as default</div>`+
+      `<div class="tpli" data-act="applydef">Apply defaults</div>`+
+      (names.length?`<div class="tpli-sep"></div>`:``)+
+      names.map(n=>`<div class="tpli tpli-named" data-name="${n.replace(/"/g,'&quot;')}"><span>${n}</span><span class="tpli-del" data-del="${n.replace(/"/g,'&quot;')}">✕</span></div>`).join("");
+  };
+  tplBtn.onclick=(e)=>{ e.stopPropagation(); apply(); buildTplMenu(); tplMenu.classList.toggle("open"); };
+  dlg.addEventListener("click",(e)=>{ if(!e.target.closest("#fib_tpl_menu") && !e.target.closest("#fib_tpl_btn")) closeTplMenu(); });
+  tplMenu.onclick=(e)=>{
+    const del=e.target.closest(".tpli-del");
+    if(del){ e.stopPropagation(); const t=loadFibTemplates(); delete t[del.dataset.del]; saveFibTemplates(t); buildTplMenu(); return; }
+    const row=e.target.closest(".tpli"); if(!row) return;
+    const act=row.dataset.act;
+    if(act==="saveas"){
+      const name=(prompt("Template name:")||"").trim(); if(!name){ closeTplMenu(); return; }
+      const t=loadFibTemplates(); t[name]=JSON.parse(JSON.stringify(s.fib)); saveFibTemplates(t);
+      if(typeof toast==="function") toast("Template saved","ok"); closeTplMenu();
+    } else if(act==="savedef"){
+      saveFibDefault(JSON.parse(JSON.stringify(s.fib)));
+      if(typeof toast==="function") toast("Saved as default for new fibs","ok"); closeTplMenu();
+    } else if(act==="applydef"){
+      closeTplMenu(); applyConfig(builtinFibConfig());
+    } else if(row.dataset.name!=null){
+      const t=loadFibTemplates(); const tpl=t[row.dataset.name]; if(tpl){ closeTplMenu(); applyConfig(tpl); }
+    }
+  };
+
   document.getElementById("dlgOk").onclick=()=>{ apply(); closeDlg(); };
   document.getElementById("dlgCancel").onclick=closeDlg;
   document.getElementById("dlgClose").onclick=closeDlg;
   document.getElementById("dlgDel").onclick=()=>{ deleteShape(id); closeDlg(); };
 }
-function closeDlg(){ dlg.classList.remove("open"); backdrop.classList.remove("open"); }
 backdrop.onclick=()=>{ closeDlg(); closeAlertDlg(); closeSymDlg(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -4035,9 +4526,13 @@ function openAlertDialog(opts={}){
   const editing = opts.existing || null;
   const cur = lastData.length ? lastData[lastData.length-1].close : 0;
   // working copy (committed to `alerts` only on Create/Save)
+  // opts.source pre-selects the LHS series (e.g. right-clicking the RSI pane →
+  // "Add alert on RSI") and seeds the initial value from that source's latest reading.
+  const src0 = opts.source || "price";
+  const srcVal = opts.source ? sourceValue(opts.source) : null;
   const a = editing ? {...editing, notify:{...editing.notify}} : {
-    id:"a"+(alertUid++), source:"price", op:"crossing", target:"value",
-    value: opts.price!=null ? opts.price : cur,
+    id:"a"+(alertUid++), source:src0, op:"crossing", target:"value",
+    value: opts.price!=null ? opts.price : (srcVal!=null ? srcVal : cur),
     trigger:"once", expiry:defaultExpiry(), message:"", notify:{...ALERT_DEFAULT_NOTIFY}, active:true, _last:null,
   };
   const srcList = alertSourcesWithDrawings();
@@ -4084,6 +4579,10 @@ function openAlertDialog(opts={}){
         </div>
         <div class="hint" id="ad_email_hint" style="display:${a.notify.email?"block":"none"}">Email needs a server; it won't send from a local file.</div>
       </div></div>
+      <div class="arow"><div class="alabel">Webhook URL</div><div class="actl">
+        <input type="url" id="ad_webhook" value="${(a.webhook||"").replace(/"/g,'&quot;')}" placeholder="https://your-endpoint/hook (optional)">
+        <div class="hint">On trigger, POSTs the alert payload as JSON to this URL.</div>
+      </div></div>
     </div>
     <div class="df">
       <button class="btn ghost" id="adCancel">Cancel</button>
@@ -4110,6 +4609,7 @@ function openAlertDialog(opts={}){
     const ev=$("ad_expiry").value; a.expiry=ev ? new Date(ev).getTime() : null;
     a.message=$("ad_message").value.trim();
     a.notify={ popup:$("ad_n_popup").checked, sound:$("ad_n_sound").checked, browser:$("ad_n_browser").checked, email:$("ad_n_email").checked };
+    a.webhook=$("ad_webhook").value.trim();
     a.active=true; a._last=null;
     if(editing){ Object.assign(editing, a); }
     else { alerts.push(a); }
@@ -4138,6 +4638,71 @@ function loadPersisted(){
 const FIB_LEVELS=[0,0.236,0.382,0.5,0.618,0.786,1];
 const FIB_EXT=[0,0.618,1,1.618,2.618];
 const FIB_COLORS=["#787b86","#ef5350","#ff9800","#4caf50","#26a69a","#26c6da","#2962ff","#9c6ade"];
+
+// ── TradingView-parity Fib retracement defaults ──
+// Full 26-level default set (value + colour + shown) matching TradingView's
+// Fib Retracement "Style" tab. Order matches TV's two-column layout.
+const TV_FIB_RED="#e53935", TV_FIB_BLUE="#2962ff", TV_FIB_ORANGE="#ff9800",
+      TV_FIB_GRAY="#b0bec5", TV_FIB_INDIGO="#311b92";
+const FIB_DEFAULT_LEVELS=[
+  {v:0,     c:TV_FIB_RED},    {v:0.236, c:TV_FIB_BLUE},
+  {v:0.382, c:TV_FIB_GRAY},   {v:0.5,   c:TV_FIB_RED},
+  {v:0.618, c:TV_FIB_ORANGE}, {v:0.786, c:TV_FIB_BLUE},
+  {v:1,     c:TV_FIB_RED},    {v:0.65,  c:TV_FIB_ORANGE},
+  {v:1.236, c:TV_FIB_BLUE},   {v:1.786, c:TV_FIB_BLUE},
+  {v:1.5,   c:TV_FIB_INDIGO}, {v:2,     c:TV_FIB_RED},
+  {v:1.618, c:TV_FIB_ORANGE}, {v:2.236, c:TV_FIB_BLUE},
+  {v:1.65,  c:TV_FIB_ORANGE}, {v:2.5,   c:TV_FIB_INDIGO},
+  {v:2.618, c:TV_FIB_ORANGE}, {v:2.65,  c:TV_FIB_ORANGE},
+  {v:2.786, c:TV_FIB_BLUE},   {v:3,     c:TV_FIB_RED},
+  {v:3.236, c:TV_FIB_BLUE},   {v:3.382, c:TV_FIB_GRAY},
+  {v:1.382, c:TV_FIB_GRAY},   {v:2.382, c:TV_FIB_GRAY},
+];
+// Page-2 continuation levels — higher extensions, all default UNCHECKED.
+// The user ticks a box to show any of these.
+const FIB_PAGE2_LEVELS=[
+  {v:3.5,   c:TV_FIB_INDIGO}, {v:3.618, c:TV_FIB_ORANGE},
+  {v:3.65,  c:TV_FIB_ORANGE}, {v:3.786, c:TV_FIB_BLUE},
+  {v:4,     c:TV_FIB_RED},    {v:4.236, c:TV_FIB_BLUE},
+  {v:4.382, c:TV_FIB_GRAY},   {v:4.5,   c:TV_FIB_INDIGO},
+  {v:4.618, c:TV_FIB_ORANGE}, {v:4.65,  c:TV_FIB_ORANGE},
+  {v:4.786, c:TV_FIB_BLUE},   {v:5,     c:TV_FIB_RED},
+  {v:5.236, c:TV_FIB_BLUE},   {v:5.382, c:TV_FIB_GRAY},
+  {v:5.5,   c:TV_FIB_INDIGO}, {v:5.618, c:TV_FIB_ORANGE},
+  {v:5.786, c:TV_FIB_BLUE},   {v:6,     c:TV_FIB_RED},
+  {v:6.382, c:TV_FIB_GRAY},   {v:6.618, c:TV_FIB_ORANGE},
+  {v:6.786, c:TV_FIB_BLUE},   {v:7,     c:TV_FIB_RED},
+  {v:7.618, c:TV_FIB_ORANGE}, {v:8,     c:TV_FIB_RED},
+];
+const FIB_PAGE_SIZE=24;   // rows per page in the level editor
+// Built-in factory defaults (deep-cloned so shapes don't share arrays).
+function builtinFibConfig(){
+  return {
+    trendLine:{ show:true, color:TV_FIB_GRAY, dash:6 },
+    levelsLine:{ width:1, dash:0 },
+    extend:"none",              // none | right | left | both
+    reverse:false,
+    useOneColor:false,
+    oneColor:"#26a69a",
+    // Merge both default sets and sort ascending so the grid reads in order
+    // (0, 0.236, 0.382, …). Sorted: page 1 = 0→3.382, page 2 = 3.5→8.
+    // Default checked: only levels in 0→1.
+    levels: [...FIB_DEFAULT_LEVELS, ...FIB_PAGE2_LEVELS]
+      .slice().sort((a,b)=>a.v-b.v)
+      .map(l=>({v:l.v, c:l.c, show:(l.v>=0 && l.v<=1)})),
+    labels:{ showLevel:true, showPrice:true },
+    visibility:{ ticks:true, seconds:true, minutes:true, hours:true, days:true, weeks:true, months:true, ranges:true },
+  };
+}
+// ── Fib templates (localStorage) ──
+// fv_fib_default = the user's saved default (applied to NEW fib drawings);
+// fv_fib_templates = named templates the user can apply on demand.
+function loadFibTemplates(){ try{ return JSON.parse(localStorage.getItem("fv_fib_templates")||"{}"); }catch{ return {}; } }
+function saveFibTemplates(t){ try{ localStorage.setItem("fv_fib_templates", JSON.stringify(t)); }catch{} }
+function saveFibDefault(cfg){ try{ localStorage.setItem("fv_fib_default", JSON.stringify(cfg)); }catch{} }
+function loadFibDefault(){ try{ const r=localStorage.getItem("fv_fib_default"); return r?JSON.parse(r):null; }catch{ return null; } }
+// New fibs use the saved default if present, else the factory built-in.
+function defaultFibConfig(){ const d=loadFibDefault(); return d?JSON.parse(JSON.stringify(d)):builtinFibConfig(); }
 
 function redraw(){
   const W=dcanvas.clientWidth, H=dcanvas.clientHeight;
@@ -4258,7 +4823,10 @@ function drawShape(s, selected, hovered){
   const a=P[0], b=P[1];
 
   switch(s.type){
-    case "trend": if(b)strokeLine(a.x,a.y,b.x,b.y,st); break;
+    case "trend": if(b){ if(st.extend&&st.extend!=="none"){ let sx=a.x,sy=a.y,ex=b.x,ey=b.y;
+        if(st.extend==="right"||st.extend==="both"){const[x,y]=extend(a.x,a.y,b.x,b.y,W,H); ex=x; ey=y;}
+        if(st.extend==="left"||st.extend==="both"){const[x,y]=extend(b.x,b.y,a.x,a.y,W,H); sx=x; sy=y;}
+        strokeLine(sx,sy,ex,ey,st);} else strokeLine(a.x,a.y,b.x,b.y,st);} break;
     case "ray": if(b){ const[ex,ey]=extend(a.x,a.y,b.x,b.y,W,H); strokeLine(a.x,a.y,ex,ey,st);} break;
     case "ext": if(b){ const[sx,sy]=extend(b.x,b.y,a.x,a.y,W,H),[ex,ey]=extend(a.x,a.y,b.x,b.y,W,H); strokeLine(sx,sy,ex,ey,st);} break;
     case "hline": strokeLine(0,a.y,W,a.y,st); if(st.showLabel) priceTag(s.pts[0].price,a.y,st.color,W); break;
@@ -4281,7 +4849,8 @@ function drawShape(s, selected, hovered){
     case "triangle": if(P[2]) drawPolygon(P.slice(0,3),st,true); break;
     case "elliott": drawLabeledPath(P,st,["0","1","2","3","4","5"]); break;
     case "xabcd": drawLabeledPath(P,st,["X","A","B","C","D"]); break;
-    case "arrow": if(b){ strokeLine(a.x,a.y,b.x,b.y,st); arrowHeadAt(a,b,st.color); } break;
+    case "headshoulders": drawLabeledPath(P,st,["LS","T1","H","T2","RS","","Neck"]); break;
+    case "arrow": if(b){ strokeLine(a.x,a.y,b.x,b.y,st); if(st.arrow!==false) arrowHeadAt(a,b,st.color); } break;
     case "polyline": drawPolygon(P,st,false); break;
     case "brush": drawBrush(P,st); break;
     case "prange": if(b)drawPriceRange(s,a,b,W); break;
@@ -4321,17 +4890,46 @@ function drawEllipse(a,b,st){
   dctx.beginPath(); dctx.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.abs(b.x-a.x)/2,Math.abs(b.y-a.y)/2,0,0,7);
   dctx.fill(); dctx.stroke(); dctx.restore();
 }
-function drawFib(s,P,levels,W){
+// Lazily returns the per-shape fib config, migrating legacy shapes (which had
+// no `.fib`) to a default so old drawings still render and become editable.
+function getFib(s){
+  if(!s.fib) s.fib=defaultFibConfig();
+  return s.fib;
+}
+// Render a Fib retracement/extension from its per-shape config (levels+colors+
+// trend line+levels line+extend). `fallback` is the legacy global level array
+// used only when a shape somehow has no config array.
+function drawFib(s,P,fallback,W){
   const a=P[0], b=P[1];
-  const x1=Math.min(a.x,b.x);
-  levels.forEach((lv,i)=>{
-    const y=a.y+(b.y-a.y)*lv, col=FIB_COLORS[i%FIB_COLORS.length];
-    strokeLine(x1,y,W,y,{color:col,width:1.1,dash:0});
+  const cfg=getFib(s);
+  const x1=Math.min(a.x,b.x), x2=Math.max(a.x,b.x);
+  // Extend controls where the level lines run horizontally.
+  let lx1=x1, lx2=W;
+  if(cfg.extend==="none"){ lx1=x1; lx2=x2; }
+  else if(cfg.extend==="right"){ lx1=x1; lx2=W; }
+  else if(cfg.extend==="left"){ lx1=0; lx2=x2; }
+  else if(cfg.extend==="both"){ lx1=0; lx2=W; }
+  const lw=cfg.levelsLine?.width||1, ld=cfg.levelsLine?.dash||0;
+  const levels = (cfg.levels&&cfg.levels.length)
+    ? cfg.levels
+    : fallback.map((v,i)=>({v, c:FIB_COLORS[i%FIB_COLORS.length], show:true}));
+  levels.forEach((lv)=>{
+    if(lv.show===false) return;
+    const t=cfg.reverse ? (1-lv.v) : lv.v;
+    const y=a.y+(b.y-a.y)*t;
+    const col=cfg.useOneColor ? cfg.oneColor : lv.c;
+    strokeLine(lx1,y,lx2,y,{color:col,width:lw,dash:ld});
     const price=yToPrice(y);
-    dctx.save(); dctx.fillStyle=col; dctx.font="10px sans-serif";
-    dctx.fillText(`${lv}  ${price!=null?fmt(price):""}`, x1+4, y-3); dctx.restore();
+    const parts=[];
+    if(cfg.labels?.showLevel!==false) parts.push(lv.v);
+    if(cfg.labels?.showPrice!==false && price!=null) parts.push(`(${fmt(price)})`);
+    if(parts.length){
+      dctx.save(); dctx.fillStyle=col; dctx.font="10px sans-serif";
+      dctx.fillText(parts.join(" "), lx1+4, y-3); dctx.restore();
+    }
   });
-  strokeLine(a.x,a.y,b.x,b.y,{color:"#787b86",width:1,dash:6});
+  if(cfg.trendLine?.show!==false)
+    strokeLine(a.x,a.y,b.x,b.y,{color:cfg.trendLine?.color||"#787b86",width:1,dash:cfg.trendLine?.dash??6});
 }
 function drawFibFan(P,W,H){
   const a=P[0], b=P[1];
@@ -4395,14 +4993,15 @@ function drawMeasure(s,P){
 function countBars(t1,t2){ if(!lastData.length)return 0; const lo=Math.min(t1,t2),hi=Math.max(t1,t2); let n=0; for(const b of lastData) if(b.time>=lo&&b.time<=hi)n++; return n; }
 function drawText(s,a){
   if(a.x==null) return;
-  dctx.save(); dctx.font="13px sans-serif";
+  const fs=s.style.fontSize||13, tc=s.style.textColor||"#d1d4dc";
+  dctx.save(); dctx.font=fs+"px sans-serif";
   if(s.type==="callout"){
-    const w=dctx.measureText(s.text||"").width+14;
+    const w=dctx.measureText(s.text||"").width+14, h=fs+9;
     dctx.fillStyle="#1e222d"; dctx.strokeStyle=s.style.color; dctx.lineWidth=1;
-    dctx.fillRect(a.x,a.y-16,w,22); dctx.strokeRect(a.x,a.y-16,w,22);
-    dctx.fillStyle="#d1d4dc"; dctx.fillText(s.text||"",a.x+7,a.y);
+    dctx.fillRect(a.x,a.y-h+6,w,h); dctx.strokeRect(a.x,a.y-h+6,w,h);
+    dctx.fillStyle=tc; dctx.fillText(s.text||"",a.x+7,a.y);
   } else {
-    dctx.fillStyle=s.style.color||"#d1d4dc"; dctx.fillText(s.text||"",a.x,a.y);
+    dctx.fillStyle=tc; dctx.fillText(s.text||"",a.x,a.y);
   }
   dctx.restore();
 }
@@ -4749,6 +5348,96 @@ const IND_CATALOG = [
   { type:"pivots",name:"Pivot Points Standard", cat:"Other", pane:"main", params:{} },
 ];
 
+// ── Indicator settings metadata (TradingView-style) ──────────────────
+// Hand-authored per indicator so the settings dashboard shows real field labels
+// and named plots instead of raw param keys. `inputs`: {key,label,type} where
+// type is "num" (number) or "src" (source dropdown). `plots`: readable names
+// index-aligned to plotSpec(ind) — drive the Style + Visibility tab rows.
+// Any type missing here falls back to auto-labelled params + "Plot N" names.
+const IND_META = {
+  sma: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["SMA"] },
+  ema: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["EMA"] },
+  wma: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["WMA"] },
+  vwma: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["VWMA"] },
+  hma: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["HMA"] },
+  dema: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["DEMA"] },
+  tema: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["TEMA"] },
+  alma: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"offset",label:"Offset",type:"num",min:0,step:0.01},{key:"sigma",label:"Sigma",type:"num",min:0,step:0.01},{key:"src",label:"Source",type:"src"}], plots:["ALMA"] },
+  smma: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["SMMA"] },
+  lsma: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["LSMA"] },
+  envel: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"pct",label:"Percent",type:"num",min:0,step:0.01},{key:"src",label:"Source",type:"src"}], plots:["Basis","Upper","Lower"] },
+  rsi: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["RSI"] },
+  macd: { inputs:[{key:"fast",label:"Fast Length",type:"num",min:1,step:1},{key:"slow",label:"Slow Length",type:"num",min:1,step:1},{key:"signal",label:"Signal Smoothing",type:"num",min:1,step:1}], plots:["Histogram","MACD","Signal"] },
+  stoch: { inputs:[{key:"k",label:"%K Length",type:"num",min:1,step:1},{key:"smooth",label:"%K Smoothing",type:"num",min:1,step:1},{key:"d",label:"%D Smoothing",type:"num",min:1,step:1}], plots:["%K","%D"] },
+  stochrsi: { inputs:[{key:"rsiLen",label:"RSI Length",type:"num",min:1,step:1},{key:"stochLen",label:"Stochastic Length",type:"num",min:1,step:1},{key:"k",label:"%K Smoothing",type:"num",min:1,step:1},{key:"d",label:"%D Smoothing",type:"num",min:1,step:1}], plots:["%K","%D"] },
+  cci: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["CCI"] },
+  willr: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["%R"] },
+  mom: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["MOM"] },
+  roc: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["ROC"] },
+  ao: { inputs:[{key:"fast",label:"Fast Length",type:"num",min:1,step:1},{key:"slow",label:"Slow Length",type:"num",min:1,step:1}], plots:["AO"] },
+  ac: { inputs:[], plots:["AC"] },
+  uo: { inputs:[{key:"l1",label:"Fast Length",type:"num",min:1,step:1},{key:"l2",label:"Middle Length",type:"num",min:1,step:1},{key:"l3",label:"Slow Length",type:"num",min:1,step:1}], plots:["UO"] },
+  trix: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"signal",label:"Signal Line Length",type:"num",min:1,step:1}], plots:["TRIX","Signal"] },
+  cmo: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["CMO"] },
+  ppo: { inputs:[{key:"fast",label:"Fast Length",type:"num",min:1,step:1},{key:"slow",label:"Slow Length",type:"num",min:1,step:1},{key:"signal",label:"Signal Smoothing",type:"num",min:1,step:1}], plots:["Histogram","PPO","Signal"] },
+  dpo: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["DPO"] },
+  fisher: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["Fisher"] },
+  bop: { inputs:[], plots:["BOP"] },
+  coppock: { inputs:[{key:"roc1",label:"Long RoC Length",type:"num",min:1,step:1},{key:"roc2",label:"Short RoC Length",type:"num",min:1,step:1},{key:"wma",label:"WMA Length",type:"num",min:1,step:1}], plots:["Coppock"] },
+  adx: { inputs:[{key:"di",label:"DI Length",type:"num",min:1,step:1},{key:"adx",label:"ADX Smoothing",type:"num",min:1,step:1}], plots:["+DI","-DI","ADX"] },
+  aroon: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["Aroon Up","Aroon Down"] },
+  supertrend: { inputs:[{key:"atr",label:"ATR Length",type:"num",min:1,step:1},{key:"factor",label:"Factor",type:"num",min:0.01,step:0.01}], plots:["Supertrend"] },
+  psar: { inputs:[{key:"start",label:"Start",type:"num",min:0.01,step:0.01},{key:"step",label:"Increment",type:"num",min:0.01,step:0.01},{key:"max",label:"Maximum",type:"num",min:0.01,step:0.01}], plots:["PSAR"] },
+  ichimoku: { inputs:[{key:"conv",label:"Conversion Line Length",type:"num",min:1,step:1},{key:"base",label:"Base Line Length",type:"num",min:1,step:1},{key:"spanB",label:"Leading Span B Length",type:"num",min:1,step:1},{key:"disp",label:"Displacement",type:"num",min:1,step:1}], plots:["Conversion Line","Base Line","Leading Span A","Leading Span B","Lagging Span"] },
+  vortex: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["VI+","VI-"] },
+  bb: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"mult",label:"StdDev",type:"num",min:0.01,step:0.01},{key:"src",label:"Source",type:"src"}], plots:["Basis","Upper","Lower"] },
+  kc: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"mult",label:"Multiplier",type:"num",min:0.01,step:0.01},{key:"atr",label:"ATR Length",type:"num",min:1,step:1}], plots:["Basis","Upper","Lower"] },
+  donchian: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["Basis","Upper","Lower"] },
+  atr: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["ATR"] },
+  stdev: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["StdDev"] },
+  chop: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["CHOP"] },
+  bbw: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"mult",label:"StdDev",type:"num",min:0.01,step:0.01},{key:"src",label:"Source",type:"src"}], plots:["BBW"] },
+  volume: { inputs:[], plots:["Volume"] },
+  volprofile: { inputs:[], plots:["Volume Profile"] },
+  vwap: { inputs:[], plots:["VWAP"] },
+  obv: { inputs:[], plots:["OBV"] },
+  mfi: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["MFI"] },
+  adl: { inputs:[], plots:["ADL"] },
+  cmf: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["CMF"] },
+  chaikin: { inputs:[{key:"fast",label:"Fast Length",type:"num",min:1,step:1},{key:"slow",label:"Slow Length",type:"num",min:1,step:1}], plots:["Chaikin Osc"] },
+  pvt: { inputs:[], plots:["PVT"] },
+  fi: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["Force Index"] },
+  alligator: { inputs:[], plots:["Jaw","Teeth","Lips"] },
+  fractals: { inputs:[], plots:[] },
+  mcginley: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["McGinley"] },
+  kama: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"fast",label:"Fast Length",type:"num",min:1,step:1},{key:"slow",label:"Slow Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["KAMA"] },
+  ckstop: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"mult",label:"Multiplier",type:"num",min:0,step:0.01},{key:"stopLen",label:"Stop Length",type:"num",min:1,step:1}], plots:["Long Stop","Short Stop"] },
+  lrc: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"mult",label:"Multiplier",type:"num",min:0,step:0.01},{key:"src",label:"Source",type:"src"}], plots:["Basis","Upper","Lower"] },
+  tsi: { inputs:[{key:"long",label:"Long Length",type:"num",min:1,step:1},{key:"short",label:"Short Length",type:"num",min:1,step:1},{key:"signal",label:"Signal Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["TSI","Signal"] },
+  kst: { inputs:[{key:"signal",label:"Signal Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["KST","Signal"] },
+  rvi: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"signal",label:"Signal Length",type:"num",min:1,step:1}], plots:["RVI","Signal"] },
+  smi: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"smooth1",label:"Smooth 1",type:"num",min:1,step:1},{key:"smooth2",label:"Smooth 2",type:"num",min:1,step:1},{key:"signal",label:"Signal Length",type:"num",min:1,step:1}], plots:["SMI","Signal"] },
+  woodies: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"turboLen",label:"Turbo Length",type:"num",min:1,step:1}], plots:["CCI","Turbo"] },
+  crsi: { inputs:[{key:"rsiLen",label:"RSI Length",type:"num",min:1,step:1},{key:"streakLen",label:"Streak Length",type:"num",min:1,step:1},{key:"rocLen",label:"ROC Length",type:"num",min:1,step:1}], plots:["Connors RSI"] },
+  eom: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"div",label:"Divisor",type:"num",min:0,step:0.01}], plots:["EOM"] },
+  klinger: { inputs:[{key:"fast",label:"Fast Length",type:"num",min:1,step:1},{key:"slow",label:"Slow Length",type:"num",min:1,step:1},{key:"signal",label:"Signal Length",type:"num",min:1,step:1}], plots:["Klinger","Signal"] },
+  netvol: { inputs:[], plots:["Net Volume"] },
+  volosc: { inputs:[{key:"fast",label:"Fast Length",type:"num",min:1,step:1},{key:"slow",label:"Slow Length",type:"num",min:1,step:1}], plots:["Volume Osc"] },
+  twap: { inputs:[], plots:["TWAP"] },
+  bbpct: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"mult",label:"Multiplier",type:"num",min:0,step:0.01},{key:"src",label:"Source",type:"src"}], plots:["%B"] },
+  histvol: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["HV"] },
+  massidx: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"sumLen",label:"Sum Length",type:"num",min:1,step:1}], plots:["Mass Index"] },
+  ulcer: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["Ulcer"] },
+  bbp: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["BBP"] },
+  ribbon: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"step",label:"Step",type:"num",min:1,step:1},{key:"count",label:"Count",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["MA1","MA2","MA3","MA4","MA5","MA6"] },
+  hl52: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["High","Low"] },
+  pivots: { inputs:[], plots:["P","R1","S1","R2","S2"] },
+};
+// Line-style options for the Style tab (LWC LineStyle enum values).
+const LINE_STYLES = [["Solid",0],["Dotted",1],["Dashed",2]];
+// Fallback label when a param has no IND_META entry: title-case the key.
+function autoLabel(k){ return k.replace(/([A-Z])/g," $1").replace(/^./,c=>c.toUpperCase()); }
+
 // ── math ──
 function emaCalc(data,len){ const out=[]; const k=2/(len+1); let prev=null;
   for(let i=0;i<data.length;i++){ const c=data[i].close; prev=prev==null?c:c*k+prev*(1-k); if(i>=len-1)out.push({time:data[i].time,value:prev}); } return out; }
@@ -5083,7 +5772,8 @@ function hl52Calc(data,len){ const n=Math.min(len,data.length); const hh=highest
 function addIndicator(type, opts){
   const cat=IND_CATALOG.find(c=>c.type===type); if(!cat) return;
   const params=Object.assign({},cat.params, (opts&&opts.params)||{});
-  const ind={ id:"i"+(indUid++), type, name:cat.name, pane:cat.pane, params, series:[], subChart:null, hidden:!!(opts&&opts.hidden) };
+  const ind={ id:"i"+(indUid++), type, name:cat.name, pane:cat.pane, params, series:[], subChart:null, hidden:!!(opts&&opts.hidden),
+    plotStyle:(opts&&opts.plotStyle)||null, plotHidden:(opts&&opts.plotHidden)||null, precision:(opts&&opts.precision!=null)?opts.precision:"" };
   indicators.push(ind);
   // Canvas-overlay indicators (Volume Profile) toggle a redraw flag instead of a LWC series.
   if(cat.pane==="overlay"){
@@ -5092,7 +5782,7 @@ function addIndicator(type, opts){
     if(!(opts&&opts.silent)) saveIndicators();
     return ind;
   }
-  buildIndicatorSeries(ind); renderIndicator(ind); renderIndLegend(); layoutPanes(); toggleIndicatorsMenu(false);
+  buildIndicatorSeries(ind); renderIndicator(ind); applyIndicatorStyle(ind); renderIndLegend(); layoutPanes(); toggleIndicatorsMenu(false);
   if(ind.hidden) ind.series.forEach(s=>{ try{ s.applyOptions({visible:false}); }catch(e){} });
   if(!(opts&&opts.silent)) saveIndicators();
   return ind;
@@ -5100,7 +5790,7 @@ function addIndicator(type, opts){
 // Persist active indicators per symbol so they restore on reload (mirrors scripts/alerts).
 const INDICATORS_KEY = ()=>"fv_indicators_"+activeSymbol;
 function saveIndicators(){
-  try{ localStorage.setItem(INDICATORS_KEY(), JSON.stringify(indicators.map(i=>({type:i.type, params:i.params, hidden:!!i.hidden})))); }catch(e){}
+  try{ localStorage.setItem(INDICATORS_KEY(), JSON.stringify(indicators.map(i=>({type:i.type, params:i.params, hidden:!!i.hidden, plotStyle:i.plotStyle||null, plotHidden:i.plotHidden||null, precision:i.precision??""})))); }catch(e){}
 }
 // ── Indicator templates: save/load a set of indicators as one named template ──
 function indTemplates(){ try{ return JSON.parse(localStorage.getItem("fv_ind_templates")||"{}"); }catch(e){ return {}; } }
@@ -5120,7 +5810,7 @@ function loadIndicators(){
   // tear down existing, then rebuild from storage (silent = don't re-save while loading)
   [...indicators].forEach(i=>removeIndicator(i.id, true));
   indicators.length=0;
-  try{ const raw=localStorage.getItem(INDICATORS_KEY()); if(raw){ JSON.parse(raw).forEach(r=>addIndicator(r.type,{params:r.params, hidden:r.hidden, silent:true})); } }catch(e){}
+  try{ const raw=localStorage.getItem(INDICATORS_KEY()); if(raw){ JSON.parse(raw).forEach(r=>addIndicator(r.type,{params:r.params, hidden:r.hidden, plotStyle:r.plotStyle, plotHidden:r.plotHidden, precision:r.precision, silent:true})); } }catch(e){}
   renderIndLegend(); layoutPanes();
 }
 function removeIndicator(id, silent){
@@ -5264,6 +5954,14 @@ function buildIndicatorSeries(ind){
   label.appendChild(eye); label.appendChild(collapse); label.appendChild(maxi); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
   const grip=document.createElement("div"); grip.className="paneResize"; grip.title="Drag to resize pane"; wirePaneResize(grip,el); el.appendChild(grip);
   wrap.appendChild(el); ind.paneEl=el;
+  // Right-click the sub-pane → app menu (Settings / Add alert / Remove), same as
+  // the main chart. Alert source = ind.type when it's a recognized ALERT_SOURCES key.
+  attachPaneContextMenu(el, {
+    settings:()=>openIndicatorSettings(ind.id),
+    alertSource: ALERT_SOURCES.some(s=>s.key===ind.type) ? ind.type : null,
+    alertLabel: ind.name,
+    remove:()=>removeIndicator(ind.id),
+  });
   const sc=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc",fontFamily:"'Trebuchet MS', Roboto, Ubuntu, sans-serif"},
     grid:{vertLines:{visible:false},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39",minimumWidth:PRICE_AXIS_W},
     timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false,tickMarkFormatter:(t,type)=>tickLabel(t,type)}, crosshair:{mode:0} });
@@ -5501,29 +6199,249 @@ function toggleIndicatorsMenu(force){
     m.classList.add("open");
   } else m.classList.remove("open");
 }
-const FLOAT_PARAMS=new Set(["mult","factor","offset","sigma","start","step","max","pct"]);
+const FLOAT_PARAMS=new Set(["mult","factor","offset","sigma","start","step","max","pct","div"]);
+// Per-plot style/visibility. ind.plotStyle[i]={color,width,style}; ind.plotHidden[i]=bool.
+// Seeded from plotSpec()'s defaults the first time so existing indicators keep their look.
+function ensurePlotState(ind){
+  const specs=plotSpec(ind);
+  // LWC lineWidth wants an integer 1–6; plotSpec defaults may be fractional (e.g. 1.5).
+  const w0=sp=>Math.max(1, Math.round(sp.w||1));
+  if(!ind.plotStyle) ind.plotStyle = specs.map(sp=>({ color:sp.color, width:w0(sp), style:0 }));
+  if(!ind.plotHidden) ind.plotHidden = specs.map(()=>false);
+  // keep arrays in sync if the plot count changed (e.g. ribbon count param)
+  while(ind.plotStyle.length < specs.length){ const sp=specs[ind.plotStyle.length]; ind.plotStyle.push({color:sp.color,width:w0(sp),style:0}); }
+  while(ind.plotHidden.length < specs.length) ind.plotHidden.push(false);
+  return specs;
+}
+// Apply stored plot styles + visibility + precision onto the live LWC series.
+function applyIndicatorStyle(ind){
+  if(!ind.series) return;
+  ensurePlotState(ind);
+  const specs=plotSpec(ind);
+  ind.series.forEach((s,i)=>{
+    if(!s) return;
+    const st=ind.plotStyle[i]||{}; const hidden=ind.hidden || ind.plotHidden[i];
+    const opt={ visible:!hidden };
+    if(st.color) opt.color=st.color;
+    if(specs[i] && specs[i].k!=="hist"){ opt.lineWidth=st.width||1; opt.lineStyle=st.style||0; }
+    if(ind.precision!=null && ind.precision!=="") opt.priceFormat={ type:"price", precision:+ind.precision, minMove:Math.pow(10,-(+ind.precision)) };
+    try{ s.applyOptions(opt); }catch(e){}
+  });
+}
 function openIndicatorSettings(id){
   const ind=indicators.find(i=>i.id===id); if(!ind) return;
-  const fields=Object.entries(ind.params).map(e=>{ const k=e[0],v=e[1];
-    if(k==="color") return '<div class="field"><label>Color</label><input type="color" id="ip_'+k+'" value="'+toHex(v)+'"></div>';
-    if(k==="src")   return '<div class="field"><label>Source</label><select id="ip_'+k+'">'+SRC_OPTS.map(o=>'<option value="'+o+'" '+(o===v?"selected":"")+'>'+o+'</option>').join("")+'</select></div>';
-    const step=FLOAT_PARAMS.has(k)?0.01:1;
-    return '<div class="field"><label>'+k+'</label><input type="number" id="ip_'+k+'" value="'+v+'" step="'+step+'"></div>';
-  }).join("");
-  dlg.innerHTML='<div class="dh"><span>'+ind.name+' settings</span><span class="cl" id="dlgClose">×</span></div><div class="db">'+fields+'</div><div class="df"><button class="btn ghost" id="dlgCancel">Cancel</button><button class="btn primary" id="dlgOk">OK</button></div>';
-  dlg.classList.add("open"); backdrop.classList.add("open");
-  const apply=()=>{ Object.keys(ind.params).forEach(k=>{ const el=document.getElementById("ip_"+k); if(!el)return;
-      ind.params[k]= el.type==="color"?el.value : (k==="src"?el.value:+el.value); });
-    if(ind.params.color){
-      // recolor every line series of single-color indicators; banded/multi keep their fixed palette
-      if(["bb","kc","donchian","envel"].includes(ind.type)) ind.series.forEach(s=>{ try{s.applyOptions({color:ind.params.color});}catch(e){} });
-      else if(ind.series[0]) { try{ ind.series[0].applyOptions({color:ind.params.color}); }catch(e){} }
-    }
-    renderIndicator(ind); renderIndLegend(); };
+  const specs=ensurePlotState(ind);
+  const meta=IND_META[ind.type]||{};
+  const metaInputs=meta.inputs||null;
+  const plotName=i=> (meta.plots&&meta.plots[i]) || ("Plot "+(i+1));
+  // ── Inputs tab: readable-labelled params (from IND_META, or auto-labelled) ──
+  const inputEntries = metaInputs
+    ? metaInputs.filter(f=>f.key in ind.params)
+    : Object.keys(ind.params).filter(k=>k!=="color").map(k=>({key:k, label:autoLabel(k), type:k==="src"?"src":"num"}));
+  const inputsHtml = inputEntries.length ? inputEntries.map(f=>{
+    const v=ind.params[f.key];
+    if(f.type==="src") return '<div class="field"><label>'+f.label+'</label><select id="ip_'+f.key+'">'+SRC_OPTS.map(o=>'<option value="'+o+'" '+(o===v?"selected":"")+'>'+o+'</option>').join("")+'</select></div>';
+    const step=f.step||(FLOAT_PARAMS.has(f.key)?0.01:1);
+    return '<div class="field"><label>'+f.label+'</label><input type="number" id="ip_'+f.key+'" value="'+v+'" step="'+step+'"'+(f.min!=null?' min="'+f.min+'"':'')+'></div>';
+  }).join("") : '<div class="field" style="color:var(--muted)">No inputs for this indicator.</div>';
+  // ── Style tab: per-plot color + (line) width + line style, plus precision ──
+  const styleRows = specs.map((sp,i)=>{
+    const st=ind.plotStyle[i];
+    const isLine = sp.k!=="hist";
+    const widthSel = isLine ? '<input class="pw" type="number" min="1" max="6" step="1" id="pw_'+i+'" value="'+(st.width||1)+'">' : '';
+    const styleSel = isLine ? '<select id="ps_'+i+'">'+LINE_STYLES.map(([n,val])=>'<option value="'+val+'" '+(val===(st.style||0)?"selected":"")+'>'+n+'</option>').join("")+'</select>' : '';
+    return '<div class="prow"><span class="pl"><input type="checkbox" id="pv_'+i+'" '+(ind.plotHidden[i]?"":"checked")+'>'+plotName(i)+'</span>'
+      +'<span class="pc"><input type="color" id="pcl_'+i+'" value="'+toHex(st.color)+'">'+widthSel+styleSel+'</span></div>';
+  }).join("") || '<div class="prow" style="color:var(--muted)">No plotted lines.</div>';
+  const precOpts = ['<option value="">Default</option>'].concat([0,1,2,3,4,5,6,7,8].map(n=>'<option value="'+n+'" '+((ind.precision+"")===(n+"")?"selected":"")+'>'+n+'</option>')).join("");
+  const styleHtml = styleRows + '<div class="dsec">Output values</div><div class="field"><label>Precision</label><select id="ip_precision">'+precOpts+'</select></div>';
+  // ── Visibility tab: per-plot show/hide ──
+  const visHtml = specs.length ? specs.map((sp,i)=>'<div class="prow"><span class="pl"><input type="checkbox" id="vv_'+i+'" '+(ind.plotHidden[i]?"":"checked")+'>'+plotName(i)+'</span></div>').join("")
+    : '<div class="prow" style="color:var(--muted)">No plotted lines.</div>';
+
+  dlg.innerHTML='<div class="dh"><span>'+ind.name+'</span><span class="cl" id="dlgClose">×</span></div>'
+    +'<div class="dtabs"><div class="dtab active" data-t="inputs">Inputs</div><div class="dtab" data-t="style">Style</div><div class="dtab" data-t="vis">Visibility</div></div>'
+    +'<div class="db">'
+    +'<div class="dpane active" data-p="inputs">'+inputsHtml+'</div>'
+    +'<div class="dpane" data-p="style">'+styleHtml+'</div>'
+    +'<div class="dpane" data-p="vis">'+visHtml+'</div>'
+    +'</div>'
+    +'<div class="df"><button class="btn ghost" id="dlgCancel">Cancel</button><button class="btn primary" id="dlgOk">OK</button></div>';
+  dlg.classList.remove("fib-dialog"); dlg.classList.add("open"); backdrop.classList.add("open");
+  // tab switching
+  dlg.querySelectorAll(".dtab").forEach(t=>t.onclick=()=>{
+    dlg.querySelectorAll(".dtab").forEach(x=>x.classList.toggle("active",x===t));
+    dlg.querySelectorAll(".dpane").forEach(pn=>pn.classList.toggle("active", pn.dataset.p===t.dataset.t));
+  });
+  const apply=()=>{
+    // inputs → params (skip color; handled by Style)
+    inputEntries.forEach(f=>{ const el=document.getElementById("ip_"+f.key); if(!el) return;
+      ind.params[f.key]= f.type==="src" ? el.value : +el.value; });
+    // style → plotStyle + sync a legacy single `color` param so the legend swatch matches plot 0
+    specs.forEach((sp,i)=>{
+      const cl=document.getElementById("pcl_"+i), pw=document.getElementById("pw_"+i), ps=document.getElementById("ps_"+i), pv=document.getElementById("pv_"+i);
+      if(cl) ind.plotStyle[i].color=cl.value;
+      if(pw) ind.plotStyle[i].width=+pw.value;
+      if(ps) ind.plotStyle[i].style=+ps.value;
+      if(pv) ind.plotHidden[i]=!pv.checked;
+    });
+    if("color" in ind.params && ind.plotStyle[0]) ind.params.color=ind.plotStyle[0].color;
+    // visibility tab checkboxes (mirror the style-tab ones)
+    specs.forEach((sp,i)=>{ const vv=document.getElementById("vv_"+i); if(vv) ind.plotHidden[i]=!vv.checked; });
+    const pr=document.getElementById("ip_precision"); if(pr) ind.precision = pr.value;
+    renderIndicator(ind); applyIndicatorStyle(ind); renderIndLegend();
+  };
+  // keep the two visibility checkbox sets in sync live
+  const syncVis=(i,checked)=>{ const a=document.getElementById("pv_"+i), b=document.getElementById("vv_"+i); if(a)a.checked=checked; if(b)b.checked=checked; };
+  specs.forEach((sp,i)=>{ ["pv_"+i,"vv_"+i].forEach(idc=>{ const el=document.getElementById(idc); if(el) el.addEventListener("change",e=>syncVis(i,e.target.checked)); }); });
   dlg.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",apply));
   document.getElementById("dlgOk").onclick=()=>{ apply(); saveIndicators(); closeDlg(); };
   document.getElementById("dlgCancel").onclick=closeDlg;
   document.getElementById("dlgClose").onclick=closeDlg;
+}
+// Settings for the built-in RSI pane. It isn't an `indicators[]` entry, so it gets
+// its own dialog — but the SAME TradingView-style Inputs/Style/Visibility tabs as the
+// dynamic indicators, editing RSI_PARAMS and its 5 plots (RSI, RSI-based MA, 3 bands).
+function updateRsiLabel(){ const el=document.getElementById("rsiName"); if(el) el.textContent="RSI "+RSI_PARAMS.len+" "+RSI_PARAMS.src; }
+// Plot descriptors for the RSI pane, index-aligned to RSI_STYLE_KEYS / the series list.
+const RSI_STYLE_KEYS = ["rsi","ma","upper","middle","lower"];
+const RSI_PLOT_NAMES = ["RSI","RSI-based MA","RSI Upper Band","RSI Middle Band","RSI Lower Band"];
+function rsiSeriesList(){ return [rsiLine, rsiMa, band70, band50, band30]; }
+// Push RSI_PARAMS.style onto the live RSI series (color/width/lineStyle/visibility).
+function applyRsiStyle(){
+  const S=rsiSeriesList();
+  RSI_STYLE_KEYS.forEach((k,i)=>{ const st=RSI_PARAMS.style[k], s=S[i]; if(!s||!st) return;
+    try{ s.applyOptions({ color:st.color, lineWidth:st.width||1, lineStyle:st.ls||0, visible:st.on!==false }); }catch(e){}
+  });
+}
+function openRsiSettings(){
+  const before=JSON.parse(JSON.stringify(RSI_PARAMS));
+  const st=RSI_PARAMS.style;
+  const srcSel=(id,val)=>'<select id="'+id+'">'+SRC_OPTS.map(o=>'<option value="'+o+'" '+(o===val?"selected":"")+'>'+o.charAt(0).toUpperCase()+o.slice(1)+'</option>').join("")+'</select>';
+  const isBB=RSI_PARAMS.maType==="Bollinger Bands";
+  const inputsHtml=''
+    +'<div class="dsec">RSI settings</div>'
+    +'<div class="field"><label>RSI Length</label><input type="number" id="rsi_len" min="1" step="1" value="'+RSI_PARAMS.len+'"></div>'
+    +'<div class="field"><label>Source</label>'+srcSel("rsi_src",RSI_PARAMS.src)+'</div>'
+    +'<div class="field"><label>Calculate Divergence</label><input type="checkbox" id="rsi_div" '+(RSI_PARAMS.divergence?"checked":"")+'></div>'
+    +'<div class="dsec">Smoothing</div>'
+    +'<div class="field"><label>Type</label><select id="rsi_matype">'+RSI_MA_TYPES.map(t=>'<option value="'+t+'" '+(t===RSI_PARAMS.maType?"selected":"")+'>'+t+'</option>').join("")+'</select></div>'
+    +'<div class="field"><label>Length</label><input type="number" id="rsi_smooth" min="1" step="1" value="'+RSI_PARAMS.smooth+'"></div>'
+    +'<div class="field"><label>BB StdDev</label><input type="number" id="rsi_bbsd" min="0.1" step="0.1" value="'+RSI_PARAMS.bbStdDev+'" '+(isBB?"":"disabled")+'></div>'
+    +'<div class="dsec">Calculation</div>'
+    +'<div class="field"><label>Timeframe</label><select id="rsi_tf" disabled><option>Chart</option></select></div>'
+    +'<div class="field"><label>Wait for timeframe closes</label><input type="checkbox" id="rsi_wait" '+(RSI_PARAMS.waitClose?"checked":"")+' disabled></div>';
+  const row=(i,k)=>{ const s=st[k];
+    return '<div class="prow"><span class="pl"><input type="checkbox" id="rv_'+i+'" '+(s.on!==false?"checked":"")+'>'+RSI_PLOT_NAMES[i]+'</span>'
+      +'<span class="pc"><input type="color" id="rcl_'+i+'" value="'+toHex(s.color)+'">'
+      +'<input class="pw" type="number" min="1" max="6" step="1" id="rw_'+i+'" value="'+(s.width||1)+'">'
+      +'<select id="rls_'+i+'">'+LINE_STYLES.map(([n,v])=>'<option value="'+v+'" '+(v===(s.ls||0)?"selected":"")+'>'+n+'</option>').join("")+'</select></span></div>'; };
+  const styleHtml=RSI_STYLE_KEYS.map((k,i)=>row(i,k)).join("");
+  const visHtml=RSI_STYLE_KEYS.map((k,i)=>'<div class="prow"><span class="pl"><input type="checkbox" id="rvv_'+i+'" '+(st[k].on!==false?"checked":"")+'>'+RSI_PLOT_NAMES[i]+'</span></div>').join("");
+  dlg.innerHTML='<div class="dh"><span>RSI</span><span class="cl" id="dlgClose">×</span></div>'
+    +'<div class="dtabs"><div class="dtab active" data-t="inputs">Inputs</div><div class="dtab" data-t="style">Style</div><div class="dtab" data-t="vis">Visibility</div></div>'
+    +'<div class="db">'
+    +'<div class="dpane active" data-p="inputs">'+inputsHtml+'</div>'
+    +'<div class="dpane" data-p="style">'+styleHtml+'</div>'
+    +'<div class="dpane" data-p="vis">'+visHtml+'</div>'
+    +'</div>'
+    +'<div class="df"><button class="btn ghost" id="dlgCancel">Cancel</button><button class="btn primary" id="dlgOk">OK</button></div>';
+  dlg.classList.remove("fib-dialog"); dlg.classList.add("open"); backdrop.classList.add("open");
+  dlg.querySelectorAll(".dtab").forEach(t=>t.onclick=()=>{
+    dlg.querySelectorAll(".dtab").forEach(x=>x.classList.toggle("active",x===t));
+    dlg.querySelectorAll(".dpane").forEach(pn=>pn.classList.toggle("active", pn.dataset.p===t.dataset.t));
+  });
+  const apply=()=>{
+    const l=+document.getElementById("rsi_len").value, s2=+document.getElementById("rsi_smooth").value;
+    if(l>0) RSI_PARAMS.len=l; if(s2>0) RSI_PARAMS.smooth=s2;
+    const srcEl=document.getElementById("rsi_src"); if(srcEl) RSI_PARAMS.src=srcEl.value;
+    const divEl=document.getElementById("rsi_div"); if(divEl) RSI_PARAMS.divergence=divEl.checked;
+    const mtEl=document.getElementById("rsi_matype"); if(mtEl) RSI_PARAMS.maType=mtEl.value;
+    const bbEl=document.getElementById("rsi_bbsd"); if(bbEl&&+bbEl.value>0) RSI_PARAMS.bbStdDev=+bbEl.value;
+    // enable/disable BB StdDev field to match the selected Type
+    if(bbEl) bbEl.disabled = RSI_PARAMS.maType!=="Bollinger Bands";
+    RSI_STYLE_KEYS.forEach((k,i)=>{ const cl=document.getElementById("rcl_"+i), w=document.getElementById("rw_"+i), ls=document.getElementById("rls_"+i), v=document.getElementById("rv_"+i);
+      if(cl) st[k].color=cl.value; if(w) st[k].width=+w.value; if(ls) st[k].ls=+ls.value; if(v) st[k].on=v.checked; });
+    updateRsiLabel();
+    if(lastData.length) renderData(lastData, true);   // recompute RSI (len/src/type may have changed)
+    applyRsiStyle();                                   // then push style/visibility
+  };
+  // keep the Style-tab and Visibility-tab checkboxes in sync live
+  RSI_STYLE_KEYS.forEach((k,i)=>{ ["rv_"+i,"rvv_"+i].forEach(idc=>{ const el=document.getElementById(idc); if(el) el.addEventListener("change",e=>{ const a=document.getElementById("rv_"+i),b=document.getElementById("rvv_"+i); if(a)a.checked=e.target.checked; if(b)b.checked=e.target.checked; }); }); });
+  dlg.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",apply));
+  document.getElementById("dlgOk").onclick=()=>{ apply(); saveRsiParams(); closeDlg(); };
+  const revert=()=>{ Object.assign(RSI_PARAMS, before); RSI_PARAMS.style=before.style; updateRsiLabel(); if(lastData.length) renderData(lastData, true); applyRsiStyle(); closeDlg(); };
+  document.getElementById("dlgCancel").onclick=revert;
+  document.getElementById("dlgClose").onclick=revert;
+}
+updateRsiLabel();
+applyRsiStyle();   // apply any persisted RSI style/visibility at boot
+
+// ── Moving-average legend + settings ────────────────────────────────────
+// Recompute each MA line, push its swatch into the legend, and append a gear
+// button that opens the MA settings dialog (edit period/color/width/hide, add/remove).
+function maTag(m){ return (m.type||"sma").toUpperCase().replace("RMA","SMMA"); }
+function renderMaLegend(data){
+  const legend=[];
+  maSeries.forEach((s,i)=>{
+    const m = MAS[i]; if(!m) return;
+    const sd = maLine(data, m);
+    s.setData(sd);
+    s.applyOptions({ color:m.color, lineWidth:m.w||1, lineStyle:m.ls||0, visible:m.on!==false });
+    if(m.on!==false && sd.length) legend.push(`<span style="color:${m.color}">${maTag(m)}${m.p} ${fmt(sd[sd.length-1].value)}</span>`);
+  });
+  const box=document.getElementById("maLegend");
+  box.innerHTML = legend.join("") + '<span id="maGear" title="MA settings" style="cursor:pointer;opacity:.65;margin-right:0">⚙</span>';
+  const g=document.getElementById("maGear");
+  if(g) g.onclick = openMaSettings;
+}
+
+function openMaSettings(){
+  const before = JSON.parse(JSON.stringify(MAS));
+  let work = JSON.parse(JSON.stringify(MAS));   // edited in place, committed on OK
+  const opts=(list,val)=>list.map(([n,v])=>'<option value="'+v+'"'+(v===val?' selected':'')+'>'+n+'</option>').join("");
+  const draw=()=>{
+    const rows = work.map((m,i)=>
+      '<div class="prow ma-editrow" data-i="'+i+'">'
+      +'<input type="checkbox" class="ma_on" data-i="'+i+'" '+(m.on!==false?"checked":"")+' title="Show / hide">'
+      +'<select class="ma_type" data-i="'+i+'" title="MA type">'+opts(MA_TYPES,m.type||"sma")+'</select>'
+      +'<input class="pw ma_p" type="number" min="1" step="1" data-i="'+i+'" value="'+m.p+'" title="Period">'
+      +'<select class="ma_src" data-i="'+i+'" title="Source">'+opts(MA_SRCS,m.src||"close")+'</select>'
+      +'<input type="color" class="ma_cl" data-i="'+i+'" value="'+toHex(m.color)+'">'
+      +'<input class="pw ma_w" type="number" min="1" max="6" step="1" data-i="'+i+'" value="'+(m.w||1)+'" title="Width">'
+      +'<select class="ma_ls" data-i="'+i+'" title="Line style">'+opts(LINE_STYLES,m.ls||0)+'</select>'
+      +'<span class="ma_del" data-i="'+i+'" title="Remove" style="cursor:pointer;padding:0 4px;opacity:.7">🗑</span>'
+      +'</div>').join("");
+    dlg.innerHTML='<div class="dh"><span>Moving Averages</span><span class="cl" id="dlgClose">×</span></div>'
+      +'<div class="db">'+rows+'<div class="field" style="margin-top:8px"><button class="btn ghost" id="maAdd">+ Add MA</button><button class="btn ghost" id="maReset" style="margin-left:6px">Reset</button></div></div>'
+      +'<div class="df"><button class="btn ghost" id="dlgCancel">Cancel</button><button class="btn primary" id="dlgOk">OK</button></div>';
+    // read edits back into `work` on every input
+    const sync=()=>{
+      dlg.querySelectorAll(".ma_type").forEach(el=>{ work[+el.dataset.i].type=el.value; });
+      dlg.querySelectorAll(".ma_src").forEach(el=>{ work[+el.dataset.i].src=el.value; });
+      dlg.querySelectorAll(".ma_p").forEach(el=>{ const v=+el.value; if(v>0) work[+el.dataset.i].p=v; });
+      dlg.querySelectorAll(".ma_cl").forEach(el=>{ work[+el.dataset.i].color=el.value; });
+      dlg.querySelectorAll(".ma_w").forEach(el=>{ const v=+el.value; if(v>0) work[+el.dataset.i].w=v; });
+      dlg.querySelectorAll(".ma_ls").forEach(el=>{ work[+el.dataset.i].ls=+el.value; });
+      dlg.querySelectorAll(".ma_on").forEach(el=>{ work[+el.dataset.i].on=el.checked; });
+    };
+    dlg.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",sync));
+    dlg.querySelectorAll(".ma_del").forEach(el=>el.onclick=()=>{ sync(); work.splice(+el.dataset.i,1); draw(); });
+    document.getElementById("maAdd").onclick=()=>{ sync(); work.push({ p:50, color:"#e0e0e0", w:1, on:true, type:"sma", src:"close", ls:0 }); draw(); };
+    document.getElementById("maReset").onclick=()=>{ work=JSON.parse(JSON.stringify(DEFAULT_MAS)); draw(); };
+    document.getElementById("dlgOk").onclick=()=>{ sync();
+      const changed = work.length!==MAS.length;   // add/remove ⇒ rebuild series
+      MAS = work;
+      if(changed) rebuildMaSeries();
+      saveMas();
+      if(lastData.length) renderMaLegend(lastData);
+      closeDlg();
+    };
+    document.getElementById("dlgCancel").onclick=closeDlg;
+    document.getElementById("dlgClose").onclick=closeDlg;
+  };
+  draw();
+  dlg.classList.add("open","ma-dlg"); backdrop.classList.add("open");
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -5543,7 +6461,7 @@ let scriptUid = 1;
 const SCRIPTS_KEY = ()=>"fv_scripts_"+activeSymbol;
 
 const DEFAULT_SCRIPT =
-`// Freeview Script — write a custom indicator.
+`// OpenView Script — write a custom indicator.
 // Inputs (arrays aligned to bars): open, high, low, close, volume, hl2, hlc3, ohlc4
 // Library: ta.sma/ema/wma/rma/rsi/atr/stdev/highest/lowest/change/roc/
 //          crossover/crossunder/cross  ·  Math.*  ·  na (=NaN)
@@ -5605,7 +6523,7 @@ function runScript(code, data){
   //  · `eval`/`arguments` can't be rebound under strict mode at all, so we reject
   //    any script that references them at the source level instead.
   //  · reserved words (import/export) aren't usable in new Function() anyway.
-  if(/\b(eval|arguments)\b/.test(code)) throw new Error("eval / arguments are not allowed in Freeview Script");
+  if(/\b(eval|arguments)\b/.test(code)) throw new Error("eval / arguments are not allowed in OpenView Script");
   const BLOCKED=["window","document","globalThis","self","top","parent","frames",
     "fetch","XMLHttpRequest","WebSocket","EventSource","localStorage","sessionStorage",
     "indexedDB","caches","navigator","location","history","Function",
@@ -5679,6 +6597,12 @@ function renderScript(sc){
     const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeScript(sc.id);
     const edit=document.createElement("span"); edit.className="subClose"; edit.textContent="✎"; edit.title="Edit script"; edit.onclick=()=>openScriptEditor(sc.id);
     label.appendChild(edit); label.appendChild(close); el.appendChild(label); wrap.appendChild(el); sc.paneEl=el;
+    // Right-click the script pane → Edit script / Reset view / Remove (no built-in
+    // alert source for custom scripts).
+    attachPaneContextMenu(el, {
+      settings:()=>openScriptEditor(sc.id),
+      remove:()=>removeScript(sc.id), removeLabel:"Remove script",
+    });
     const sChart=LightweightCharts.createChart(el,{ layout:{background:{color:"#131722"},textColor:"#d1d4dc",fontFamily:"'Trebuchet MS', Roboto, Ubuntu, sans-serif"},
       grid:{vertLines:{visible:false},horzLines:{color:"#1e222d"}}, rightPriceScale:{borderColor:"#2a2e39",minimumWidth:PRICE_AXIS_W},
       timeScale:{borderColor:"#2a2e39",timeVisible:true,secondsVisible:false,tickMarkFormatter:(t,type)=>tickLabel(t,type)}, crosshair:{mode:0} });
@@ -5769,7 +6693,7 @@ function renderScriptLegend(){
 function openScriptEditor(id){
   const sc = id ? scripts.find(s=>s.id===id) : null;
   scriptDlg.innerHTML=`
-    <div class="dh"><span>${sc?"Edit":"New"} Freeview Script</span><span class="cl" id="scClose">×</span></div>
+    <div class="dh"><span>${sc?"Edit":"New"} OpenView Script</span><span class="cl" id="scClose">×</span></div>
     <div class="db" style="gap:8px;">
       <input type="text" id="sc_name" class="search" style="margin:0;" placeholder="Script name" value="${sc?escHtml(sc.name):'My Script'}">
       <textarea id="sc_code" spellcheck="false">${escHtml(sc?sc.code:DEFAULT_SCRIPT)}</textarea>
@@ -5831,7 +6755,7 @@ function migrateAlert(a){
 function saveAlerts(){
   try{ localStorage.setItem(alertsKey(), JSON.stringify(alerts.map(a=>({
     id:a.id, source:a.source, op:a.op, target:a.target, value:a.value,
-    trigger:a.trigger, expiry:a.expiry, message:a.message, notify:a.notify, active:a.active,
+    trigger:a.trigger, expiry:a.expiry, message:a.message, notify:a.notify, webhook:a.webhook, active:a.active,
   })))); }catch(e){}
 }
 function loadAlerts(){ alerts.length=0;
@@ -5867,7 +6791,7 @@ function sourceLabel(k){
 function sourceValue(key){
   if(!lastData.length) return null;
   if(key==="price") return lastData[lastData.length-1].close;
-  if(key==="rsi"){ const r=rsiSeries(lastData,14); return r.length?r[r.length-1].value:null; }
+  if(key==="rsi"){ const r=rsiSeries(lastData,RSI_PARAMS.len,RSI_PARAMS.src); return r.length?r[r.length-1].value:null; }
   // Alert on a drawing: horizontal line = its level; trend/ray = value at the last bar.
   if(key && key.indexOf("draw:")===0){
     const s=draw.shapes.find(x=>x.id===key.slice(5)); if(!s||!s.pts||!s.pts.length) return null;
@@ -6022,15 +6946,31 @@ function fireAlert(a, lhs, rhs){
   const msg = `${base} — now ${fmt(lhs)}`;
   logAlert({ ts: Date.now(), symbol: activeSymbol, text: msg });   // history
   const n = a.notify || ALERT_DEFAULT_NOTIFY;
-  if(n.browser && window.Notification && Notification.permission==="granted"){ try{ new Notification("Freeview Alert",{body:msg}); }catch(e){} }
+  if(n.browser && window.Notification && Notification.permission==="granted"){ try{ new Notification("OpenView Alert",{body:msg}); }catch(e){} }
   if(n.popup){
     const t=document.createElement("div"); t.textContent="🔔 "+msg;
     t.style.cssText="position:fixed;top:60px;right:320px;z-index:500;background:#f7525f;color:#fff;padding:10px 16px;border-radius:6px;box-shadow:0 4px 16px #0008;font-size:13px;max-width:320px;";
     document.body.appendChild(t); setTimeout(()=>t.remove(),6000);
   }
   if(n.sound){ try{ beep(); }catch(e){} }
-  // Email/external needs a backend; a local file:// page can't send it. The UI
-  // toggle is kept for parity but does nothing here.
+  // Webhook: POST the alert payload straight to a user-defined URL. No backend
+  // needed — the browser fetch() does it. Fire-and-forget (no-cors so cross-origin
+  // endpoints like Discord/Slack/Zapier accept it without a preflight).
+  if(a.webhook){
+    try{
+      fetch(a.webhook, {
+        method:"POST", mode:"no-cors", keepalive:true,
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({
+          symbol: activeSymbol, message: msg, value: lhs,
+          source: a.source, op: a.op, target: a.target,
+          time: new Date().toISOString(),
+        }),
+      }).catch(()=>{});
+    }catch(e){}
+  }
+  // Email needs a backend; a local file:// page can't send it. The UI toggle is
+  // kept for parity but does nothing here.
 }
 function beep(){ const ac=new (window.AudioContext||window.webkitAudioContext)(); const o=ac.createOscillator(),g=ac.createGain(); o.connect(g); g.connect(ac.destination); o.frequency.value=880; g.gain.value=0.08; o.start(); setTimeout(()=>{o.stop();ac.close();},220); }
 function requestNotifPermission(){ if(window.Notification && Notification.permission==="default") Notification.requestPermission(); }
@@ -6075,6 +7015,9 @@ function renderAlertsPanel(){
 }
 
 document.getElementById("btnIndicators").onclick=()=>toggleIndicatorsMenu();
+document.getElementById("btnUndo").onclick=()=>undoDraw();                             // ↩ undo (same as Ctrl+Z)
+document.getElementById("btnRedo").onclick=()=>redoDraw();                             // ↪ redo (same as Ctrl+Y)
+updateUndoButtons();                                                                   // greyed-out until history exists
 document.getElementById("btnScript").onclick=()=>openScriptEditor(null);              // ƒ → new custom-indicator script
 document.getElementById("btnAlert").onclick=()=>openAlertDialog({});                  // bell → create alert (TradingView)
 document.getElementById("btnAlert").addEventListener("contextmenu", e=>{ e.preventDefault(); toggleAlertsPanel(); });  // right-click → manage list
@@ -6391,11 +7334,41 @@ document.getElementById("wlNameBtn").onclick = (e)=>{
   e.stopPropagation();
   const menu=document.getElementById("wlNameMenu");
   if(menu.style.display==="block"){ menu.style.display="none"; return; }
+  const act=(label,action)=>'<div class="mi" data-act="'+action+'">'+label+'</div>';
   let html="";
-  Object.keys(WATCHLISTS).forEach(n=>{ html+='<div class="mi" data-wl="'+escHtml(n)+'">'+(n===ACTIVE_WL?"✓ ":"")+escHtml(n)+'</div>'; });
-  html+='<div class="msep"></div><div class="mi" data-newwl="1">＋ New watchlist…</div>';
+  // ── list-level actions (TradingView order) ──
+  html+=act("↗ Share list…","share");
+  html+=act("🔔 Add alert on the list…","alert");
+  html+=act("⧉ Make a copy…","copy");
+  html+=act("✎ Rename…","rename");
+  html+=act("＋ Add section…","section");
+  html+=act("🗑 Clear list…","clear");
+  html+='<div class="msep"></div>';
+  html+=act("＋ Create new list…","new");
+  html+=act("⭳ Upload list… (.txt)","upload");
+  html+=act("⤢ Open list… (Shift+W)","open");
+  // ── recently used ──
+  const recent=RECENT_WL.filter(n=>WATCHLISTS[n] && n!==ACTIVE_WL);
+  if(recent.length){
+    html+='<div class="msep"></div><div class="mi" style="color:var(--muted);font-size:10px;letter-spacing:.5px;pointer-events:none">RECENTLY USED</div>';
+    recent.forEach(n=>{ html+='<div class="mi" data-wl="'+escHtml(n)+'">'+escHtml(n)+'</div>'; });
+  }
   menu.innerHTML=html; menu.style.display="block";
-  menu.querySelectorAll(".mi").forEach(it=>it.onclick=()=>{ menu.style.display="none"; if(it.dataset.newwl) createWatchlist(); else switchWatchlist(it.dataset.wl); });
+  menu.querySelectorAll(".mi").forEach(it=>it.onclick=()=>{
+    menu.style.display="none";
+    if(it.dataset.wl){ switchWatchlist(it.dataset.wl); return; }
+    switch(it.dataset.act){
+      case "share":   shareWatchlist(); break;
+      case "alert":   alertOnList(); break;
+      case "copy":    copyWatchlist(); break;
+      case "rename":  renameWatchlist(); break;
+      case "section": addGroup(null); break;
+      case "clear":   clearWatchlist(); break;
+      case "new":     createWatchlist(); break;
+      case "upload":  document.getElementById("wlImportFile").click(); break;
+      case "open":    openListBrowser(); break;
+    }
+  });
 };
 document.addEventListener("click", e=>{ if(!e.target.closest("#wlHead")){ const m=document.getElementById("wlNameMenu"); if(m) m.style.display="none"; } });
 // Collapse / expand the floating on-chart legend.
