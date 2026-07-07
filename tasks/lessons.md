@@ -186,3 +186,53 @@ Rule: for "feature X is slow" on a network-backed chart, FIRST check page-count-
 and the network tab for 429s before assuming render cost — and instrument first-paint latency
 vs. network round-trips separately. Any async path that mutates shared `lastData`/repaints
 (not just the main loader) needs the same `loadToken` staleness guard.
+
+## An out-of-order bar TIME (not just render thrash) trips the LWC "Value is null" freeze
+The spread NEAR-USD/INJ-USD loaded with ONE bar whose timestamp jumped backwards mid-series
+(index 1036: Jul-2025 → Sep-2022). Lightweight Charts requires strictly-ascending, unique bar
+times; a single out-of-order (or duplicate) `time` makes its line renderer throw "Value is null",
+most visibly during rapid zoom-out (which then permanently wedges the chart). Proof it was
+ORDER, not spacing: BTC at the same 2400-bar count and same 0.50px bar spacing → 0 crashes; the
+gapped/misordered spread → 82. A bar-spacing clamp does NOT fix it. Fix: normalise the series to
+strictly-ascending, deduped time at the ONE chokepoint every paint routes through (`renderData`),
+before any `setData`. Lesson: when LWC throws "Value is null", check the DATA ordering first
+(scan for `d[i].time <= d[i-1].time`), not only the render cadence — merges (spread ratios,
+history prepends) can silently emit a misordered bar. Verify a data-shape hypothesis by diffing
+a clean symbol (BTC) against the failing one at identical bar-count/zoom.
+
+## A regression test can outlive the behavior it asserts — reconcile, don't just satisfy it
+regression_chart_render.mjs check [4] demanded bar spacing floor ≥3px on zoom-out, but a later
+commit (fa9926b) DELIBERATELY allowed sub-pixel spacing for TradingView-like full zoom-out. After
+fixing the real crash bug, [4] still failed — a code-vs-test conflict, not a bug. Confirmed with
+the user that full zoom-out is intended, then rewrote [4] to assert the real invariant (chart
+doesn't WEDGE: zoom-in after full zoom-out still grows bar spacing) instead of the stale ≥3px.
+Lesson: when a test fails after an intentional product change, don't blindly re-add code to
+satisfy it — check git history/commit intent, confirm which side is right, and update the test to
+guard the ACTUAL invariant.
+
+## Verify an audit finding actually FAILS before claiming a fix — a try/catch can make a "bug" a non-bug
+An audit reported `loadCompareData` writing to a stale compare series after `await` (remove/re-add
+mid-fetch → disposed-series throw). Reproduction showed 0 pageerrors and no data corruption: the
+existing `try/catch` swallows the disposed-series throw, and `COMPARE[sym]` always tracks the
+current series. So the "bug" had no observable failure. I kept the `COMPARE[sym]!==c` guard as a
+cheap defensive measure but did NOT dress it up as a proven bug fix — the test comment documents it
+as smoke coverage, not a reproduction. Lesson: before fixing an audit finding, reproduce the
+OBSERVABLE failure (crash, wrong pixels, wrong data). If you can't, either the guard already exists
+or the finding is theoretical — say so honestly instead of shipping a "fix" for a non-bug.
+
+## A `.addEventListener` on a PERSISTENT node inside a re-runnable builder leaks one handler per run
+`openFibSettings` rebuilds `#settingsDlg`'s innerHTML each open but bound an outside-click handler
+via `dlg.addEventListener("click", …)` on the dialog NODE (which survives the innerHTML swap). Every
+reopen — and the re-entrant `applyConfig→openFibSettings` path — stacked another live closure; 8
+opens = 8 handlers (proven by instrumenting add/removeEventListener). Sibling handlers on the same
+builder used `el.onclick=` (idempotent — auto-replaced) and were fine. Fix: track the handler on the
+node (`dlg._fibTplOutsideClick`) and `removeEventListener` the prior one before adding. Lesson: when a
+builder re-runs and binds to a node that OUTLIVES the rebuild, prefer `.onclick=`/`.on*=` (replaces)
+over `addEventListener` (stacks); if you must use addEventListener, remove the previous handler first.
+Test the leak by counting live 'click' listeners across N opens, not by looking for a visible symptom.
+
+## The silent 20s background refresh must NOT run the progressive first-page paint
+User: "out of nowhere it bounces and for 2 seconds there is nothing." Cause: `setInterval(loadChart(sym,tf,true), 20000)` re-runs the FULL progressive loader every 20s. On a keepView refresh, `paintedFromCache` is false, so `_painted` started at 0 and `paintProgressive` painted the first ~1 page (e.g. 350 bars) BEFORE the final complete paint — momentarily shrinking a 2457-bar series to 350 and jolting the user's zoomed view, then restoring. Proven by sampling `lastData.length` across a keepView refresh: pre-fix dipped to 350, post-fix held at 2457. Fix: `let _painted = (paintedFromCache || keepView) ? 1 : 0;` — a background refresh paints ONLY the final complete series, never a partial page. Lesson: the first-page progressive paint exists purely for INSTANT FEEDBACK on a user-initiated switch; any silent/background reload (keepView) must suppress it and touch the view once, at the end. When a periodic "bounce" is reported, look for an interval timer (its period matches "out of nowhere"), not a gesture handler.
+
+## Drive chart zoom limits by BAR SPACING (px/bar), not a fixed visible-bar count
+Zoom-in was capped at a minimum visible span of 8 bars (`Math.max(8, span*factor)`), so the user hit a wall well before TradingView's "zoom almost to infinity". TradingView governs zoom by bar spacing: zoom in until one bar is very wide (~hundreds of px), out until sub-pixel. Fix: a shared `zoomSpanLimits()` returns `{minSpan: width/MAX_BAR_SPACING, maxSpan: min(loadedBars*1.2, width/MIN_BAR_SPACING)}` with MAX=350px (≈4 bars fill screen) / MIN=0.5px, used by ALL THREE zoom paths (wheel, keyboard +/-, time-axis drag) so they agree. Lesson: express zoom limits as px-per-bar (`span ≈ chartWidth/barSpacing`), not bar count — bar count doesn't map to how big a candle looks, which is what the user actually perceives as "how far zoomed in". And when there are multiple zoom entry points, refactor the clamp into ONE helper so they can't drift apart.

@@ -998,12 +998,20 @@ const chart = LightweightCharts.createChart(chartEl, common);
 // null ⇒ auto-scale (the default). When set, candle.autoscaleInfoProvider pins the
 // scale to it so the whole price axis (candles + MAs + aux series) honors the drag.
 let manualPriceRange = null;
+// Autoscale providers for the right price scale. The candle is the anchor: when
+// manualPriceRange is set it returns exactly that range. Every OTHER overlay
+// (MAs, aux chart-type series, compare) must NOT contribute its own data extent
+// while a manual range is active — otherwise LWC merges them in and floors the
+// visible span (blocking zoom-in). They return null (excluded from autoscale)
+// when manualPriceRange is set, and defer to their default extent otherwise.
+const candleScale  = orig => manualPriceRange
+  ? { priceRange:{ minValue:manualPriceRange.min, maxValue:manualPriceRange.max } }
+  : orig();
+const overlayScale = orig => manualPriceRange ? null : orig();
 const candle = chart.addCandlestickSeries({
   upColor:"#26a69a", downColor:"#ef5350", borderVisible:false,
   wickUpColor:"#26a69a", wickDownColor:"#ef5350",
-  autoscaleInfoProvider: orig => manualPriceRange
-    ? { priceRange:{ minValue:manualPriceRange.min, maxValue:manualPriceRange.max } }
-    : orig(),
+  autoscaleInfoProvider: candleScale,
 });
 
 // ── Chart type + scale ──────────────────────────────────────────────
@@ -1017,18 +1025,20 @@ let scaleMode = 0;           // 0 Normal · 1 Log · 2 Percentage
 const aux = {};              // lazily-created auxiliary series keyed by type
 function auxSeries(type){
   if(aux[type]) return aux[type];
-  if(type==="line")     aux[type]=chart.addLineSeries({ color:"#2962ff", lineWidth:2, priceLineVisible:true, lastValueVisible:true });
-  else if(type==="linemark") aux[type]=chart.addLineSeries({ color:"#2962ff", lineWidth:2, priceLineVisible:true, lastValueVisible:true, pointMarkersVisible:true, pointMarkersRadius:3 });
-  else if(type==="step") aux[type]=chart.addLineSeries({ color:"#2962ff", lineWidth:2, priceLineVisible:true, lastValueVisible:true, lineType:1 /* LineType.WithSteps */ });
-  else if(type==="area")aux[type]=chart.addAreaSeries({ lineColor:"#2962ff", topColor:"rgba(41,98,255,0.30)", bottomColor:"rgba(41,98,255,0.02)", lineWidth:2 });
-  else if(type==="baseline") aux[type]=chart.addBaselineSeries({ baseValue:{type:"price",price:0}, topLineColor:"#26a69a", bottomLineColor:"#ef5350", topFillColor1:"rgba(38,166,154,0.20)", bottomFillColor1:"rgba(239,83,80,0.20)" });
-  else if(type==="columns") aux[type]=chart.addHistogramSeries({ color:"#26a69a", priceLineVisible:false, lastValueVisible:true });
-  else if(type==="bars"||type==="hlcbars") aux[type]=chart.addBarSeries({ upColor:"#26a69a", downColor:"#ef5350", thinBars:false, openVisible:type==="bars" });
-  else if(type==="highlow") aux[type]=chart.addBarSeries({ upColor:"#787b86", downColor:"#787b86", thinBars:false, openVisible:false });
+  // Every aux series IS the primary price series for its chart type (candle is
+  // hidden), so it honors the manual price range via candleScale — same as candle.
+  if(type==="line")     aux[type]=chart.addLineSeries({ color:"#2962ff", lineWidth:2, priceLineVisible:true, lastValueVisible:true, autoscaleInfoProvider:candleScale });
+  else if(type==="linemark") aux[type]=chart.addLineSeries({ color:"#2962ff", lineWidth:2, priceLineVisible:true, lastValueVisible:true, pointMarkersVisible:true, pointMarkersRadius:3, autoscaleInfoProvider:candleScale });
+  else if(type==="step") aux[type]=chart.addLineSeries({ color:"#2962ff", lineWidth:2, priceLineVisible:true, lastValueVisible:true, lineType:1 /* LineType.WithSteps */, autoscaleInfoProvider:candleScale });
+  else if(type==="area")aux[type]=chart.addAreaSeries({ lineColor:"#2962ff", topColor:"rgba(41,98,255,0.30)", bottomColor:"rgba(41,98,255,0.02)", lineWidth:2, autoscaleInfoProvider:candleScale });
+  else if(type==="baseline") aux[type]=chart.addBaselineSeries({ baseValue:{type:"price",price:0}, topLineColor:"#26a69a", bottomLineColor:"#ef5350", topFillColor1:"rgba(38,166,154,0.20)", bottomFillColor1:"rgba(239,83,80,0.20)", autoscaleInfoProvider:candleScale });
+  else if(type==="columns") aux[type]=chart.addHistogramSeries({ color:"#26a69a", priceLineVisible:false, lastValueVisible:true, autoscaleInfoProvider:candleScale });
+  else if(type==="bars"||type==="hlcbars") aux[type]=chart.addBarSeries({ upColor:"#26a69a", downColor:"#ef5350", thinBars:false, openVisible:type==="bars", autoscaleInfoProvider:candleScale });
+  else if(type==="highlow") aux[type]=chart.addBarSeries({ upColor:"#787b86", downColor:"#787b86", thinBars:false, openVisible:false, autoscaleInfoProvider:candleScale });
   // renko / kagi / pnf / linebreak render through a candlestick aux series fed
   // transformed "brick"/"box"/"line" data, so they share candle coordinate anchoring.
   else if(type==="renko"||type==="kagi"||type==="pnf"||type==="linebreak")
-    aux[type]=chart.addCandlestickSeries({ upColor:"#26a69a", downColor:"#ef5350", borderUpColor:"#26a69a", borderDownColor:"#ef5350", wickUpColor:"#26a69a", wickDownColor:"#ef5350", priceLineVisible:true, lastValueVisible:true });
+    aux[type]=chart.addCandlestickSeries({ upColor:"#26a69a", downColor:"#ef5350", borderUpColor:"#26a69a", borderDownColor:"#ef5350", wickUpColor:"#26a69a", wickDownColor:"#ef5350", priceLineVisible:true, lastValueVisible:true, autoscaleInfoProvider:candleScale });
   return aux[type];
 }
 // Heikin Ashi transform: HA-Close=(O+H+L+C)/4; HA-Open=(prevHAO+prevHAC)/2;
@@ -1258,7 +1268,7 @@ function maLine(data, m){
   const out=[]; for(let i=0;i<data.length;i++) if(o[i]!=null) out.push({ time:data[i].time, value:o[i] });
   return out;
 }
-const maSeriesOpts = m => ({ color:m.color, lineWidth:m.w, lineStyle:m.ls||0, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false, visible:m.on!==false });
+const maSeriesOpts = m => ({ color:m.color, lineWidth:m.w, lineStyle:m.ls||0, priceLineVisible:false, lastValueVisible:true, crosshairMarkerVisible:false, visible:m.on!==false, autoscaleInfoProvider:overlayScale });
 let maSeries = MAS.map(m => chart.addLineSeries(maSeriesOpts(m)));
 // Tear down + recreate the MA line series to match the current MAS[] (after add/remove).
 function rebuildMaSeries(){
@@ -1270,13 +1280,21 @@ function rebuildMaSeries(){
 const rsiChart = LightweightCharts.createChart(rsiEl, { ...common });
 
 // Keep the panel pinned to a sensible RSI window so it reads like TradingView.
-const rsiScale = () => ({ priceRange:{ minValue:18, maxValue:82 } });
+// null ⇒ default 18–82 window; set by dragging the RSI right axis (like the main
+// chart's manualPriceRange) so the user can stretch/compress the RSI scale.
+let manualRsiRange = null;
+const rsiScale = () => manualRsiRange
+  ? { priceRange:{ minValue:manualRsiRange.min, maxValue:manualRsiRange.max } }
+  : { priceRange:{ minValue:18, maxValue:82 } };
 
 // TradingView's default RSI shades the whole 30–70 band with a faint purple.
 // A baseline series anchored at 70 whose top+bottom fills are the same purple
 // paints a solid translucent block across the band region. rsiUnder (anchored at
 // 30) is kept as a transparent no-op so the rest of the code that feeds it stays
 // unchanged.
+// Every RSI-pane series defers its autoscale to rsiScale so the band lines
+// (fixed at 30/50/70) don't pin the merged price extent — otherwise LWC floors
+// the visible range at ~[30,70] and the user can't zoom the pane in past that.
 const rsiOver = rsiChart.addBaselineSeries({
   baseValue:{ type:"price", price:70 },
   topFillColor1:"rgba(124,87,194,0.10)", topFillColor2:"rgba(124,87,194,0.10)",
@@ -1284,6 +1302,7 @@ const rsiOver = rsiChart.addBaselineSeries({
   bottomFillColor1:"rgba(124,87,194,0.10)", bottomFillColor2:"rgba(124,87,194,0.10)",
   bottomLineColor:"rgba(0,0,0,0)",
   priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
+  autoscaleInfoProvider:rsiScale,
 });
 const rsiUnder = rsiChart.addBaselineSeries({
   baseValue:{ type:"price", price:30 },
@@ -1292,14 +1311,15 @@ const rsiUnder = rsiChart.addBaselineSeries({
   bottomFillColor1:"rgba(0,0,0,0)", bottomFillColor2:"rgba(0,0,0,0)",
   bottomLineColor:"rgba(0,0,0,0)",
   priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
+  autoscaleInfoProvider:rsiScale,
 });
 // dashed 70 / 30 bands — TradingView tints these purple (the RSI plot color).
-const band70  = rsiChart.addLineSeries({ color:"rgba(124,87,194,0.5)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
-const band30  = rsiChart.addLineSeries({ color:"rgba(124,87,194,0.5)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
-const band50  = rsiChart.addLineSeries({ color:"#3a3e4a", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
+const band70  = rsiChart.addLineSeries({ color:"rgba(124,87,194,0.5)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
+const band30  = rsiChart.addLineSeries({ color:"rgba(124,87,194,0.5)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
+const band50  = rsiChart.addLineSeries({ color:"#3a3e4a", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
 // RSI line (TradingView purple #7E57C2, thin) + smoothing MA (gold, thicker), added last = on top.
 const rsiLine = rsiChart.addLineSeries({ color:"#7e57c2", lineWidth:2, priceLineVisible:false, lastValueVisible:true, autoscaleInfoProvider:rsiScale });
-const rsiMa   = rsiChart.addLineSeries({ color:"#e6b400", lineWidth:2, priceLineVisible:false, lastValueVisible:true });
+const rsiMa   = rsiChart.addLineSeries({ color:"#e6b400", lineWidth:2, priceLineVisible:false, lastValueVisible:true, autoscaleInfoProvider:rsiScale });
 
 // sync the two time scales
 let _rsiSyncing=false;   // reentrancy guard so the two scales don't ping-pong
@@ -1894,10 +1914,35 @@ function futureWhitespace(data){
 // ~4 months ahead in lockstep with the candle series.
 function withFuture(data, pts){ return pts.concat(futureWhitespace(data)); }
 
+// Like withFuture, but the future tail carries a constant VALUE instead of
+// whitespace — so horizontal RSI band lines / band fills keep painting across
+// the whole pane (right to the edge) instead of dying at the last real bar,
+// matching TradingView.
+function withFutureConst(data, pts, value){
+  return pts.concat(futureWhitespace(data).map(w=>({time:w.time, value})));
+}
+
 // Push a finished bar series into every series + indicator. Called on each
 // progressive page as well as on the final result, so the chart stays live
 // while history keeps deepening underneath it.
 function renderData(data, keepView){
+  // Lightweight Charts REQUIRES strictly-ascending, unique bar times; a series with
+  // an out-of-order or duplicate timestamp trips its internal "Value is null" render
+  // race (most visibly during rapid zoom-out, which permanently wedges the chart).
+  // Spread ratios and history-prepend merges can occasionally emit a bar out of order,
+  // so normalise here — the one chokepoint every paint path routes through.
+  if(data && data.length > 1){
+    let ordered = true;
+    for(let i=1;i<data.length;i++){ if(data[i].time <= data[i-1].time){ ordered=false; break; } }
+    if(!ordered){
+      const seen = new Set(); const norm = [];
+      for(const b of [...data].sort((a,b)=>a.time-b.time)){
+        if(seen.has(b.time)) continue;   // drop duplicate-time bars (keep first after sort)
+        seen.add(b.time); norm.push(b);
+      }
+      data = norm;
+    }
+  }
   // Bar replay: when active, keep the full series but only reveal up to _replayIdx.
   if(_replay.active){
     _replay.full = data;                                  // remember the complete series
@@ -1929,11 +1974,11 @@ function renderData(data, keepView){
   // reaches ~4 months ahead in lockstep with the main chart (kept index-aligned).
   // Solid faint-purple block across the 30–70 band: constant series at 30 with
   // baseValue 70 fills the whole region regardless of the RSI value.
-  rsiOver.setData(withFuture(data, data.map(b=>({time:b.time, value:30}))));
+  rsiOver.setData(withFutureConst(data, data.map(b=>({time:b.time, value:30})), 30));
   rsiUnder.setData(withFuture(data, rFull));           // transparent no-op
-  band70.setData(withFuture(data, data.map(b=>({time:b.time, value:70}))));
-  band50.setData(withFuture(data, data.map(b=>({time:b.time, value:50}))));
-  band30.setData(withFuture(data, data.map(b=>({time:b.time, value:30}))));
+  band70.setData(withFutureConst(data, data.map(b=>({time:b.time, value:70})), 70));
+  band50.setData(withFutureConst(data, data.map(b=>({time:b.time, value:50})), 50));
+  band30.setData(withFutureConst(data, data.map(b=>({time:b.time, value:30})), 30));
   rsiLine.setData(withFuture(data, rFull));
   rsiMa.setData(withFuture(data, rmFull));
   // Calculate Divergence: mark regular bullish/bearish RSI divergences at pivots.
@@ -2009,7 +2054,7 @@ async function loadChart(symbol, tf, keepView){
   // A fresh load (symbol/TF switch) discards any manual axis stretch — a price range
   // pinned for one asset (e.g. BTC ~60k) is meaningless for the next (NEAR ~0.4).
   // Also restore the default margins a manual pan/stretch may have zeroed.
-  if(!keepView){ manualPriceRange=null;
+  if(!keepView){ manualPriceRange=null; _manualMargins=false;
     try{ chart.priceScale("right").applyOptions({ autoScale:true, scaleMargins:{ top:0.2, bottom:0.1 } }); }catch(e){} }
   activeSymbol = symbol;   // the symbol being charted = the active one (keeps status/venue labels in sync)
   if(typeof saveActiveState==="function") saveActiveState();   // remember symbol+tf across reloads
@@ -2064,10 +2109,14 @@ async function loadChart(symbol, tf, keepView){
   // + snap to latest) here; the loop's trailing paint(data) below renders the
   // complete series once. History still deepens in the background between them,
   // just without repainting on every page. Mirrors the spread path's fix.
-  // If we already painted a cached series, the chart is showing the full series
-  // already — skip the first-page progressive paint (it holds only one page and
-  // would visibly shrink the history) and let only the final complete paint land.
-  let _painted = paintedFromCache ? 1 : 0;
+  // Skip the first-page progressive paint when it would visibly disturb the chart:
+  //  - paintedFromCache: the full series is already on screen.
+  //  - keepView (the silent 20s background refresh): painting one partial page would
+  //    momentarily shrink the series and jolt the user's zoomed/panned view — the
+  //    "out of nowhere it bounces and goes blank for ~2s" symptom. A background refresh
+  //    must never touch the view, so only the final complete series is painted.
+  // In both cases we let ONLY the trailing paintFinal(data) land.
+  let _painted = (paintedFromCache || keepView) ? 1 : 0;
   const paintProgressive = (data)=>{
     if(_painted || !fresh() || !data.length) return;
     _painted = 1; paint(data);   // first page only
@@ -3429,21 +3478,36 @@ let panState=null;
 function startPan(p){
   const ts=chart.timeScale();
   panState={ startX:p.x, startY:p.y, startScroll:ts.scrollPosition(),
-             startMargins:null, h:dcanvas.clientHeight||1 };
-  capturePanPrice();   // snapshot the current scaleMargins offset
+             startRange:null, h:dcanvas.clientHeight||1 };
+  capturePanPrice();   // snapshot the current price range so vertical drag can slide it
 }
-// Snapshot the price scale's current vertical offset (scaleMargins) so a vertical
-// drag can slide it. We move the margins as a BALANCED pair — top += d, bottom -= d
-// — which keeps (top+bottom) constant, so the data band always occupies the same
-// fraction of the pane and the candle SIZE never changes (a pure translation, not a
-// rescale). lightweight-charts requires each margin in [0,1], so the pan is bounded
-// (content slides until it touches an edge) — the same practical limit TradingView
-// has. Returns false only if the scale isn't readable yet.
+// Snapshot the current visible PRICE RANGE (min/max) so a vertical drag can
+// translate it. We shift the whole range up/down by the dragged pixel delta
+// converted to price — this has NO [0,1] bound (unlike scaleMargins), so the
+// user can drag the band as far as they want, exactly like TradingView. The span
+// (max-min) is preserved, so candle SIZE never changes — a pure translation.
+// Seeds manualPriceRange on first drag so the offset sticks. Returns false only
+// if the scale isn't readable yet.
+// When the user takes manual control of the price scale (drag/pan/stretch), zero
+// the scale margins so manualPriceRange maps 1:1 to the pane. With the default
+// 0.2/0.1 margins LWC pads the returned range, which inflates the rendered span
+// and compounds across successive vertical pans. We seed manualPriceRange from
+// the CURRENTLY VISIBLE range at the same moment we zero the margins, so the
+// pixels don't jump. resetPriceScale restores the default margins + auto-scale.
+let _manualMargins=false;
+function enterManualScale(){
+  if(_manualMargins) return true;
+  const r = manualPriceRange || visiblePriceRange();
+  if(!r) return false;
+  _manualMargins=true;
+  manualPriceRange = { min:r.min, max:r.max };
+  try{ chart.priceScale("right").applyOptions({ scaleMargins:{ top:0, bottom:0 } }); }catch(e){}
+  candle.applyOptions({});
+  return true;
+}
 function capturePanPrice(){
-  let m;
-  try{ m = chart.priceScale("right").options().scaleMargins; }catch(e){ m=null; }
-  if(!m) return false;
-  panState.startMargins = { top:m.top, bottom:m.bottom };
+  if(!enterManualScale()) return false;
+  panState.startRange = { min:manualPriceRange.min, max:manualPriceRange.max };
   return true;
 }
 function doPan(p){
@@ -3453,20 +3517,20 @@ function doPan(p){
   const spacing = currentBarSpacing();                       // px per bar
   const deltaBars = (p.x - panState.startX) / spacing;        // drag-left → scroll back
   ts.scrollToPosition(panState.startScroll - deltaBars, false);
-  // — vertical: slide the balanced margins so the plot tracks the cursor 1:1 —
-  if(!panState.startMargins){                                // late-bind if press was too early
+  // — vertical: translate the price range 1:1 with the cursor (unbounded) —
+  if(!panState.startRange){                                   // late-bind if press was too early
     if(capturePanPrice()) panState.startY = p.y;             // re-anchor so there's no jump
   }
-  if(panState.startMargins){
+  if(panState.startRange){
     const dy = p.y - panState.startY;                         // px dragged (down = +)
-    let f = dy / panState.h;                                  // fraction of pane height
-    const t0 = panState.startMargins.top, b0 = panState.startMargins.bottom;
-    // Clamp the shift so NEITHER margin leaves [0,1]; both move by the same |f| so
-    // their sum is preserved → no compression. Drag DOWN (f>0) pushes content down.
-    const maxDown = b0;          // bottom can drop to 0
-    const maxUp   = t0;          // top can drop to 0 (f negative)
-    f = Math.max(-maxUp, Math.min(maxDown, f));
-    try{ chart.priceScale("right").applyOptions({ scaleMargins:{ top:t0 + f, bottom:b0 - f } }); }catch(e){}
+    const span = panState.startRange.max - panState.startRange.min;
+    // px→price: pane height maps to the span. Drag DOWN (dy>0) moves the view
+    // down, i.e. prices under the cursor increase → shift the range UP. Panning
+    // takes over the price scale (auto-scale off until the axis is double-clicked),
+    // same as TradingView.
+    const dPrice = (dy / panState.h) * span;
+    manualPriceRange = { min:panState.startRange.min + dPrice, max:panState.startRange.max + dPrice };
+    candle.applyOptions({});                                  // re-run autoscale with the shifted range
   }
   redraw();
 }
@@ -3477,6 +3541,21 @@ function currentBarSpacing(){
   const xa=chart.timeScale().timeToCoordinate(a.time), xb=chart.timeScale().timeToCoordinate(b.time);
   if(xa!=null&&xb!=null&&xa!==xb) return Math.abs(xb-xa);
   return 6;
+}
+// TradingView-style zoom limits, expressed as BAR SPACING (px per bar) not bar count:
+//   span ≈ chartWidth / barSpacing. Zoom IN until a bar is ~ZOOM_MAX_BAR_SPACING wide
+//   (≈4 bars fill the screen — the "almost infinite" zoom-in feel), zoom OUT until
+//   spacing hits ZOOM_MIN_BAR_SPACING (sub-pixel), never past the loaded history.
+// Shared by every zoom path (wheel, keyboard +/-, time-axis drag) so they agree.
+const ZOOM_MAX_BAR_SPACING = 350;   // px per bar at deepest zoom-in
+const ZOOM_MIN_BAR_SPACING = 0.5;   // px per bar at widest zoom-out
+function zoomSpanLimits(){
+  const w = (dcanvas.clientWidth || chartEl.clientWidth || 1);
+  const loadedBars = (lastData && lastData.length) ? lastData.length : w;
+  return {
+    minSpan: Math.max(1, w / ZOOM_MAX_BAR_SPACING),                 // deepest zoom-in
+    maxSpan: Math.min(loadedBars * 1.2, w / ZOOM_MIN_BAR_SPACING),  // widest zoom-out
+  };
 }
 
 // ── Right price-axis vertical drag (TradingView-style scale stretch) ──
@@ -3500,7 +3579,11 @@ function visiblePriceRange(){
   return (isFinite(max)&&isFinite(min)&&max>min) ? {min,max} : null;
 }
 function startAxisDrag(p){
-  const r=visiblePriceRange(); if(!r) return false;
+  // Zero margins + seed manualPriceRange from the visible range (no jump), then
+  // re-base from the REQUESTED manual range — not a read-back of LWC's clamped
+  // coordinate map — so the library's floor can't cap successive zoom-ins.
+  if(!enterManualScale()) return false;
+  const r = manualPriceRange;
   axisDrag={ startY:p.y, base:r, center:(r.min+r.max)/2, span:r.max-r.min };
   dcanvas.style.cursor="ns-resize";
   return true;
@@ -3565,9 +3648,8 @@ function doTimeDrag(clientX){
   // Drag LEFT (dx<0) → factor>1 (expand span / zoom out). Anchor on the right edge.
   const dx=clientX-timeDrag.startX;
   const factor=Math.exp(-dx/w * 2.2);            // 2.2 ≈ TradingView sensitivity
-  const loadedBars=(lastData&&lastData.length)?lastData.length:w;
-  const maxSpan=Math.max(30, Math.min(loadedBars, w) * 2.0);
-  const span=Math.min(maxSpan, Math.max(8, timeDrag.span*factor));
+  const { minSpan, maxSpan }=zoomSpanLimits();   // TradingView-style bar-spacing limits
+  const span=Math.min(maxSpan, Math.max(minSpan, timeDrag.span*factor));
   chart.timeScale().setVisibleLogicalRange({ from:timeDrag.to-span, to:timeDrag.to });
   redraw();
 }
@@ -3596,12 +3678,63 @@ document.addEventListener("dblclick", e=>{
 }, true);
 function resetPriceScale(){
   manualPriceRange=null;
+  _manualMargins=false;
   // Restore auto-scale AND the default breathing-room margins removed during a
   // manual pan/stretch, so the chart re-fits to the data with normal padding.
   try{ chart.priceScale("right").applyOptions({ autoScale:true, scaleMargins:{ top:0.2, bottom:0.1 } }); }catch(e){}
   candle.applyOptions({});                        // back to auto-scale (re-fit to data)
   redraw();
 }
+
+// ── RSI pane right price-axis vertical drag (TradingView-style) ──
+// The RSI pane is its own LWC chart with no overlay canvas, so we hit-test the
+// right-axis gutter in the pane's own client coords and stretch manualRsiRange —
+// mirroring the main chart's axis drag. Drag DOWN expands (zoom out), UP
+// compresses (zoom in). Double-click the RSI axis → back to the 18–82 default.
+let rsiAxisDrag=null;
+function rsiAxisW(){
+  try{ const w=rsiChart.priceScale("right").width(); if(w>0) return w; }catch(e){}
+  return 64;
+}
+function rsiEvtPt(e){ const r=rsiEl.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; }
+function inRsiPriceAxis(p){ const w=rsiEl.clientWidth; return p.x >= w-rsiAxisW() && p.x <= w; }
+// The drag base is the currently-requested manualRsiRange (or the 18–82 default),
+// NOT a read-back of what LWC actually rendered — reading the clamped view back
+// would let the library's floor cap successive zoom-ins. This lets the user
+// stretch/compress with no practical limit.
+function rsiBaseRange(){ return manualRsiRange || {min:18,max:82}; }
+rsiEl.addEventListener("mousedown", e=>{
+  if(e.button!==0) return;
+  const p=rsiEvtPt(e);
+  if(!inRsiPriceAxis(p)) return;
+  const r=rsiBaseRange();
+  rsiAxisDrag={ startY:p.y, center:(r.min+r.max)/2, span:r.max-r.min };
+  document.body.style.cursor="ns-resize";   // hold the cursor for the whole drag
+  e.preventDefault();
+});
+document.addEventListener("mousemove", e=>{
+  if(!rsiAxisDrag){
+    // hover cursor hint over the RSI axis gutter
+    const p=rsiEvtPt(e);
+    const over = p.x>=0 && p.y>=0 && p.x<=rsiEl.clientWidth && p.y<=rsiEl.clientHeight && inRsiPriceAxis(p);
+    rsiEl.style.cursor = over ? "ns-resize" : "";
+    return;
+  }
+  const h=rsiEl.clientHeight||1;
+  const dy=(e.clientY-rsiEl.getBoundingClientRect().top)-rsiAxisDrag.startY;
+  const factor=Math.exp(dy/h * 2.2);
+  const span=Math.max(rsiAxisDrag.span*factor, 1e-6);
+  manualRsiRange={ min:rsiAxisDrag.center-span/2, max:rsiAxisDrag.center+span/2 };
+  rsiLine.applyOptions({});                        // re-run rsiScale autoscaleInfoProvider
+});
+document.addEventListener("mouseup", ()=>{
+  if(rsiAxisDrag){ rsiAxisDrag=null; document.body.style.cursor=""; }
+});
+rsiEl.addEventListener("dblclick", e=>{
+  if(!inRsiPriceAxis(rsiEvtPt(e))) return;
+  manualRsiRange=null;
+  rsiLine.applyOptions({});
+});
 
 // ─────────────────────────────────────────────────────────────────────
 //  COORDINATE CONVERSION  (price/time ⇄ pixels)
@@ -3816,12 +3949,8 @@ dcanvas.addEventListener("wheel", e=>{
   const frac = Math.min(1, Math.max(0, p.x / w));   // 0=left edge, 1=right edge
   const anchor = from + span * frac;                // logical index under cursor
   const factor = e.deltaY > 0 ? 1.1 : 1/1.1;        // wheel down = zoom out
-  // Clamp span: never fewer than ~8 bars. On the wide end, allow bar spacing down to
-  // ~1px (TradingView-like) so the user can zoom out to the full loaded history; the
-  // available bar count is the real ceiling, so cap at whatever data is loaded.
-  const loadedBars = (lastData && lastData.length) ? lastData.length : (dcanvas.clientWidth||1);
-  const maxSpan = Math.max(30, Math.min(loadedBars, (dcanvas.clientWidth||1) / 1) * 2.0);
-  const newSpan = Math.min(maxSpan, Math.max(8, span * factor));
+  const { minSpan, maxSpan } = zoomSpanLimits();      // TradingView-style bar-spacing limits
+  const newSpan = Math.min(maxSpan, Math.max(minSpan, span * factor));
   if(newSpan === span){ redraw(); return; }          // already at a clamp edge — don't nudge
   ts.setVisibleLogicalRange({
     from: anchor - (anchor - from) * (newSpan/span),
@@ -4031,9 +4160,8 @@ window.addEventListener("keydown", e=>{
     const r=ts.getVisibleLogicalRange(); if(!r) return;
     const span=r.to-r.from, mid=(r.from+r.to)/2;
     const zoomIn = (e.key==="+"||e.key==="=");
-    const loadedBars = (lastData && lastData.length) ? lastData.length : (dcanvas.clientWidth||1);
-    const maxSpan = Math.max(30, Math.min(loadedBars, (dcanvas.clientWidth||1) / 1) * 2.0);   // zoom out 2x past full history
-    const newSpan=Math.min(maxSpan, Math.max(8, span*(zoomIn?1/1.2:1.2)));
+    const { minSpan, maxSpan }=zoomSpanLimits();   // TradingView-style bar-spacing limits
+    const newSpan=Math.min(maxSpan, Math.max(minSpan, span*(zoomIn?1/1.2:1.2)));
     ts.setVisibleLogicalRange({ from:mid-newSpan/2, to:mid+newSpan/2 });
     redraw();
   }
@@ -4487,7 +4615,13 @@ function openFibSettings(id){
       names.map(n=>`<div class="tpli tpli-named" data-name="${n.replace(/"/g,'&quot;')}"><span>${n}</span><span class="tpli-del" data-del="${n.replace(/"/g,'&quot;')}">✕</span></div>`).join("");
   };
   tplBtn.onclick=(e)=>{ e.stopPropagation(); apply(); buildTplMenu(); tplMenu.classList.toggle("open"); };
-  dlg.addEventListener("click",(e)=>{ if(!e.target.closest("#fib_tpl_menu") && !e.target.closest("#fib_tpl_btn")) closeTplMenu(); });
+  // `dlg` (#settingsDlg) is a persistent node reused across every openFibSettings call
+  // (including the re-entrant applyConfig→openFibSettings path), so addEventListener here
+  // would stack a new closure on each open and leak unbounded. Remove the prior handler
+  // (tracked on the node) before adding this one so exactly one is ever live.
+  if(dlg._fibTplOutsideClick) dlg.removeEventListener("click", dlg._fibTplOutsideClick);
+  dlg._fibTplOutsideClick=(e)=>{ if(!e.target.closest("#fib_tpl_menu") && !e.target.closest("#fib_tpl_btn")) closeTplMenu(); };
+  dlg.addEventListener("click", dlg._fibTplOutsideClick);
   tplMenu.onclick=(e)=>{
     const del=e.target.closest(".tpli-del");
     if(del){ e.stopPropagation(); const t=loadFibTemplates(); delete t[del.dataset.del]; saveFibTemplates(t); buildTplMenu(); return; }
@@ -5939,8 +6073,8 @@ function buildIndicatorSeries(ind){
   const specs=plotSpec(ind);
   if(ind.pane==="main"){
     ind.series=specs.map(sp=> recordData(sp.k==="hist"
-      ? chart.addHistogramSeries({priceLineVisible:false,lastValueVisible:false})
-      : chart.addLineSeries({color:sp.color,lineWidth:sp.w,priceLineVisible:false,lastValueVisible:false})));
+      ? chart.addHistogramSeries({priceLineVisible:false,lastValueVisible:false,autoscaleInfoProvider:overlayScale})
+      : chart.addLineSeries({color:sp.color,lineWidth:sp.w,priceLineVisible:false,lastValueVisible:false,autoscaleInfoProvider:overlayScale})));
     return;
   }
   const wrap=document.getElementById("subPanes");
@@ -6632,9 +6766,10 @@ function renderScript(sc){
       try{ s.setMarkers(mk); }catch(e){}
       return;
     }
+    const mainOverlay = p.pane==="main" ? overlayScale : undefined;
     const s = p.kind==="hist"
-      ? tgt.addHistogramSeries({ color:p.color, priceLineVisible:false })
-      : tgt.addLineSeries({ color:p.color, lineWidth:p.width, lineStyle:p.dash?2:0, priceLineVisible:false, lastValueVisible:p.pane==="main" });
+      ? tgt.addHistogramSeries({ color:p.color, priceLineVisible:false, autoscaleInfoProvider:mainOverlay })
+      : tgt.addLineSeries({ color:p.color, lineWidth:p.width, lineStyle:p.dash?2:0, priceLineVisible:false, lastValueVisible:p.pane==="main", autoscaleInfoProvider:mainOverlay });
     s.setData(scriptPair(d,p.arr)); sc.series.push(s);
     if(p.pane==="sub") setPaneSeries(sc.subChart, s);   // anchor the shared crosshair to a live sub series
   });
@@ -7397,6 +7532,11 @@ async function loadCompareData(sym){
   const c=COMPARE[sym]; if(!c) return;
   try{
     const bars=await fetchKlines(sym, activeTF);
+    // The compare series can be removed (removeCompare) or replaced (re-added) while
+    // this fetch is in flight. Re-read COMPARE[sym] after the await: if it's gone or
+    // now a different series, our `c.series` is disposed/stale — writing to it throws
+    // in Lightweight Charts (or clobbers the fresh series), so bail.
+    if(COMPARE[sym]!==c) return;
     if(!bars.length){ c.series.setData([]); return; }
     const base=bars[0].close||1;
     c.series.setData(bars.map(b=>({ time:b.time, value:(b.close/base-1)*100 })));  // % change

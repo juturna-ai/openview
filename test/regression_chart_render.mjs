@@ -44,11 +44,18 @@ for (let i = 0; i < 6; i++) { await p.mouse.wheel(0, -120); await p.waitForTimeo
 const bs1 = await p.evaluate(() => chart.timeScale().options().barSpacing);
 const t3 = bs1 > bs0 + 0.5;
 
-// 4) Zoom all the way out keeps candles visible (bar spacing floors ≥ 3px).
+// 4) Full zoom-out to the loaded history (TradingView-like; sub-pixel spacing is
+//    allowed by design). The regression guard is that the chart does NOT wedge:
+//    the time scale stays live and responds to a subsequent zoom-in.
 for (let i = 0; i < 40; i++) { await p.mouse.wheel(0, 120); await p.waitForTimeout(15); }
 await p.waitForTimeout(600);
 const bsOut = await p.evaluate(() => chart.timeScale().options().barSpacing);
-const t4 = bsOut >= 3;
+// Zoom back in and confirm bar spacing actually grows (scale not frozen at the wide edge).
+await p.mouse.move(box.x + box.w * 0.6, box.y + box.h * 0.5);
+for (let i = 0; i < 8; i++) { await p.mouse.wheel(0, -120); await p.waitForTimeout(40); }
+await p.waitForTimeout(300);
+const bsBack = await p.evaluate(() => chart.timeScale().options().barSpacing);
+const t4 = bsBack > bsOut + 0.5;
 
 // 5) Zooming in/out doesn't oscillate ("bounce").
 await p.evaluate(() => { window.__r = []; chart.timeScale().subscribeVisibleLogicalRangeChange(r => { if (r) window.__r.push(+r.from.toFixed(2)); }); });
@@ -66,7 +73,7 @@ const pass = t1 && t2 && t3 && t4 && t5;
 console.log(`[1] no render crash        : ${t1 ? 'PASS' : 'FAIL'} (crashes=${crashes})`);
 console.log(`[2] chart has bars         : ${t2 ? 'PASS' : 'FAIL'} (bars=${bars})`);
 console.log(`[3] zoom not wedged        : ${t3 ? 'PASS' : 'FAIL'} (barSpacing ${bs0.toFixed(2)}→${bs1.toFixed(2)})`);
-console.log(`[4] candles stay visible   : ${t4 ? 'PASS' : 'FAIL'} (min barSpacing=${bsOut.toFixed(2)})`);
+console.log(`[4] zoom-out not wedged    : ${t4 ? 'PASS' : 'FAIL'} (widest=${bsOut.toFixed(2)} → zoom-in=${bsBack.toFixed(2)})`);
 console.log(`[5] no zoom bounce         : ${t5 ? 'PASS' : 'FAIL'} (direction flips=${flips})`);
 console.log(pass ? '\n✅ ALL PASS' : '\n❌ FAIL');
 
