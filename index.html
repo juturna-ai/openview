@@ -2665,6 +2665,9 @@ window.addEventListener("message", e=>{
   if(d.fvx==="settool" && IS_EMBED && typeof d.tool==="string" && TOOLS.some(t=>t.key===d.tool)){
     try{ selectTool(d.tool); }catch(err){}
   }
+  // Host → embed: open the symbol/pair details card (mobile app "View details" action).
+  // Falls back to the current chart symbol when the host doesn't pass one.
+  if(d.fvx==="details" && IS_EMBED){ try{ openPairInfoCard(d.sym || activeSymbol); }catch(err){} }
 });
 // Embed → host: emit visible-range changes for Time/Date-range sync.
 if(IS_EMBED){
