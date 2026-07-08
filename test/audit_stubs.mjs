@@ -6,13 +6,13 @@ await p.waitForTimeout(5000);
 const railBtns=await p.locator('#rightRail .rr-btn').count();
 // open news stub
 await p.locator('#rightRail .rr-btn[title="News"]').click(); await p.waitForTimeout(300);
-const newsVisible=await p.evaluate(()=>{ const s=document.getElementById('stubPanel'); return s&&s.style.display==='block'&&s.innerText.includes('News'); });
+const newsVisible=await p.evaluate(()=>{ const s=document.getElementById('rightPanel'); return s&&s.classList.contains('open')&&s.innerText.includes('News'); });
 // open screener
 await p.locator('#rightRail .rr-btn[title="Screener"]').click(); await p.waitForTimeout(300);
-const screenerVisible=await p.evaluate(()=>document.getElementById('stubPanel').innerText.includes('Screener'));
+const screenerVisible=await p.evaluate(()=>document.getElementById('rightPanel').innerText.includes('Screener'));
 // paper
 await p.locator('#rightRail .rr-btn[title="Paper trading"]').click(); await p.waitForTimeout(300);
-const paperVisible=await p.evaluate(()=>document.getElementById('stubPanel').innerText.includes('Paper'));
+const paperVisible=await p.evaluate(()=>document.getElementById('rightPanel').innerText.includes('Paper'));
 await p.screenshot({path:'stubs.png'});
 console.log(JSON.stringify({railBtns, newsVisible, screenerVisible, paperVisible, appErrors:errs.slice(0,4)}));
 await b.close();

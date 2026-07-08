@@ -13,12 +13,12 @@ await p.evaluate(()=>{
 await p.waitForTimeout(800);
 // open object tree
 await p.locator('#btnObjTree').click(); await p.waitForTimeout(400);
-const visible=await p.evaluate(()=>{ const o=document.getElementById('objTree'); return o && o.style.display==='block'; });
-const drawRows=await p.locator('#objTree .ot-row[data-kind="draw"]').count();
-const indRows=await p.locator('#objTree .ot-row[data-kind="ind"]').count();
-// delete the drawing via the tree
+const visible=await p.evaluate(()=>{ const rp=document.getElementById('rightPanel'); return rp && rp.classList.contains('open') && !!document.getElementById('otContent'); });
+const drawRows=await p.locator('#otContent .ot-row[data-kind="draw"]').count();
+const indRows=await p.locator('#otContent .ot-row[data-kind="ind"]').count();
+// delete the drawing via the tree (hover action)
 const drawCountBefore=await p.evaluate(()=>draw.shapes.length);
-await p.locator('#objTree .ot-row[data-kind="draw"] .ot-x').first().click();
+await p.evaluate(()=>document.querySelector('#otContent .ot-row[data-kind="draw"] [data-act="del"]').click());
 await p.waitForTimeout(300);
 const drawCountAfter=await p.evaluate(()=>draw.shapes.length);
 await p.screenshot({path:'objtree.png'});
