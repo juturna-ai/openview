@@ -37,6 +37,8 @@
   /* Narrow phone frame: let the SMA/indicator legend wrap instead of overflowing. */
   html.embed #chartLegend{max-width:92%;}
   html.embed #maLegend{white-space:normal; width:auto; max-width:100%;}
+  /* App shows OHLC in its own UI → hide the engine's OHLC legend row in embed mode. */
+  html.embed #ohlcRow{display:none;}
   /* ── Multi-chart grid (iframe panels) ── */
   #chartGrid{display:none; position:absolute; top:38px; left:52px; right:0; bottom:0; z-index:35;
     background:var(--bg); gap:2px; grid-auto-rows:1fr;}
@@ -731,12 +733,13 @@
   #pairCard .pc-page{width:50%; flex:none;}
   #pairCard.pg1 .pc-track{transform:translateX(-50%);}
   /* Edge arrows to flip pages. */
-  #pairCard .pc-arrow{position:absolute; top:118px; z-index:6; width:30px; height:30px;
-    display:flex; align-items:center; justify-content:center; border-radius:50%; cursor:pointer;
-    background:var(--panel2); border:1px solid var(--border); color:var(--text); box-shadow:0 2px 10px #0007;}
-  #pairCard .pc-arrow:hover{background:var(--accent); border-color:var(--accent); color:#fff;}
+  /* Carousel arrows live in the header row, just left of the × close button. */
+  #pairCard .pc-arrow{position:absolute; top:22px; z-index:6; width:26px; height:26px;
+    display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer;
+    background:transparent; border:none; color:var(--muted);}
+  #pairCard .pc-arrow:hover{background:var(--hover); color:var(--text);}
   #pairCard .pc-arrow svg{width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;}
-  #pairCard .pc-arrow.right{right:10px;} #pairCard .pc-arrow.left{left:10px;}
+  #pairCard .pc-arrow.right{right:44px;} #pairCard .pc-arrow.left{right:44px;}
   /* Page dots in the footer. */
   #pairCard .pc-dots{display:flex; gap:6px; align-items:center; justify-content:center; padding:2px 0 0;}
   #pairCard .pc-dot{width:6px; height:6px; border-radius:50%; background:var(--border); cursor:pointer; transition:background .15s, width .15s;}
@@ -1212,8 +1215,9 @@ try{ const raw=localStorage.getItem("fv_rsi_params"); if(raw){ const p=JSON.pars
 const RSI_MA_TYPES = ["SMA","EMA","WMA","RMA","VWMA","Bollinger Bands"];
 function saveRsiParams(){ try{ localStorage.setItem("fv_rsi_params", JSON.stringify(RSI_PARAMS)); }catch(e){} }
 // Fixed right-axis gutter width shared by every pane so their plot areas align
-// horizontally (wide enough for "110,000.00"-class price labels).
-const PRICE_AXIS_W = 72;
+// horizontally (wide enough for "110,000.00"-class price labels). Widen in embed mode
+// so the price/SMA tags clear the mobile app's rounded phone-frame border.
+const PRICE_AXIS_W = IS_EMBED ? 84 : 72;
 
 // Time-axis tick label, derived purely from the tick's UTC date so labels stay
 // clean across the padded future region (no skipped months / stray day numbers).
