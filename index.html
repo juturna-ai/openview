@@ -39,6 +39,9 @@
   html.embed #maLegend{white-space:normal; width:auto; max-width:100%;}
   /* App shows OHLC in its own UI → hide the engine's OHLC legend row in embed mode. */
   html.embed #ohlcRow{display:none;}
+  /* Hide the bar-close countdown pill in embed mode — it overlaps the top price label
+     and collides with the wrapped SMA legend on the narrow phone frame. */
+  html.embed #barCountdown{display:none !important;}
   /* ── Multi-chart grid (iframe panels) ── */
   #chartGrid{display:none; position:absolute; top:38px; left:52px; right:0; bottom:0; z-index:35;
     background:var(--bg); gap:2px; grid-auto-rows:1fr;}
@@ -729,9 +732,10 @@
   #pairCard .pc-grid>.pc-cell:nth-child(3n)[data-help]:hover::before{left:auto; right:10px;}
   html.light #pairCard .pc-cell[data-help]:hover::before{background:#fff; color:#131722;}
   /* Carousel: a horizontal track of full-width pages that slides on nav. */
-  #pairCard .pc-track{display:flex; width:200%; transition:transform .22s cubic-bezier(.4,0,.2,1);}
-  #pairCard .pc-page{width:50%; flex:none;}
-  #pairCard.pg1 .pc-track{transform:translateX(-50%);}
+  #pairCard .pc-track{display:flex; width:300%; transition:transform .22s cubic-bezier(.4,0,.2,1);}
+  #pairCard .pc-page{width:33.3333%; flex:none;}
+  #pairCard.pg1 .pc-track{transform:translateX(-33.3333%);}
+  #pairCard.pg2 .pc-track{transform:translateX(-66.6667%);}
   /* Edge arrows to flip pages. */
   /* Carousel arrows live in the header row, just left of the × close button. */
   #pairCard .pc-arrow{position:absolute; top:22px; z-index:6; width:26px; height:26px;
@@ -739,7 +743,9 @@
     background:transparent; border:none; color:var(--muted);}
   #pairCard .pc-arrow:hover{background:var(--hover); color:var(--text);}
   #pairCard .pc-arrow svg{width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;}
-  #pairCard .pc-arrow.right{right:44px;} #pairCard .pc-arrow.left{right:44px;}
+  /* both arrows sit side-by-side left of the ×; disabled (dimmed) at the ends */
+  #pairCard .pc-arrow.left{right:74px;} #pairCard .pc-arrow.right{right:44px;}
+  #pairCard .pc-arrow.disabled{opacity:.25; pointer-events:none;}
   /* Page dots in the footer. */
   #pairCard .pc-dots{display:flex; gap:6px; align-items:center; justify-content:center; padding:2px 0 0;}
   #pairCard .pc-dot{width:6px; height:6px; border-radius:50%; background:var(--border); cursor:pointer; transition:background .15s, width .15s;}
@@ -758,6 +764,26 @@
   #pairCard .pc-rsi-track .d{position:absolute; top:-3px; width:12px; height:12px; border-radius:50%;
     background:#fff; border:2px solid var(--panel); box-shadow:0 1px 4px #0008; transform:translateX(-50%);}
   #pairCard .pc-rsi-row.pending .pc-rsi-val{color:var(--muted);}
+  /* SMA multi-timeframe page: TF rows × SMA columns matrix. */
+  #pairCard .pc-sma-wrap{padding:0 16px 8px; overflow-x:auto;}
+  #pairCard .pc-sma-wrap::-webkit-scrollbar{height:7px;}
+  #pairCard .pc-sma-wrap::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
+  #pairCard .pc-sma-tbl{width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums;}
+  #pairCard .pc-sma-tbl th, #pairCard .pc-sma-tbl td{padding:6px 6px; text-align:right; white-space:nowrap; font-size:11.5px;}
+  #pairCard .pc-sma-tbl th{position:sticky; top:0; color:var(--muted); font-weight:700; font-size:10px;
+    text-transform:uppercase; letter-spacing:.3px; background:var(--panel); border-bottom:1px solid var(--border);}
+  #pairCard .pc-sma-tbl th:first-child, #pairCard .pc-sma-tbl td:first-child{text-align:left; font-weight:700;
+    color:var(--muted); position:sticky; left:0; background:var(--panel); z-index:1;}
+  #pairCard .pc-sma-tbl tbody tr{border-top:1px solid var(--border);}
+  #pairCard .pc-sma-tbl tbody tr:hover td{background:var(--panel2);}
+  #pairCard .pc-sma-tbl tbody tr:hover td:first-child{background:var(--panel2);}
+  #pairCard .pc-sma-tbl td{color:var(--text); font-weight:600;}
+  /* price above SMA = bullish (green), below = bearish (red) */
+  #pairCard .pc-sma-tbl td.above{color:var(--green);} #pairCard .pc-sma-tbl td.below{color:var(--red);}
+  #pairCard .pc-sma-tbl td.pending{color:var(--muted); font-weight:400;}
+  #pairCard .pc-sma-legend{padding:2px 16px 12px; font-size:10.5px; color:var(--muted); display:flex; gap:14px;}
+  #pairCard .pc-sma-legend b{font-weight:600;}
+  #pairCard .pc-sma-legend .g{color:var(--green);} #pairCard .pc-sma-legend .r{color:var(--red);}
 </style>
 </head>
 <body>
@@ -3519,14 +3545,14 @@ function openPairInfoCard(sym){
 
   // Loading skeleton first; fills in as async data lands. Two carousel pages:
   // page 0 = details, page 1 = multi-timeframe RSI (lazy-loaded on first nav).
-  pairCard.classList.remove("pg1");
-  _rsiPageSym = null;   // reset lazy-RSI guard for the new symbol
+  pairCard.classList.remove("pg1","pg2");
+  _rsiPageSym = null; _smaPageSym = null;   // reset lazy-page guards for the new symbol
   pairCard.innerHTML =
       `<div class="pc-head">${icon}<div class="pc-tt"><div class="pc-sym">${escHtml(label)}</div>`
     +   `<div class="pc-sub"><span class="pc-badge">${escHtml(typeStr)}</span>${venue?escHtml(venue):""}</div></div>`
     +   `<span class="pc-x" id="pcClose">×</span></div>`
-    + `<div class="pc-arrow right" id="pcNext" title="Multi-timeframe RSI"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>`
-    + `<div class="pc-arrow left" id="pcPrev" title="Back" style="display:none"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>`
+    + `<div class="pc-arrow left disabled" id="pcPrev" title="Previous page"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>`
+    + `<div class="pc-arrow right" id="pcNext" title="Next page"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>`
     + `<div class="pc-track">`
     +   `<div class="pc-page" id="pcPage0">`
     +     `<div class="pc-price"><div class="pc-last" id="pcLast">…</div><div class="pc-chg" id="pcChg"></div></div>`
@@ -3537,15 +3563,24 @@ function openPairInfoCard(sym){
     +     `<div class="pc-rsi-subtitle">RSI(14) close across timeframes · &gt;70 overbought · &lt;30 oversold</div>`
     +     `<div class="pc-rsi-rows" id="pcRsiRows"></div>`
     +   `</div>`
+    +   `<div class="pc-page" id="pcPage2">`
+    +     `<div class="pc-rsi-title">SMAs · Multi-timeframe</div>`
+    +     `<div class="pc-rsi-subtitle">Simple moving averages across timeframes</div>`
+    +     `<div class="pc-sma-wrap" id="pcSmaWrap"></div>`
+    +     `<div class="pc-sma-legend"><span class="g">▲ price above SMA</span><span class="r">▼ price below SMA</span></div>`
+    +   `</div>`
     + `</div>`
-    + `<div class="pc-dots"><span class="pc-dot on" data-pg="0"></span><span class="pc-dot" data-pg="1"></span></div>`
+    + `<div class="pc-dots"><span class="pc-dot on" data-pg="0"></span><span class="pc-dot" data-pg="1"></span><span class="pc-dot" data-pg="2"></span></div>`
     + `<div class="pc-foot">`
     +   `<button class="pc-btn primary" id="pcOpen">Open chart</button>`
     +   `<button class="pc-btn" id="pcAlert">Add alert</button>`
     + `</div>`;
+  // No backdrop: the card floats over the chart without dimming/blurring it, and can
+  // be dragged around by its header (pcDragWire).
   pairCard.classList.add("open");
-  document.getElementById("dlgBackdrop").classList.add("open");
+  pairCard.style.left = ""; pairCard.style.top = ""; pairCard.style.transform = "";  // reset to centered
   document.getElementById("pcClose").onclick = closePairCard;
+  pcDragWire();
   wirePairCardNav(sym, isSpread);
 
   Promise.all([ isSpread ? Promise.resolve(null) : fetchRichStats(sym), fetchCardCandles(sym) ])
@@ -3641,22 +3676,30 @@ function renderPairCard(sym, stats, data, isSpread){
     + pcGrid(pairCells);
 }
 
-// ── Carousel nav + multi-timeframe RSI page ──
+// ── Carousel nav + multi-timeframe RSI / SMA pages ──
 const PC_RSI_TFS = ["1m","5m","15m","30m","1h","2h","4h","6h","12h","1d","1w","1M"];
+const PC_SMA_PERIODS = [7,25,99,150,200,300];
+const PC_PAGES = 3;
+let _pcPage = 0;
 function rsiClass(v){ return v>=70?"ob":v<=30?"os":"nt"; }
 function rsiTag(v){ return v>=70?" · Overbought":v<=30?" · Oversold":""; }
 function wirePairCardNav(sym, isSpread){
+  _pcPage = 0;
   const go = pg=>{
+    pg = Math.max(0, Math.min(PC_PAGES-1, pg));
+    _pcPage = pg;
     pairCard.classList.toggle("pg1", pg===1);
+    pairCard.classList.toggle("pg2", pg===2);
     const nx=document.getElementById("pcNext"), pv=document.getElementById("pcPrev");
-    if(nx) nx.style.display = pg===1?"none":"flex";
-    if(pv) pv.style.display = pg===1?"flex":"none";
+    if(nx) nx.classList.toggle("disabled", pg>=PC_PAGES-1);
+    if(pv) pv.classList.toggle("disabled", pg<=0);
     pairCard.querySelectorAll(".pc-dot").forEach(d=>d.classList.toggle("on", +d.dataset.pg===pg));
     if(pg===1) loadRsiPage(sym, isSpread);
+    if(pg===2) loadSmaPage(sym, isSpread);
   };
   const nx=document.getElementById("pcNext"), pv=document.getElementById("pcPrev");
-  if(nx) nx.onclick=()=>go(1);
-  if(pv) pv.onclick=()=>go(0);
+  if(nx) nx.onclick=()=>go(_pcPage+1);
+  if(pv) pv.onclick=()=>go(_pcPage-1);
   pairCard.querySelectorAll(".pc-dot").forEach(d=> d.onclick=()=>go(+d.dataset.pg));
   const openBtn=document.getElementById("pcOpen");
   if(openBtn) openBtn.onclick = ()=>{ closePairCard(); const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click(); };
@@ -3702,14 +3745,83 @@ async function fetchSpreadRsi(sym, tf){
   if(!pa.length || !pb.length) return null;
   return rsiFromBars(makeRatio(pa, pb));
 }
+// Bars for one timeframe (single leg or spread ratio) — shared by the SMA page.
+async function fetchTfBars(sym, tf, isSpread){
+  if(isSpread){
+    const [a,b] = sym.split("/");
+    const [pa,pb] = await Promise.all([fetchKlines(a,tf), fetchKlines(b,tf)]);
+    return (pa.length && pb.length) ? makeRatio(pa,pb) : [];
+  }
+  return await fetchKlines(sym, tf);
+}
+// Compute SMA(7/25/99/150/200/300) for every timeframe → a TF×period matrix, each
+// cell colored by last-close vs that SMA. Rows fill as each TF's fetch lands.
+let _smaPageSym = null;
+function loadSmaPage(sym, isSpread){
+  if(_smaPageSym===sym) return;
+  _smaPageSym = sym;
+  const wrap = document.getElementById("pcSmaWrap"); if(!wrap) return;
+  const head = `<tr><th>TF</th>${PC_SMA_PERIODS.map(p=>`<th>${p}</th>`).join("")}</tr>`;
+  const body = PC_RSI_TFS.map(tf=>
+    `<tr data-tf="${tf}"><td>${(TF[tf]||{}).label||tf}</td>`
+    + PC_SMA_PERIODS.map(()=>`<td class="pending">…</td>`).join("") + `</tr>`).join("");
+  wrap.innerHTML = `<table class="pc-sma-tbl"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  const seq = _pairCardSeq;
+  PC_RSI_TFS.forEach(tf=>{
+    fetchTfBars(sym, tf, isSpread).then(data=>{
+      if(seq!==_pairCardSeq) return;
+      const tr = document.querySelector(`#pcSmaWrap tr[data-tf="${tf}"]`); if(!tr) return;
+      const tds = tr.querySelectorAll("td"); // [0]=TF label, then one per period
+      if(!data || !data.length){ PC_SMA_PERIODS.forEach((p,i)=>{ tds[i+1].textContent="—"; tds[i+1].className=""; }); return; }
+      const closes = data.map(d=>d.close);
+      const last = closes[closes.length-1];
+      PC_SMA_PERIODS.forEach((p,i)=>{
+        const cell = tds[i+1];
+        if(data.length < p){ cell.textContent="—"; cell.className=""; return; }
+        const s = smaA(closes, p); const v = s[s.length-1];
+        if(v==null){ cell.textContent="—"; cell.className=""; return; }
+        cell.textContent = fmtPrice(v);
+        cell.className = last>v ? "above" : last<v ? "below" : "";
+        cell.title = `Price ${last>v?"above":last<v?"below":"at"} SMA${p}`;
+      });
+    }).catch(()=>{ const tr=document.querySelector(`#pcSmaWrap tr[data-tf="${tf}"]`);
+      if(tr) tr.querySelectorAll("td").forEach((td,i)=>{ if(i>0){ td.textContent="—"; td.className=""; } }); });
+  });
+}
 
 function closePairCard(){
   pairCard.classList.remove("open");
-  if(!document.querySelector(".dialog.open") && !document.getElementById("symDlg").classList.contains("open"))
-    document.getElementById("dlgBackdrop").classList.remove("open");
 }
-// Esc closes the card; clicking the backdrop closes it too.
+// Esc closes the card.
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && pairCard.classList.contains("open")) closePairCard(); });
+
+// Drag the card by its header. On first drag we switch from the centered transform to
+// absolute left/top so the card follows the cursor and stays where dropped (clamped
+// to the viewport). Ignores drags that start on the ×, arrows, or dots.
+function pcDragWire(){
+  const head = pairCard.querySelector(".pc-head"); if(!head) return;
+  head.style.cursor = "move";
+  head.onpointerdown = e=>{
+    if(e.button!==0 || e.target.closest(".pc-x, .pc-arrow, .pc-dot")) return;
+    const rect = pairCard.getBoundingClientRect();
+    // pin to pixel coords (drop the translate centering) at the current position
+    pairCard.style.transform = "none";
+    pairCard.style.left = rect.left + "px";
+    pairCard.style.top  = rect.top  + "px";
+    const dx = e.clientX - rect.left, dy = e.clientY - rect.top;
+    const w = rect.width, h = rect.height;
+    head.setPointerCapture(e.pointerId);
+    const move = ev=>{
+      const nx = Math.max(0, Math.min(window.innerWidth  - w, ev.clientX - dx));
+      const ny = Math.max(0, Math.min(window.innerHeight - h, ev.clientY - dy));
+      pairCard.style.left = nx + "px"; pairCard.style.top = ny + "px";
+    };
+    const up = ()=>{ head.removeEventListener("pointermove", move); head.removeEventListener("pointerup", up); };
+    head.addEventListener("pointermove", move);
+    head.addEventListener("pointerup", up);
+    e.preventDefault();
+  };
+}
 
 // Let a dragged symbol be dropped onto a section header (appends to that group).
 function sectionDropWire(el, name){
@@ -5666,7 +5778,7 @@ function openFibSettings(id){
   document.getElementById("dlgClose").onclick=closeDlg;
   document.getElementById("dlgDel").onclick=()=>{ deleteShape(id); closeDlg(); };
 }
-backdrop.onclick=()=>{ closeDlg(); closeAlertDlg(); closeSymDlg(); closePairCard(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); };
+backdrop.onclick=()=>{ closeDlg(); closeAlertDlg(); closeSymDlg(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); };
 
 // ─────────────────────────────────────────────────────────────────────
 //  CREATE / EDIT ALERT DIALOG  (TradingView-style)
