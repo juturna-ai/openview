@@ -175,11 +175,12 @@
   #legCollapse{cursor:pointer; color:var(--muted); font-size:10px; margin-right:4px; display:inline-block; transition:transform .12s;}
   #legCollapse:hover{color:var(--text);}
   #chartLegend.collapsed #legCollapse{transform:rotate(-90deg);}
-  #chartLegend.collapsed #maLegend, #chartLegend.collapsed #indLegend{display:none;}
+  #chartLegend.collapsed #ohlcRow, #chartLegend.collapsed #maLegend, #chartLegend.collapsed #indLegend{display:none;}
   #legSymRow #legMeta{color:var(--muted); font-weight:400; font-size:11px; margin-left:4px;}
   #maLegend{font-size:11px; white-space:nowrap; font-variant-numeric:tabular-nums;}
   #maLegend span{margin-right:8px;}
-  #ohlc{font-size:11px; color:var(--muted); margin-left:8px; white-space:nowrap; font-variant-numeric:tabular-nums;}
+  #ohlcRow{font-size:11px; white-space:nowrap;}
+  #ohlc{color:var(--muted); font-variant-numeric:tabular-nums;}
   #ohlc b{color:var(--text); font-weight:600;}
   #status{margin-left:auto; font-size:11px; color:var(--muted); white-space:nowrap;}
   .dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green); margin-right:5px; vertical-align:middle;}
@@ -280,6 +281,16 @@
   .row .del:hover{color:var(--red); background:#2a2e39;}
   .row .del svg{width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.6;
     stroke-linecap:round; stroke-linejoin:round;}
+  /* view toggle: sits just left of the trash, hides/shows the price columns list-wide */
+  .row .eye{position:absolute; right:34px; top:50%; transform:translateY(-50%);
+    width:22px; height:22px; border-radius:4px; display:none; align-items:center;
+    justify-content:center; color:var(--muted); background:#1e222dcc; cursor:pointer; z-index:2;}
+  .row:hover .eye{display:flex;}
+  .row .eye:hover{color:#fff; background:#2a2e39;}
+  .row .eye svg{width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.6;
+    stroke-linecap:round; stroke-linejoin:round;}
+  /* a masked row shows "••••••" in the price columns, dimmed and colorless */
+  .row.masked .last, .row.masked .chgabs, .row.masked .chg{color:var(--muted); letter-spacing:1px;}
   .row .flag{flex:none; font-size:8px; line-height:1; text-align:center; width:0; overflow:visible;}
   .row .flag:not(:empty){width:9px; margin-right:1px;}
   .row .sym{flex:1; display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;}
@@ -644,6 +655,39 @@
   html.light #toastWrap .toast{background:#fff;}
 
   /* alert price lines drawn by lightweight-charts createPriceLine - styled inline */
+
+  /* ── Pair info card (right-click → View details) ── */
+  #pairCard{position:fixed; z-index:402; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:380px; max-height:86vh; overflow-y:auto; background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; box-shadow:0 16px 56px #000d; display:none; flex-direction:column;}
+  #pairCard.open{display:flex;}
+  #pairCard .pc-head{display:flex; align-items:center; gap:10px; padding:14px 16px 12px; border-bottom:1px solid var(--border);}
+  #pairCard .pc-ic{width:34px; height:34px; border-radius:50%; flex:none; object-fit:contain; background:#2a2e39;
+    color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center;}
+  #pairCard .pc-tt{flex:1; min-width:0;}
+  #pairCard .pc-sym{font-size:15px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  #pairCard .pc-sub{font-size:11px; color:var(--muted); margin-top:1px;}
+  #pairCard .pc-x{cursor:pointer; color:var(--muted); font-size:20px; line-height:1; padding:0 2px;}
+  #pairCard .pc-x:hover{color:var(--text);}
+  #pairCard .pc-price{padding:12px 16px; border-bottom:1px solid var(--border);}
+  #pairCard .pc-last{font-size:26px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums;}
+  #pairCard .pc-chg{font-size:13px; font-weight:600; margin-top:2px; font-variant-numeric:tabular-nums;}
+  #pairCard .pc-grid{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border);}
+  #pairCard .pc-cell{background:var(--panel); padding:9px 14px;}
+  #pairCard .pc-k{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.3px;}
+  #pairCard .pc-v{font-size:13px; color:var(--text); font-weight:600; margin-top:2px; font-variant-numeric:tabular-nums;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  #pairCard .pc-sec{padding:6px 16px 3px; font-size:10.5px; font-weight:700; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.4px; background:var(--panel);}
+  #pairCard .pc-foot{padding:10px 16px; border-top:1px solid var(--border); display:flex; gap:8px;}
+  #pairCard .pc-btn{flex:1; appearance:none; border:1px solid var(--border); background:var(--panel2);
+    color:var(--text); font-size:12px; font-weight:600; padding:8px; border-radius:7px; cursor:pointer;}
+  #pairCard .pc-btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  #pairCard .pc-btn:hover{filter:brightness(1.12);}
+  #pairCard .pc-rsi-bar{height:5px; border-radius:3px; margin-top:5px;
+    background:linear-gradient(90deg,#26a69a 0%,#26a69a 30%,#787b86 30%,#787b86 70%,#ef5350 70%,#ef5350 100%); position:relative;}
+  #pairCard .pc-rsi-dot{position:absolute; top:-2px; width:9px; height:9px; border-radius:50%;
+    background:#fff; border:2px solid var(--panel); transform:translateX(-50%);}
 </style>
 </head>
 <body>
@@ -712,7 +756,8 @@
       <canvas id="draw" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:auto; z-index:100;"></canvas>
       <!-- Floating on-chart legend (TradingView-style): symbol row + OHLC, then MA + indicator rows -->
       <div id="chartLegend">
-        <div id="legSymRow"><span id="legCollapse" title="Collapse / expand legend">▾</span><span id="legSym">NEAR-USD/INJ-USD</span><span id="legMeta">· 1D · Coinbase</span> <span id="ohlc"></span></div>
+        <div id="legSymRow"><span id="legCollapse" title="Collapse / expand legend">▾</span><span id="legSym">NEAR-USD/INJ-USD</span><span id="legMeta">· 1D · Coinbase</span></div>
+        <div id="ohlcRow"><span id="ohlc"></span></div>
         <div id="maLegend"></div>
         <div id="indLegend"></div>
       </div>
@@ -746,6 +791,7 @@
   <div id="alertDlg" class="dialog alertdlg"></div>
   <div id="scriptDlg" class="dialog scriptdlg"></div>
   <div id="symDlg" class="dialog symdlg"></div>
+  <div id="pairCard"></div>
   <div id="dlgBackdrop"></div>
 
   <div id="watchlist">
@@ -2591,8 +2637,12 @@ function buildWatchlist(){
         ? `<span class="exbadge">${exMeta.label}</span>` : "";
       const flagCol = SYMBOL_FLAGS[sym];
       const flag = `<span class="flag" title="Flag color"${flagCol?` style="color:${flagCol}"`:""}>${flagCol?"⬤":""}</span>`;
+      const masked = isPriceHidden(sym);
+      const cell = masked ? WL_MASK : "—";
+      if(masked) row.classList.add("masked");
       row.innerHTML = `${flag}<span class="sym">${icon}<span class="nm">${escHtml(nmLabel)}</span>${exBadge}</span>
-        <span class="last" data-last>—</span><span class="chgabs" data-chgabs>—</span><span class="chg" data-chg>—</span>
+        <span class="last" data-last>${cell}</span><span class="chgabs" data-chgabs>${cell}</span><span class="chg" data-chg>${cell}</span>
+        <span class="eye" title="Hide / show this asset's price">${icEyeWl(sym)}</span>
         <span class="del" title="Remove from watchlist">${icTrashWl()}</span>`;
       row.oncontextmenu = (e)=>{ e.preventDefault(); e.stopPropagation(); showRowMenu(sym, e.clientX, e.clientY); };
       row.onclick = ()=>{
@@ -2612,6 +2662,7 @@ function buildWatchlist(){
         loadChart(sym, activeTF);
       };
       row.querySelector(".del").onclick = (e)=>{ e.stopPropagation(); removeSymbol(g.name, sym); };
+      row.querySelector(".eye").onclick = (e)=>{ e.stopPropagation(); toggleWlPrice(sym); };
       wlDragWire(row);
       body.appendChild(row);
       (rowMap[sym] = rowMap[sym]||[]).push(row);
@@ -2625,6 +2676,35 @@ function cssEsc(s){ return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replac
 // Small trash glyph for the per-row remove button.
 function icTrashWl(){
   return '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>';
+}
+// ── Per-symbol price masking (the eye toggle) ──
+// A set of legs whose Last/Chg/Chg% are masked as "••••••" in the watchlist. Only the
+// toggled symbol is affected — never the whole list. Persisted across reloads.
+const WL_MASK = "•".repeat(6);
+let WL_HIDDEN = new Set();
+try{ const raw=localStorage.getItem("fv_wl_hidden"); if(raw) WL_HIDDEN=new Set(JSON.parse(raw)||[]); }catch(e){}
+function isPriceHidden(sym){ return WL_HIDDEN.has(sym); }
+function saveWlHidden(){ try{ localStorage.setItem("fv_wl_hidden", JSON.stringify([...WL_HIDDEN])); }catch(e){} }
+// Eye glyph for the per-row "hide/show this asset's price" toggle; slashed when hidden.
+function icEyeWl(sym){
+  return isPriceHidden(sym)
+    ? '<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.8 2.8M9.4 5.2A9.6 9.6 0 0 1 12 5c5 0 9 4.5 9 7a11 11 0 0 1-2.2 3.1M6.2 6.3A11.6 11.6 0 0 0 3 12c0 2.5 4 7 9 7 1.4 0 2.7-.3 3.9-.9"/></svg>'
+    : '<svg viewBox="0 0 24 24"><path d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7z"/><circle cx="12" cy="12" r="2.5"/></svg>';
+}
+// Toggle masking for ONE symbol; mask its live cells immediately and refresh its eye.
+function toggleWlPrice(sym){
+  if(WL_HIDDEN.has(sym)) WL_HIDDEN.delete(sym); else WL_HIDDEN.add(sym);
+  saveWlHidden();
+  const hidden = WL_HIDDEN.has(sym);
+  (rowMap[sym]||[]).forEach(row=>{
+    row.classList.toggle("masked", hidden);
+    const eye = row.querySelector(".eye"); if(eye){ eye.innerHTML = icEyeWl(sym); }
+    if(hidden){
+      const l=row.querySelector("[data-last]"), a=row.querySelector("[data-chgabs]"), c=row.querySelector("[data-chg]");
+      if(l) l.textContent=WL_MASK; if(a){ a.textContent=WL_MASK; a.className="chgabs"; } if(c){ c.textContent=WL_MASK; c.className="chg"; }
+    }
+  });
+  if(!hidden) refreshPrices();   // reveal → repaint real values
 }
 
 // Remove a symbol from a specific group, persist, and rebuild. If the removed
@@ -3239,11 +3319,207 @@ function showSectionMenu(name, x, y){
 }
 // Right-click a watchlist row → flag it with a color (or clear the flag).
 function showRowMenu(sym, x, y){
-  const items=[ mi("Open "+ symLabel(sym), ()=>{ const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click(); }), msep() ];
+  const items=[ mi("Open "+ symLabel(sym), ()=>{ const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click(); }),
+                mi("View details", ()=>openPairInfoCard(sym)), msep() ];
   FLAG_COLORS.forEach(c=> items.push(mi("Flag", ()=>setSymbolFlag(sym,c), c)));
   items.push(msep(), mi("Clear flag", ()=>setSymbolFlag(sym,null)));
   showCtx(x,y,items);
 }
+
+// ── Pair info card (right-click → "View details") ──
+// A modal card with as much detail as the public APIs expose: price, 24h change,
+// 24h high/low/volume, spread/exchange/type, plus indicators computed from candles
+// (RSI 14, SMA 20/50, range position). Numbers come from the venue's ticker
+// (fetchRichStats) and a daily candle fetch; everything degrades gracefully to "—".
+const pairCard = document.getElementById("pairCard");
+
+// Rich single-leg 24h stats. Returns {last, open, high, low, vol, quoteVol, extra{}} or null.
+async function fetchRichStats(leg){
+  const r = resolveLeg(leg), ex = r.exchange.id;
+  try{
+    if(ex==="COINBASE"){
+      const s = await (await fetchTimeout(`${API}/products/${r.rest}/stats`)).json();
+      if(!s || s.last==null) return null;
+      return { last:+s.last, open:+s.open, high:+s.high, low:+s.low, vol:+s.volume };
+    }
+    if(ex==="BINANCE"){
+      const host = r.isPerp ? "https://fapi.binance.com/fapi/v1" : "https://api.binance.com/api/v3";
+      const t = await (await fetchTimeout(`${host}/ticker/24hr?symbol=${r.rest}`)).json();
+      if(!t || t.lastPrice==null) return null;
+      return { last:+t.lastPrice, open:+t.openPrice, high:+t.highPrice, low:+t.lowPrice,
+               vol:+t.volume, quoteVol:+t.quoteVolume,
+               extra:{ "Weighted avg": +t.weightedAvgPrice, "Trades (24h)": +t.count } };
+    }
+    if(ex==="BYBIT"){
+      const cat = r.isPerp ? "linear" : "spot";
+      const d = await (await fetchTimeout(`https://api.bybit.com/v5/market/tickers?category=${cat}&symbol=${r.rest}`)).json();
+      const t = d && d.result && d.result.list && d.result.list[0];
+      if(!t || t.lastPrice==null) return null;
+      return { last:+t.lastPrice, open:+t.prevPrice24h, high:+t.highPrice24h, low:+t.lowPrice24h,
+               vol:+t.volume24h, quoteVol:+t.turnover24h,
+               extra: r.isPerp ? { "Funding rate": t.fundingRate!=null?(+t.fundingRate*100).toFixed(4)+"%":null,
+                                   "Open interest": t.openInterest!=null?(+t.openInterest).toLocaleString():null } : {} };
+    }
+    if(ex==="YAHOO"){
+      const d = await proxyJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(r.rest)}?interval=1d&range=5d`);
+      const m = d && d.chart && d.chart.result && d.chart.result[0] && d.chart.result[0].meta;
+      if(!m || m.regularMarketPrice==null) return null;
+      return { last:+m.regularMarketPrice, open:+(m.chartPreviousClose??m.previousClose),
+               high:+m.regularMarketDayHigh, low:+m.regularMarketDayLow, vol:+m.regularMarketVolume,
+               extra:{ "52-wk high": m.fiftyTwoWeekHigh, "52-wk low": m.fiftyTwoWeekLow, "Currency": m.currency } };
+    }
+  }catch(e){}
+  return null;
+}
+
+// Build a synthetic-ratio OR single-leg daily candle series for indicator math.
+async function fetchCardCandles(sym){
+  try{
+    if(sym.includes("/")){
+      const [a,b] = sym.split("/");
+      const [pa,pb] = await Promise.all([fetchKlines(a,"1d"), fetchKlines(b,"1d")]);
+      return (pa.length && pb.length) ? makeRatio(pa, pb) : [];
+    }
+    return await fetchKlines(sym, "1d");
+  }catch(e){ return []; }
+}
+
+function pcCell(k,v){ return `<div class="pc-cell"><div class="pc-k">${escHtml(k)}</div><div class="pc-v">${v==null||v===""?"—":v}</div></div>`; }
+function fmtVol(v){ if(v==null||!isFinite(v)) return "—";
+  const a=Math.abs(v);
+  if(a>=1e9) return (v/1e9).toFixed(2)+"B";
+  if(a>=1e6) return (v/1e6).toFixed(2)+"M";
+  if(a>=1e3) return (v/1e3).toFixed(2)+"K";
+  return v.toLocaleString(undefined,{maximumFractionDigits:2}); }
+
+let _pairCardSeq = 0;
+function openPairInfoCard(sym){
+  const seq = ++_pairCardSeq;
+  const isSpread = sym.includes("/");
+  const base = isSpread ? "" : legBase(sym);
+  const label = symLabel(sym);
+  const venue = [...new Set(String(sym).split("/").map(s=>resolveLeg(s).exchange.label))].join(" / ");
+  const legR = isSpread ? null : resolveLeg(sym);
+  const typeStr = isSpread ? "Spread / Ratio" : (legR.isPerp ? "Perpetual" : "Spot");
+  const icon = (isSpread || NO_LOGO.has(base))
+    ? `<span class="pc-ic" style="background:#2962ff">${escHtml((base[0]||label[0]||"?").toUpperCase())}</span>`
+    : `<img class="pc-ic" src="${logoForBase(base)}" alt="" onerror="this.outerHTML='<span class=\\'pc-ic\\' style=\\'background:#2962ff\\'>${escHtml((base[0]||"?").toUpperCase())}</span>'">`;
+
+  // Loading skeleton first; fills in as async data lands.
+  pairCard.innerHTML =
+      `<div class="pc-head">${icon}<div class="pc-tt"><div class="pc-sym">${escHtml(label)}</div>`
+    +   `<div class="pc-sub">${escHtml(venue||"")}${venue?" · ":""}${escHtml(typeStr)}</div></div>`
+    +   `<span class="pc-x" id="pcClose">×</span></div>`
+    + `<div class="pc-price"><div class="pc-last" id="pcLast">…</div><div class="pc-chg" id="pcChg"></div></div>`
+    + `<div id="pcBody"><div style="padding:18px 16px;color:var(--muted);font-size:12px">Loading market data…</div></div>`;
+  pairCard.classList.add("open");
+  document.getElementById("dlgBackdrop").classList.add("open");
+  document.getElementById("pcClose").onclick = closePairCard;
+
+  Promise.all([ isSpread ? Promise.resolve(null) : fetchRichStats(sym), fetchCardCandles(sym) ])
+    .then(([stats, data])=>{
+      if(seq!==_pairCardSeq || !pairCard.classList.contains("open")) return;   // superseded / closed
+      renderPairCard(sym, stats, data, isSpread);
+    });
+}
+
+function renderPairCard(sym, stats, data, isSpread){
+  const cached = PRICE_CACHE[sym] || {};
+  // Price + change: prefer live ticker, fall back to the watchlist cache, then candles.
+  let last = stats && stats.last!=null ? stats.last : (cached.price!=null ? cached.price : (data.length?data[data.length-1].close:null));
+  let open = stats && stats.open!=null ? stats.open : null;
+  let chgPct = (open!=null && open!==0 && last!=null) ? (last/open-1)*100
+             : (cached.chgPct!=null ? cached.chgPct : null);
+  let chgAbs = (open!=null && last!=null) ? (last-open) : (cached.chgAbs!=null ? cached.chgAbs : null);
+  const up = (chgAbs??0) >= 0;
+
+  document.getElementById("pcLast").textContent = last!=null ? fmtPrice(last) : "—";
+  const chgEl = document.getElementById("pcChg");
+  if(chgAbs!=null && chgPct!=null){
+    chgEl.className = "pc-chg "+(up?"up":"down");
+    chgEl.textContent = `${up?"+":"−"}${fmtPrice(Math.abs(chgAbs))}  (${up?"+":"−"}${Math.abs(chgPct).toFixed(2)}%) · 24h`;
+  } else chgEl.textContent = "";
+
+  // 24h high/low/volume from the ticker; fall back to the last ~24h of daily candles.
+  let high = stats && isFinite(stats.high) ? stats.high : null;
+  let low  = stats && isFinite(stats.low)  ? stats.low  : null;
+  if((high==null||low==null) && data.length){ const d=data[data.length-1]; high=high??d.high; low=low??d.low; }
+
+  // Indicators from the daily series.
+  let rsi=null, sma20=null, sma50=null, hi52=null, lo52=null, atr=null;
+  if(data.length){
+    const closes = data.map(d=>d.close);
+    const rs = rsiCalc(data,14,"close"); for(let i=rs.length-1;i>=0;i--){ if(rs[i]&&rs[i].value!=null){ rsi=rs[i].value; break; } }
+    const s20=smaA(closes,20), s50=smaA(closes,50);
+    sma20 = s20[s20.length-1]; sma50 = s50[s50.length-1];
+    const yr = data.slice(-365);
+    hi52 = Math.max(...yr.map(d=>d.high)); lo52 = Math.min(...yr.map(d=>d.low));
+    // ATR(14) on daily bars → rough daily volatility
+    if(data.length>15){ let s=0,n=0; for(let i=data.length-14;i<data.length;i++){ const p=data[i-1];
+      const tr=Math.max(data[i].high-data[i].low, Math.abs(data[i].high-p.close), Math.abs(data[i].low-p.close)); s+=tr; n++; } atr=n?s/n:null; }
+  }
+  const rsiTxt = rsi!=null ? rsi.toFixed(1)+(rsi>=70?" · Overbought":rsi<=30?" · Oversold":"") : "—";
+  const trend = (sma20!=null&&sma50!=null) ? (sma20>sma50?"Bullish (20>50)":"Bearish (20<50)") : null;
+  // Position of last within the 24h range.
+  let rangePos=null;
+  if(last!=null && high!=null && low!=null && high>low) rangePos = ((last-low)/(high-low)*100);
+
+  const rsiBar = rsi!=null
+    ? `<div class="pc-cell" style="grid-column:1/-1"><div class="pc-k">RSI (14, 1D)</div>`
+      +`<div class="pc-v">${rsiTxt}</div><div class="pc-rsi-bar"><span class="pc-rsi-dot" style="left:${Math.max(0,Math.min(100,rsi))}%"></span></div></div>`
+    : "";
+
+  const extraCells = (stats && stats.extra) ? Object.entries(stats.extra)
+      .filter(([k,v])=>v!=null && v!=="" && !(typeof v==="number"&&!isFinite(v)))
+      .map(([k,v])=>pcCell(k, typeof v==="number"?fmtPrice(v):v)).join("") : "";
+
+  document.getElementById("pcBody").innerHTML =
+      `<div class="pc-sec">Market · 24h</div>`
+    + `<div class="pc-grid">`
+    +   pcCell("24h High", high!=null?fmtPrice(high):null)
+    +   pcCell("24h Low",  low!=null?fmtPrice(low):null)
+    +   pcCell("24h Volume", stats?fmtVol(stats.vol):null)
+    +   pcCell("Quote volume", stats&&stats.quoteVol!=null?fmtVol(stats.quoteVol):null)
+    +   (rangePos!=null?pcCell("Range position", rangePos.toFixed(0)+"% of 24h range"):"")
+    +   pcCell("Prev close / open", open!=null?fmtPrice(open):null)
+    + `</div>`
+    + `<div class="pc-sec">Technicals · Daily</div>`
+    + `<div class="pc-grid">`
+    +   rsiBar
+    +   pcCell("SMA 20", sma20!=null?fmtPrice(sma20):null)
+    +   pcCell("SMA 50", sma50!=null?fmtPrice(sma50):null)
+    +   (trend?pcCell("Trend", trend):"")
+    +   pcCell("ATR (14)", atr!=null?fmtPrice(atr):null)
+    +   pcCell("1Y High", hi52!=null&&isFinite(hi52)?fmtPrice(hi52):null)
+    +   pcCell("1Y Low",  lo52!=null&&isFinite(lo52)?fmtPrice(lo52):null)
+    + `</div>`
+    + (extraCells?`<div class="pc-sec">Exchange</div><div class="pc-grid">${extraCells}</div>`:"")
+    + `<div class="pc-sec">Pair</div>`
+    + `<div class="pc-grid">`
+    +   pcCell("Symbol", escHtml(symLabel(sym)))
+    +   pcCell("Type", isSpread?"Spread / Ratio":(resolveLeg(sym).isPerp?"Perpetual":"Spot"))
+    +   (isSpread
+        ? pcCell("Numerator", escHtml(legShort(sym.split("/")[0])))+pcCell("Denominator", escHtml(legShort(sym.split("/")[1])))
+        : pcCell("Exchange", escHtml(resolveLeg(sym).exchange.label)))
+    + `</div>`
+    + `<div class="pc-foot">`
+    +   `<button class="pc-btn primary" id="pcOpen">Open chart</button>`
+    +   `<button class="pc-btn" id="pcAlert">Add alert</button>`
+    + `</div>`;
+
+  document.getElementById("pcOpen").onclick = ()=>{ closePairCard(); const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click(); };
+  const alertBtn = document.getElementById("pcAlert");
+  if(alertBtn) alertBtn.onclick = ()=>{ closePairCard(); const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click();
+    if(typeof openAlertDialog==="function") setTimeout(openAlertDialog,150); };
+}
+
+function closePairCard(){
+  pairCard.classList.remove("open");
+  if(!document.querySelector(".dialog.open") && !document.getElementById("symDlg").classList.contains("open"))
+    document.getElementById("dlgBackdrop").classList.remove("open");
+}
+// Esc closes the card; clicking the backdrop closes it too.
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && pairCard.classList.contains("open")) closePairCard(); });
 
 // Let a dragged symbol be dropped onto a section header (appends to that group).
 function sectionDropWire(el, name){
@@ -3433,6 +3709,7 @@ async function refreshPrices(){
     const chgAbs = price - prev;                 // absolute change
     const chgPct = prev ? (price/prev - 1)*100 : 0;
     PRICE_CACHE[sym] = { price, chgAbs, chgPct };   // for column sorting
+    if(isPriceHidden(sym)) return;                  // masked (eye off) → keep "••••••", don't paint
     const up = chgAbs >= 0;
     const txt    = fmtPrice(price);
     const absTxt = (up?"+":"−") + fmtPrice(Math.abs(chgAbs));
@@ -3511,7 +3788,7 @@ function applyCustomTF(raw){
   const label = sec%604800===0?`${sec/604800}W` : sec%86400===0?`${sec/86400}D` : sec%3600===0?`${sec/3600}H` : `${sec/60}m`;
   const key = "c"+sec;   // e.g. c2700
   if(!TF[key]) TF[key] = { label, menu:label+" (custom)", sec:"CUSTOM", base:p.base, bucket:sec, pages:20 };
-  tfSel.classList.remove("open");
+  closeTfMenu();
   selectTF(key);
   return true;
 }
@@ -3541,15 +3818,25 @@ function openTfMenu(){
   if(act) act.scrollIntoView({block:"nearest"});   // bring the current TF into view
 }
 
+// Close the TF menu AND restore chart size. In embed/WebView mode, focusing the custom
+// input can shrink the visual viewport (keyboard) without firing a settled window 'resize',
+// leaving the canvas narrower than its container (black gutter on the right). Re-run the
+// same deferred resize idiom used for grid/fullscreen changes so the canvas reflows back.
+function closeTfMenu(){
+  if(!tfSel.classList.contains("open")) return;
+  tfSel.classList.remove("open");
+  setTimeout(()=>{ resize(); sizeCanvas(); },50);
+}
+
 tfSelBtn.addEventListener("click", e=>{
   e.stopPropagation();
-  tfSel.classList.contains("open") ? tfSel.classList.remove("open") : openTfMenu();
+  tfSel.classList.contains("open") ? closeTfMenu() : openTfMenu();
 });
 
 tfMenu.addEventListener("click", e=>{
   if(e.target.closest(".tf-custom")) { e.stopPropagation(); return; }  // don't close on input click
   const opt = e.target.closest(".tf-opt"); if(!opt) return;
-  tfSel.classList.remove("open");
+  closeTfMenu();
   selectTF(opt.dataset.i);
 });
 // Custom timeframe: Enter applies it.
@@ -3559,7 +3846,7 @@ tfMenu.addEventListener("keydown", e=>{
 
 // Close the menu on any click outside the selector.
 document.addEventListener("click", e=>{
-  if(!e.target.closest("#tfSel")) tfSel.classList.remove("open");
+  if(!e.target.closest("#tfSel")) closeTfMenu();
 });
 
 syncTfUI();  // initialise label + highlight to the default activeTF
@@ -3600,7 +3887,7 @@ function applyTz(idx){
 // Anchored to the button: opens upward (bottom bar sits at the screen's bottom edge),
 // right edge aligned to the button's right edge, clamped into the viewport.
 function openTzMenu(){
-  tzSel.classList.add("open"); tfSel.classList.remove("open");
+  tzSel.classList.add("open"); closeTfMenu();
   document.body.appendChild(tzMenu);           // re-parent out of the clipped/trapped ancestors
   tzMenu.classList.add("tz-fixed");
   tzMenu.style.visibility="hidden"; tzMenu.style.display="block";   // measure before placing
@@ -3659,7 +3946,7 @@ function syncChartTypeUI(){
   ctMenu.querySelectorAll(".tf-opt").forEach(o=>o.classList.toggle("active", o.dataset.ct===chartType));
 }
 ctSelBtn.addEventListener("click", e=>{ e.stopPropagation();
-  ctSel.classList.toggle("open"); tfSel.classList.remove("open"); });
+  ctSel.classList.toggle("open"); closeTfMenu(); });
 ctMenu.addEventListener("click", e=>{ const o=e.target.closest(".tf-opt"); if(!o) return;
   ctSel.classList.remove("open"); setChartType(o.dataset.ct); });
 document.addEventListener("click", e=>{ if(!e.target.closest("#ctSel")) ctSel.classList.remove("open"); });
@@ -5189,7 +5476,7 @@ function openFibSettings(id){
   document.getElementById("dlgClose").onclick=closeDlg;
   document.getElementById("dlgDel").onclick=()=>{ deleteShape(id); closeDlg(); };
 }
-backdrop.onclick=()=>{ closeDlg(); closeAlertDlg(); closeSymDlg(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); };
+backdrop.onclick=()=>{ closeDlg(); closeAlertDlg(); closeSymDlg(); closePairCard(); toggleIndicatorsMenu(false); toggleAlertsPanel(false); };
 
 // ─────────────────────────────────────────────────────────────────────
 //  CREATE / EDIT ALERT DIALOG  (TradingView-style)
