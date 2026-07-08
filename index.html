@@ -34,6 +34,9 @@
   html.embed #topbar{left:0;}
   /* App owns symbol search in embed mode → symbol name isn't a search trigger here. */
   html.embed #symbolBox{cursor:default;pointer-events:none;}
+  /* Narrow phone frame: let the SMA/indicator legend wrap instead of overflowing. */
+  html.embed #chartLegend{max-width:92%;}
+  html.embed #maLegend{white-space:normal; width:auto; max-width:100%;}
   /* ── Multi-chart grid (iframe panels) ── */
   #chartGrid{display:none; position:absolute; top:38px; left:52px; right:0; bottom:0; z-index:35;
     background:var(--bg); gap:2px; grid-auto-rows:1fr;}
@@ -170,9 +173,9 @@
   @keyframes tfShake{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
   /* ── Floating on-chart legend (TradingView top-left) ── */
   #chartLegend{position:absolute; top:8px; left:10px; z-index:110; max-width:70%;
-    display:flex; flex-direction:column; gap:1px; pointer-events:none;}
+    display:flex; flex-direction:column; gap:3px; pointer-events:none;}
   #chartLegend > div{pointer-events:auto; width:fit-content; background:rgba(19,23,34,.55);
-    border-radius:3px; padding:1px 5px;}
+    border-radius:3px; padding:2px 6px; line-height:1.35;}
   #legSymRow{font-size:13px; font-weight:700; color:var(--text); white-space:nowrap;}
   #legCollapse{cursor:pointer; color:var(--muted); font-size:10px; margin-right:4px; display:inline-block; transition:transform .12s;}
   #legCollapse:hover{color:var(--text);}
@@ -660,36 +663,98 @@
 
   /* ── Pair info card (right-click → View details) ── */
   #pairCard{position:fixed; z-index:402; top:50%; left:50%; transform:translate(-50%,-50%);
-    width:380px; max-height:86vh; overflow-y:auto; background:var(--panel); border:1px solid var(--border);
-    border-radius:12px; box-shadow:0 16px 56px #000d; display:none; flex-direction:column;}
-  #pairCard.open{display:flex;}
-  #pairCard .pc-head{display:flex; align-items:center; gap:10px; padding:14px 16px 12px; border-bottom:1px solid var(--border);}
-  #pairCard .pc-ic{width:34px; height:34px; border-radius:50%; flex:none; object-fit:contain; background:#2a2e39;
-    color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center;}
+    width:560px; max-width:94vw; max-height:88vh; overflow-y:auto; overflow-x:hidden; background:var(--panel);
+    border:1px solid var(--border); border-radius:14px; box-shadow:0 24px 64px #000e, 0 0 0 1px #ffffff0a inset;
+    display:none; flex-direction:column;}
+  #pairCard.open{display:flex; animation:pcIn .16s ease-out;}
+  @keyframes pcIn{from{opacity:0; transform:translate(-50%,-46%) scale(.98);} to{opacity:1; transform:translate(-50%,-50%) scale(1);}}
+  #pairCard::-webkit-scrollbar{width:9px;}
+  #pairCard::-webkit-scrollbar-thumb{background:var(--border); border-radius:5px; border:2px solid var(--panel);}
+  /* Header sits on a subtle gradient so the card reads as a "sheet". */
+  #pairCard .pc-head{display:flex; align-items:center; gap:11px; padding:16px 16px 14px;
+    background:linear-gradient(180deg,#ffffff08,transparent); border-bottom:1px solid var(--border);}
+  #pairCard .pc-ic{width:38px; height:38px; border-radius:50%; flex:none; object-fit:contain; background:#2a2e39;
+    color:#fff; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 1px #ffffff14;}
   #pairCard .pc-tt{flex:1; min-width:0;}
-  #pairCard .pc-sym{font-size:15px; font-weight:700; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  #pairCard .pc-sub{font-size:11px; color:var(--muted); margin-top:1px;}
-  #pairCard .pc-x{cursor:pointer; color:var(--muted); font-size:20px; line-height:1; padding:0 2px;}
-  #pairCard .pc-x:hover{color:var(--text);}
-  #pairCard .pc-price{padding:12px 16px; border-bottom:1px solid var(--border);}
-  #pairCard .pc-last{font-size:26px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums;}
-  #pairCard .pc-chg{font-size:13px; font-weight:600; margin-top:2px; font-variant-numeric:tabular-nums;}
-  #pairCard .pc-grid{display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--border);}
-  #pairCard .pc-cell{background:var(--panel); padding:9px 14px;}
-  #pairCard .pc-k{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.3px;}
-  #pairCard .pc-v{font-size:13px; color:var(--text); font-weight:600; margin-top:2px; font-variant-numeric:tabular-nums;
+  #pairCard .pc-sym{font-size:16px; font-weight:700; color:var(--text); letter-spacing:.2px;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  #pairCard .pc-sec{padding:6px 16px 3px; font-size:10.5px; font-weight:700; color:var(--muted);
-    text-transform:uppercase; letter-spacing:.4px; background:var(--panel);}
-  #pairCard .pc-foot{padding:10px 16px; border-top:1px solid var(--border); display:flex; gap:8px;}
+  #pairCard .pc-sub{font-size:11px; color:var(--muted); margin-top:2px; display:flex; align-items:center; gap:6px;}
+  #pairCard .pc-badge{font-size:9.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase;
+    color:var(--accent); background:#2962ff1f; border:1px solid #2962ff33; padding:1px 6px; border-radius:4px;}
+  #pairCard .pc-x{cursor:pointer; color:var(--muted); font-size:18px; line-height:1; width:26px; height:26px;
+    display:flex; align-items:center; justify-content:center; border-radius:6px; flex:none;}
+  #pairCard .pc-x:hover{color:var(--text); background:var(--hover);}
+  /* Price block: big number + a change chip. */
+  #pairCard .pc-price{padding:14px 16px 16px; border-bottom:1px solid var(--border);}
+  #pairCard .pc-last{font-size:30px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-.5px; line-height:1;}
+  #pairCard .pc-chg{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700;
+    margin-top:9px; padding:3px 9px; border-radius:6px; font-variant-numeric:tabular-nums;}
+  #pairCard .pc-chg.up{color:var(--green); background:#26a69a1c;}
+  #pairCard .pc-chg.down{color:var(--red); background:#ef53501c;}
+  #pairCard .pc-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:var(--border);}
+  #pairCard .pc-cell{background:var(--panel); padding:10px 14px; position:relative; transition:background .12s;}
+  #pairCard .pc-cell.has-help{cursor:help;}
+  #pairCard .pc-cell:not(.pc-fill):hover{background:var(--panel2);}
+  #pairCard .pc-cell.pc-fill{cursor:default;}
+  #pairCard .pc-k{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:600;
+    display:flex; align-items:center; gap:4px;}
+  #pairCard .pc-cell.has-help .pc-k::after{content:"?"; font-size:8px; font-weight:700; width:11px; height:11px;
+    display:inline-flex; align-items:center; justify-content:center; border-radius:50%; color:var(--muted);
+    background:#ffffff12; opacity:0; transition:opacity .12s;}
+  #pairCard .pc-cell.has-help:hover .pc-k::after{opacity:.8;}
+  #pairCard .pc-v{font-size:13.5px; color:var(--text); font-weight:600; margin-top:3px; font-variant-numeric:tabular-nums;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  #pairCard .pc-v.up{color:var(--green);} #pairCard .pc-v.down{color:var(--red);}
+  #pairCard .pc-sec{padding:11px 16px 6px; font-size:10px; font-weight:700; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.6px; background:var(--panel); display:flex; align-items:center; gap:8px;}
+  #pairCard .pc-sec::after{content:""; flex:1; height:1px; background:var(--border);}
+  #pairCard .pc-foot{padding:12px 16px 14px; display:flex; gap:9px;}
   #pairCard .pc-btn{flex:1; appearance:none; border:1px solid var(--border); background:var(--panel2);
-    color:var(--text); font-size:12px; font-weight:600; padding:8px; border-radius:7px; cursor:pointer;}
-  #pairCard .pc-btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
-  #pairCard .pc-btn:hover{filter:brightness(1.12);}
-  #pairCard .pc-rsi-bar{height:5px; border-radius:3px; margin-top:5px;
-    background:linear-gradient(90deg,#26a69a 0%,#26a69a 30%,#787b86 30%,#787b86 70%,#ef5350 70%,#ef5350 100%); position:relative;}
-  #pairCard .pc-rsi-dot{position:absolute; top:-2px; width:9px; height:9px; border-radius:50%;
-    background:#fff; border:2px solid var(--panel); transform:translateX(-50%);}
+    color:var(--text); font-size:12.5px; font-weight:600; padding:9px; border-radius:8px; cursor:pointer; transition:filter .12s, background .12s;}
+  #pairCard .pc-btn.primary{background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 2px 10px #2962ff40;}
+  #pairCard .pc-btn:hover{filter:brightness(1.14);}
+  #pairCard .pc-rsi-bar{height:6px; border-radius:4px; margin-top:7px; overflow:visible;
+    background:linear-gradient(90deg,#26a69a 0%,#26a69a 30%,#565a66 30%,#565a66 70%,#ef5350 70%,#ef5350 100%); position:relative;}
+  #pairCard .pc-rsi-dot{position:absolute; top:-3px; width:12px; height:12px; border-radius:50%;
+    background:#fff; border:2px solid var(--panel); box-shadow:0 1px 4px #0008; transform:translateX(-50%);}
+  /* Hover help box (data-help on a cell). */
+  #pairCard .pc-cell[data-help]:hover::before{content:attr(data-help); position:absolute; left:10px; top:calc(100% - 4px);
+    min-width:180px; max-width:240px; z-index:5; background:#0d0f16; color:#d1d4dc; font-size:11px; font-weight:400; line-height:1.45;
+    letter-spacing:normal; text-transform:none; padding:8px 10px; border-radius:8px; border:1px solid var(--border);
+    box-shadow:0 8px 24px #000b; white-space:normal; pointer-events:none;}
+  /* cells in the rightmost column anchor the tip to their right edge so it stays on-card */
+  #pairCard .pc-grid>.pc-cell:nth-child(3n)[data-help]:hover::before{left:auto; right:10px;}
+  html.light #pairCard .pc-cell[data-help]:hover::before{background:#fff; color:#131722;}
+  /* Carousel: a horizontal track of full-width pages that slides on nav. */
+  #pairCard .pc-track{display:flex; width:200%; transition:transform .22s cubic-bezier(.4,0,.2,1);}
+  #pairCard .pc-page{width:50%; flex:none;}
+  #pairCard.pg1 .pc-track{transform:translateX(-50%);}
+  /* Edge arrows to flip pages. */
+  #pairCard .pc-arrow{position:absolute; top:118px; z-index:6; width:30px; height:30px;
+    display:flex; align-items:center; justify-content:center; border-radius:50%; cursor:pointer;
+    background:var(--panel2); border:1px solid var(--border); color:var(--text); box-shadow:0 2px 10px #0007;}
+  #pairCard .pc-arrow:hover{background:var(--accent); border-color:var(--accent); color:#fff;}
+  #pairCard .pc-arrow svg{width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;}
+  #pairCard .pc-arrow.right{right:10px;} #pairCard .pc-arrow.left{left:10px;}
+  /* Page dots in the footer. */
+  #pairCard .pc-dots{display:flex; gap:6px; align-items:center; justify-content:center; padding:2px 0 0;}
+  #pairCard .pc-dot{width:6px; height:6px; border-radius:50%; background:var(--border); cursor:pointer; transition:background .15s, width .15s;}
+  #pairCard .pc-dot.on{background:var(--accent); width:16px;}
+  /* RSI multi-timeframe page. */
+  #pairCard .pc-rsi-title{padding:14px 16px 4px; font-size:13px; font-weight:700; color:var(--text);}
+  #pairCard .pc-rsi-subtitle{padding:0 16px 12px; font-size:11px; color:var(--muted);}
+  #pairCard .pc-rsi-rows{padding:0 16px 8px; display:flex; flex-direction:column; gap:1px;}
+  #pairCard .pc-rsi-row{display:grid; grid-template-columns:46px 52px 1fr; align-items:center; gap:12px; padding:7px 0; border-top:1px solid var(--border);}
+  #pairCard .pc-rsi-row:first-child{border-top:none;}
+  #pairCard .pc-rsi-tf{font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.3px;}
+  #pairCard .pc-rsi-val{font-size:14px; font-weight:700; font-variant-numeric:tabular-nums;}
+  #pairCard .pc-rsi-val.ob{color:var(--red);} #pairCard .pc-rsi-val.os{color:var(--green);} #pairCard .pc-rsi-val.nt{color:var(--text);}
+  #pairCard .pc-rsi-track{position:relative; height:6px; border-radius:4px;
+    background:linear-gradient(90deg,#26a69a 0%,#26a69a 30%,#565a66 30%,#565a66 70%,#ef5350 70%,#ef5350 100%);}
+  #pairCard .pc-rsi-track .d{position:absolute; top:-3px; width:12px; height:12px; border-radius:50%;
+    background:#fff; border:2px solid var(--panel); box-shadow:0 1px 4px #0008; transform:translateX(-50%);}
+  #pairCard .pc-rsi-row.pending .pc-rsi-val{color:var(--muted);}
 </style>
 </head>
 <body>
@@ -3387,7 +3452,47 @@ async function fetchCardCandles(sym){
   }catch(e){ return []; }
 }
 
-function pcCell(k,v){ return `<div class="pc-cell"><div class="pc-k">${escHtml(k)}</div><div class="pc-v">${v==null||v===""?"—":v}</div></div>`; }
+// Plain-language explanations shown as a hover help box on each stat cell.
+const PC_HELP = {
+  "24h High":"Highest traded price over the last 24 hours.",
+  "24h Low":"Lowest traded price over the last 24 hours.",
+  "24h Volume":"Amount of the base asset traded in the last 24 hours.",
+  "Quote volume":"Total value traded in the last 24 hours, in the quote currency (e.g. USDT).",
+  "Range position":"Where the current price sits between the 24h low (0%) and high (100%).",
+  "Prev close / open":"The reference price 24 hours ago, used to compute today's change.",
+  "RSI (14, 1D)":"Relative Strength Index over 14 daily bars. Above 70 = overbought, below 30 = oversold.",
+  "SMA 20":"20-day Simple Moving Average — the average closing price of the last 20 days.",
+  "SMA 50":"50-day Simple Moving Average — the average closing price of the last 50 days.",
+  "Trend":"Bullish when the 20-day average is above the 50-day average; bearish when below.",
+  "ATR (14)":"Average True Range (14 days) — typical daily price movement, a measure of volatility.",
+  "1Y High":"Highest price over roughly the last year of daily bars.",
+  "1Y Low":"Lowest price over roughly the last year of daily bars.",
+  "Weighted avg":"Volume-weighted average price over the last 24 hours (Binance).",
+  "Trades (24h)":"Number of individual trades executed in the last 24 hours.",
+  "Funding rate":"Periodic payment between long and short perpetual holders; positive = longs pay shorts.",
+  "Open interest":"Total value of open perpetual contracts currently outstanding.",
+  "52-wk high":"Highest price over the last 52 weeks.",
+  "52-wk low":"Lowest price over the last 52 weeks.",
+  "Currency":"The currency this instrument is priced in.",
+  "Symbol":"The ticker used to fetch and chart this instrument.",
+  "Type":"Spot, Perpetual future, or a synthetic A/B spread (ratio).",
+  "Exchange":"The venue this price data comes from.",
+  "Numerator":"The top leg (A) of the A/B spread ratio.",
+  "Denominator":"The bottom leg (B) of the A/B spread ratio.",
+};
+function pcCell(k,v){
+  const help = PC_HELP[k];
+  const attr = help ? ` data-help="${escHtml(help)}"` : "";
+  return `<div class="pc-cell${help?" has-help":""}"${attr}><div class="pc-k">${escHtml(k)}</div><div class="pc-v">${v==null||v===""?"—":v}</div></div>`;
+}
+// Wrap a list of pcCell() strings in a .pc-grid, padding the final row with blank
+// filler cells so a partially-filled row never leaves a dark gap. `cols` = grid width.
+function pcGrid(cells, cols=3){
+  const list = cells.filter(Boolean);
+  const rem = list.length % cols;
+  const pad = rem ? cols - rem : 0;
+  return `<div class="pc-grid">${list.join("")}${'<div class="pc-cell pc-fill"></div>'.repeat(pad)}</div>`;
+}
 function fmtVol(v){ if(v==null||!isFinite(v)) return "—";
   const a=Math.abs(v);
   if(a>=1e9) return (v/1e9).toFixed(2)+"B";
@@ -3408,16 +3513,36 @@ function openPairInfoCard(sym){
     ? `<span class="pc-ic" style="background:#2962ff">${escHtml((base[0]||label[0]||"?").toUpperCase())}</span>`
     : `<img class="pc-ic" src="${logoForBase(base)}" alt="" onerror="this.outerHTML='<span class=\\'pc-ic\\' style=\\'background:#2962ff\\'>${escHtml((base[0]||"?").toUpperCase())}</span>'">`;
 
-  // Loading skeleton first; fills in as async data lands.
+  // Loading skeleton first; fills in as async data lands. Two carousel pages:
+  // page 0 = details, page 1 = multi-timeframe RSI (lazy-loaded on first nav).
+  pairCard.classList.remove("pg1");
+  _rsiPageSym = null;   // reset lazy-RSI guard for the new symbol
   pairCard.innerHTML =
       `<div class="pc-head">${icon}<div class="pc-tt"><div class="pc-sym">${escHtml(label)}</div>`
-    +   `<div class="pc-sub">${escHtml(venue||"")}${venue?" · ":""}${escHtml(typeStr)}</div></div>`
+    +   `<div class="pc-sub"><span class="pc-badge">${escHtml(typeStr)}</span>${venue?escHtml(venue):""}</div></div>`
     +   `<span class="pc-x" id="pcClose">×</span></div>`
-    + `<div class="pc-price"><div class="pc-last" id="pcLast">…</div><div class="pc-chg" id="pcChg"></div></div>`
-    + `<div id="pcBody"><div style="padding:18px 16px;color:var(--muted);font-size:12px">Loading market data…</div></div>`;
+    + `<div class="pc-arrow right" id="pcNext" title="Multi-timeframe RSI"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>`
+    + `<div class="pc-arrow left" id="pcPrev" title="Back" style="display:none"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>`
+    + `<div class="pc-track">`
+    +   `<div class="pc-page" id="pcPage0">`
+    +     `<div class="pc-price"><div class="pc-last" id="pcLast">…</div><div class="pc-chg" id="pcChg"></div></div>`
+    +     `<div id="pcBody"><div style="padding:18px 16px;color:var(--muted);font-size:12px">Loading market data…</div></div>`
+    +   `</div>`
+    +   `<div class="pc-page" id="pcPage1">`
+    +     `<div class="pc-rsi-title">RSI · Multi-timeframe</div>`
+    +     `<div class="pc-rsi-subtitle">RSI(14) close across timeframes · &gt;70 overbought · &lt;30 oversold</div>`
+    +     `<div class="pc-rsi-rows" id="pcRsiRows"></div>`
+    +   `</div>`
+    + `</div>`
+    + `<div class="pc-dots"><span class="pc-dot on" data-pg="0"></span><span class="pc-dot" data-pg="1"></span></div>`
+    + `<div class="pc-foot">`
+    +   `<button class="pc-btn primary" id="pcOpen">Open chart</button>`
+    +   `<button class="pc-btn" id="pcAlert">Add alert</button>`
+    + `</div>`;
   pairCard.classList.add("open");
   document.getElementById("dlgBackdrop").classList.add("open");
   document.getElementById("pcClose").onclick = closePairCard;
+  wirePairCardNav(sym, isSpread);
 
   Promise.all([ isSpread ? Promise.resolve(null) : fetchRichStats(sym), fetchCardCandles(sym) ])
     .then(([stats, data])=>{
@@ -3468,52 +3593,110 @@ function renderPairCard(sym, stats, data, isSpread){
   if(last!=null && high!=null && low!=null && high>low) rangePos = ((last-low)/(high-low)*100);
 
   const rsiBar = rsi!=null
-    ? `<div class="pc-cell" style="grid-column:1/-1"><div class="pc-k">RSI (14, 1D)</div>`
+    ? `<div class="pc-cell has-help" style="grid-column:1/-1" data-help="${escHtml(PC_HELP["RSI (14, 1D)"])}"><div class="pc-k">RSI (14, 1D)</div>`
       +`<div class="pc-v">${rsiTxt}</div><div class="pc-rsi-bar"><span class="pc-rsi-dot" style="left:${Math.max(0,Math.min(100,rsi))}%"></span></div></div>`
     : "";
 
-  const extraCells = (stats && stats.extra) ? Object.entries(stats.extra)
+  const extraCellsArr = (stats && stats.extra) ? Object.entries(stats.extra)
       .filter(([k,v])=>v!=null && v!=="" && !(typeof v==="number"&&!isFinite(v)))
-      .map(([k,v])=>pcCell(k, typeof v==="number"?fmtPrice(v):v)).join("") : "";
+      .map(([k,v])=>pcCell(k, typeof v==="number"?fmtPrice(v):v)) : [];
+  const extraCells = extraCellsArr.length;
+
+  const pairCells = [
+    pcCell("Symbol", escHtml(symLabel(sym))),
+    pcCell("Type", isSpread?"Spread / Ratio":(resolveLeg(sym).isPerp?"Perpetual":"Spot")),
+    ...(isSpread
+        ? [pcCell("Numerator", escHtml(legShort(sym.split("/")[0]))), pcCell("Denominator", escHtml(legShort(sym.split("/")[1])))]
+        : [pcCell("Exchange", escHtml(resolveLeg(sym).exchange.label))]),
+  ];
+  // Technicals: rsiBar spans the full row, then 6 stat cells (grid-fills evenly).
+  const techTail = pcGrid([
+    pcCell("SMA 20", sma20!=null?fmtPrice(sma20):null),
+    pcCell("SMA 50", sma50!=null?fmtPrice(sma50):null),
+    (trend?pcCell("Trend", trend):""),
+    pcCell("ATR (14)", atr!=null?fmtPrice(atr):null),
+    pcCell("1Y High", hi52!=null&&isFinite(hi52)?fmtPrice(hi52):null),
+    pcCell("1Y Low",  lo52!=null&&isFinite(lo52)?fmtPrice(lo52):null),
+  ]);
 
   document.getElementById("pcBody").innerHTML =
       `<div class="pc-sec">Market · 24h</div>`
-    + `<div class="pc-grid">`
-    +   pcCell("24h High", high!=null?fmtPrice(high):null)
-    +   pcCell("24h Low",  low!=null?fmtPrice(low):null)
-    +   pcCell("24h Volume", stats?fmtVol(stats.vol):null)
-    +   pcCell("Quote volume", stats&&stats.quoteVol!=null?fmtVol(stats.quoteVol):null)
-    +   (rangePos!=null?pcCell("Range position", rangePos.toFixed(0)+"% of 24h range"):"")
-    +   pcCell("Prev close / open", open!=null?fmtPrice(open):null)
-    + `</div>`
+    + pcGrid([
+        pcCell("24h High", high!=null?fmtPrice(high):null),
+        pcCell("24h Low",  low!=null?fmtPrice(low):null),
+        pcCell("24h Volume", stats?fmtVol(stats.vol):null),
+        pcCell("Quote volume", stats&&stats.quoteVol!=null?fmtVol(stats.quoteVol):null),
+        (rangePos!=null?pcCell("Range position", rangePos.toFixed(0)+"% of 24h range"):""),
+        pcCell("Prev close / open", open!=null?fmtPrice(open):null),
+      ])
     + `<div class="pc-sec">Technicals · Daily</div>`
-    + `<div class="pc-grid">`
-    +   rsiBar
-    +   pcCell("SMA 20", sma20!=null?fmtPrice(sma20):null)
-    +   pcCell("SMA 50", sma50!=null?fmtPrice(sma50):null)
-    +   (trend?pcCell("Trend", trend):"")
-    +   pcCell("ATR (14)", atr!=null?fmtPrice(atr):null)
-    +   pcCell("1Y High", hi52!=null&&isFinite(hi52)?fmtPrice(hi52):null)
-    +   pcCell("1Y Low",  lo52!=null&&isFinite(lo52)?fmtPrice(lo52):null)
-    + `</div>`
-    + (extraCells?`<div class="pc-sec">Exchange</div><div class="pc-grid">${extraCells}</div>`:"")
+    + (rsiBar ? `<div class="pc-grid">${rsiBar}</div>` : "")
+    + techTail
+    + (extraCells?`<div class="pc-sec">Exchange</div>`+pcGrid(extraCellsArr):"")
     + `<div class="pc-sec">Pair</div>`
-    + `<div class="pc-grid">`
-    +   pcCell("Symbol", escHtml(symLabel(sym)))
-    +   pcCell("Type", isSpread?"Spread / Ratio":(resolveLeg(sym).isPerp?"Perpetual":"Spot"))
-    +   (isSpread
-        ? pcCell("Numerator", escHtml(legShort(sym.split("/")[0])))+pcCell("Denominator", escHtml(legShort(sym.split("/")[1])))
-        : pcCell("Exchange", escHtml(resolveLeg(sym).exchange.label)))
-    + `</div>`
-    + `<div class="pc-foot">`
-    +   `<button class="pc-btn primary" id="pcOpen">Open chart</button>`
-    +   `<button class="pc-btn" id="pcAlert">Add alert</button>`
-    + `</div>`;
+    + pcGrid(pairCells);
+}
 
-  document.getElementById("pcOpen").onclick = ()=>{ closePairCard(); const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click(); };
-  const alertBtn = document.getElementById("pcAlert");
+// ── Carousel nav + multi-timeframe RSI page ──
+const PC_RSI_TFS = ["1m","5m","15m","30m","1h","2h","4h","6h","12h","1d","1w","1M"];
+function rsiClass(v){ return v>=70?"ob":v<=30?"os":"nt"; }
+function rsiTag(v){ return v>=70?" · Overbought":v<=30?" · Oversold":""; }
+function wirePairCardNav(sym, isSpread){
+  const go = pg=>{
+    pairCard.classList.toggle("pg1", pg===1);
+    const nx=document.getElementById("pcNext"), pv=document.getElementById("pcPrev");
+    if(nx) nx.style.display = pg===1?"none":"flex";
+    if(pv) pv.style.display = pg===1?"flex":"none";
+    pairCard.querySelectorAll(".pc-dot").forEach(d=>d.classList.toggle("on", +d.dataset.pg===pg));
+    if(pg===1) loadRsiPage(sym, isSpread);
+  };
+  const nx=document.getElementById("pcNext"), pv=document.getElementById("pcPrev");
+  if(nx) nx.onclick=()=>go(1);
+  if(pv) pv.onclick=()=>go(0);
+  pairCard.querySelectorAll(".pc-dot").forEach(d=> d.onclick=()=>go(+d.dataset.pg));
+  const openBtn=document.getElementById("pcOpen");
+  if(openBtn) openBtn.onclick = ()=>{ closePairCard(); const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click(); };
+  const alertBtn=document.getElementById("pcAlert");
   if(alertBtn) alertBtn.onclick = ()=>{ closePairCard(); const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click();
     if(typeof openAlertDialog==="function") setTimeout(openAlertDialog,150); };
+}
+// Compute RSI(14) for every timeframe, filling each row as its fetch lands.
+let _rsiPageSym = null;
+function loadRsiPage(sym, isSpread){
+  if(_rsiPageSym===sym) return;      // already loading/loaded for this symbol
+  _rsiPageSym = sym;
+  const rows = document.getElementById("pcRsiRows"); if(!rows) return;
+  rows.innerHTML = PC_RSI_TFS.map(tf=>
+    `<div class="pc-rsi-row pending" data-tf="${tf}"><span class="pc-rsi-tf">${(TF[tf]||{}).label||tf}</span>`
+    +`<span class="pc-rsi-val">…</span><div class="pc-rsi-track"><span class="d" style="left:0%"></span></div></div>`).join("");
+  const seq = _pairCardSeq;          // tie to the currently-open card
+  PC_RSI_TFS.forEach(tf=>{
+    (isSpread ? fetchSpreadRsi(sym, tf) : fetchKlines(sym, tf).then(d=>rsiFromBars(d)))
+      .then(v=>{
+        if(seq!==_pairCardSeq) return;                 // card changed/closed
+        const row = document.querySelector(`#pcRsiRows .pc-rsi-row[data-tf="${tf}"]`); if(!row) return;
+        row.classList.remove("pending");
+        const val=row.querySelector(".pc-rsi-val"), dot=row.querySelector(".pc-rsi-track .d");
+        if(v==null){ val.textContent="—"; val.className="pc-rsi-val nt"; return; }
+        val.textContent = v.toFixed(1); val.className = "pc-rsi-val "+rsiClass(v);
+        val.title = v.toFixed(1)+rsiTag(v);
+        dot.style.left = Math.max(0,Math.min(100,v))+"%";
+      })
+      .catch(()=>{ const row=document.querySelector(`#pcRsiRows .pc-rsi-row[data-tf="${tf}"]`);
+        if(row){ row.classList.remove("pending"); row.querySelector(".pc-rsi-val").textContent="—"; } });
+  });
+}
+function rsiFromBars(data){
+  if(!data || !data.length) return null;
+  const rs = rsiCalc(data,14,"close");
+  for(let i=rs.length-1;i>=0;i--){ if(rs[i]&&rs[i].value!=null) return rs[i].value; }
+  return null;
+}
+async function fetchSpreadRsi(sym, tf){
+  const [a,b] = sym.split("/");
+  const [pa,pb] = await Promise.all([fetchKlines(a,tf), fetchKlines(b,tf)]);
+  if(!pa.length || !pb.length) return null;
+  return rsiFromBars(makeRatio(pa, pb));
 }
 
 function closePairCard(){
