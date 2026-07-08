@@ -32,6 +32,8 @@
   html.embed #toolbar{display:none !important;}
   html.embed #rightRail{display:none !important;}
   html.embed #topbar{left:0;}
+  /* App owns symbol search in embed mode → symbol name isn't a search trigger here. */
+  html.embed #symbolBox{cursor:default;pointer-events:none;}
   /* ── Multi-chart grid (iframe panels) ── */
   #chartGrid{display:none; position:absolute; top:38px; left:52px; right:0; bottom:0; z-index:35;
     background:var(--bg); gap:2px; grid-auto-rows:1fr;}
@@ -3006,6 +3008,7 @@ async function fetchTVResults(q){
 let symDlgState = null;  // {group, results, cur} while open
 
 function openAddSymbolDlg(groupName){
+  if(IS_EMBED) return;   // mobile app supplies its own symbol search in embed mode
   // default target = first section; create one if the list is somehow empty
   if(groupName==null){
     if(!GROUPS.length){ GROUPS.push({name:uniqueGroupName("SECTION"), symbols:[]}); saveGroups(); }
