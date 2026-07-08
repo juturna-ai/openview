@@ -27,6 +27,11 @@
   html.embed #watchlist{display:none;}
   html.embed #rightPanel{display:none !important;}   /* docked rail panels stay host-only */
   html.embed #topbar{right:0;}
+  /* Mobile app frames this page and provides its own toolbar → hide the engine's
+     floating drawing toolbar (left) and right rail so they don't overlap the chart. */
+  html.embed #toolbar{display:none !important;}
+  html.embed #rightRail{display:none !important;}
+  html.embed #topbar{left:0;}
   /* ── Multi-chart grid (iframe panels) ── */
   #chartGrid{display:none; position:absolute; top:38px; left:52px; right:0; bottom:0; z-index:35;
     background:var(--bg); gap:2px; grid-auto-rows:1fr;}
@@ -129,7 +134,7 @@
   #tzMenu.tz-fixed{position:fixed; z-index:130; max-height:60vh;}
   #symbolBox{font-weight:700; font-size:15px; letter-spacing:.3px; white-space:nowrap; cursor:pointer; padding:2px 6px; border-radius:5px;}
   #symbolBox:hover{background:var(--hover);}
-  #symbolBox #symSearchIcon{font-size:12px; margin-right:6px; opacity:.7;}
+  #symbolBox #symSearchIcon{display:inline-flex; align-items:center; margin-right:6px; opacity:.7;}
   #symbolBox .exch{color:var(--muted); font-weight:400; font-size:12px; margin-left:6px;}
   /* ── Timeframe selector (TradingView-style sectioned dropdown) ── */
   .tf-group{display:flex; align-items:center; gap:2px; margin-left:8px;}
@@ -199,7 +204,7 @@
   #rsiLabel b{font-weight:600;}
   #rsi{width:100%; height:100%;}
 
-  #watchlist{width:var(--wl-w,300px); background:var(--panel); border-left:1px solid var(--border);
+  #watchlist{width:var(--wl-w,300px); background:var(--bg); border-left:1px solid var(--border);
     display:flex; flex-direction:column; overflow:hidden; position:relative;}
   #wlResize{position:absolute; left:-3px; top:0; bottom:0; width:6px; cursor:col-resize; z-index:10;}
   #wlResize:hover{background:rgba(41,98,255,.3);}
@@ -225,7 +230,8 @@
     border-radius:4px; font-weight:400;}
   #wlAdd:hover{color:#fff; background:var(--hover);}
   .wlActions{display:flex; align-items:center; gap:2px;}
-  .wlActions span{cursor:pointer; color:var(--muted); font-size:15px; line-height:1; padding:2px 6px; border-radius:4px; font-weight:400;}
+  .wlActions span{cursor:pointer; color:var(--muted); line-height:1; padding:4px 6px; border-radius:4px;
+    display:inline-flex; align-items:center;}
   .wlActions span:hover{color:#fff; background:var(--hover);}
   #wlCols{display:flex; padding:6px 12px 6px 14px; font-size:11px; color:var(--muted);
     border-bottom:1px solid var(--border);}
@@ -256,7 +262,11 @@
   .section.gdrop-above{box-shadow:inset 0 2px 0 0 var(--accent);}
   .section.gdrop-below{box-shadow:inset 0 -2px 0 0 var(--accent);}
   .section.gdragging{opacity:.5;}
-  .row{display:flex; align-items:center; height:28px; padding:0 10px 0 8px; cursor:pointer; position:relative;}
+  /* Rows are separated by a thin divider (TradingView-style list). The border uses the
+     theme --border so it reads faint in dark and light. box-shadow (not border) draws
+     it so the 1px line never shifts row height / the flex baseline. */
+  .row{display:flex; align-items:center; height:32px; padding:0 10px 0 8px; cursor:pointer; position:relative;
+    box-shadow:inset 0 -1px 0 0 var(--border);}
   .row:hover{background:var(--hover);}
   .row.active{background:#1c2c4a;}
   .row.dragging{opacity:.4;}
@@ -279,8 +289,8 @@
   .row .sym .exbadge{flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:clip; white-space:nowrap;
     font-size:9px; font-weight:600; letter-spacing:.3px; color:var(--muted);
     background:#2a2e39; border-radius:3px; padding:1px 4px; text-transform:uppercase;}
-  .row .ic{width:18px; height:18px; border-radius:50%; flex-shrink:0; object-fit:contain;
-    background:#2a2e39; color:#fff; font-size:8px; display:flex; align-items:center;
+  .row .ic{width:20px; height:20px; border-radius:50%; flex-shrink:0; object-fit:contain;
+    background:#2a2e39; color:#fff; font-size:9px; display:flex; align-items:center;
     justify-content:center; font-weight:700;}
   .row .last{width:var(--wl-c2,72px); text-align:right; font-size:12px; font-variant-numeric:tabular-nums; color:#d1d4dc;}
   .row .chgabs{width:var(--wl-c3,60px); text-align:right; font-size:11px; font-variant-numeric:tabular-nums;}
@@ -294,9 +304,13 @@
 
   /* ── topbar buttons ── */
   .tbtn{background:transparent; border:none; color:#d1d4dc; font-size:12px; cursor:pointer;
-    padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:4px; height:28px;}
+    padding:5px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; height:28px;}
   .tbtn:hover{background:var(--hover);}
   .tbtn:disabled{opacity:.35; cursor:default;} .tbtn:disabled:hover{background:transparent;}
+  /* Professional stroke icons (replace emoji) across topbar + watchlist header. */
+  .tbtn svg, .wlActions svg, #symSearchIcon svg{width:15px; height:15px; flex:none;
+    fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round;}
+  .tbtn.icon-only{padding:5px 7px;}
 
   /* ── sub-panes for separate-pane indicators (MACD, Stoch, etc.) ── */
   #subPanes{display:none; flex-direction:column; flex:0 1 auto; min-height:0;}
@@ -637,7 +651,7 @@
   <div id="toolbar"></div>
   <div id="main">
     <div id="topbar">
-      <span id="symbolBox" title="Search symbols"><span id="symSearchIcon">🔍</span><span id="symName">NEAR-USD/INJ-USD</span><span class="exch">· <span id="exName">Coinbase</span> · <span id="tfName">1D</span></span></span>
+      <span id="symbolBox" title="Search symbols"><span id="symSearchIcon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg></span><span id="symName">NEAR-USD/INJ-USD</span><span class="exch">· <span id="exName">Coinbase</span> · <span id="tfName">1D</span></span></span>
       <span class="tbdiv"></span>
       <div class="tf-group" id="tfGroup">
         <div class="tf-sel" id="tfSel">
@@ -657,11 +671,11 @@
         </div>
         <div class="tf-menu" id="ctMenu"><!-- built by JS from CHART_TYPES --></div>
       </div>
-      <button class="tbtn" id="btnCompare" title="Compare / overlay another symbol">＋ Compare</button>
+      <button class="tbtn" id="btnCompare" title="Compare / overlay another symbol"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Compare</button>
       <span class="tbdiv"></span>
-      <button class="tbtn" id="btnIndicators">⊞ Indicators</button>
-      <button class="tbtn" id="btnAlert" title="Click: create alert · Right-click: manage alerts">🔔 Alert</button>
-      <button class="tbtn" id="btnScript" title="Write a custom indicator (OpenView Script)">ƒ Script</button>
+      <button class="tbtn" id="btnIndicators"><svg viewBox="0 0 24 24"><path d="M3 17l4-6 3 4 3-6 4 8"/><path d="M3 20h18"/></svg> Indicators</button>
+      <button class="tbtn" id="btnAlert" title="Click: create alert · Right-click: manage alerts"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7z"/><path d="M10.5 20a1.5 1.5 0 0 0 3 0"/></svg> Alert</button>
+      <button class="tbtn" id="btnScript" title="Write a custom indicator (OpenView Script)"><svg viewBox="0 0 24 24"><path d="M15 5h-2.5A2.5 2.5 0 0 0 10 7.5V9M7.5 13H13M8 19a2 2 0 0 0 2-2v-7"/></svg> Script</button>
       <!-- Price-scale mode toggle + timezone selector are relocated to the bottom bar by JS at boot -->
       <button class="tbtn" id="btnScale" title="Price scale: Normal / Log / Percent">⤢ Auto</button>
       <div class="tf-sel" id="tzSel" title="Chart timezone">
@@ -672,7 +686,7 @@
         <div class="tf-menu" id="tzMenu"><!-- built by JS from TIMEZONES --></div>
       </div>
       <span class="tbspacer"></span>
-      <button class="tbtn" id="btnSnap" title="Save chart screenshot (PNG)">📷</button>
+      <button class="tbtn icon-only" id="btnSnap" title="Save chart screenshot (PNG)"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>
       <div class="tf-sel" id="layoutSel" title="Chart layout">
         <div class="tf-sel-btn" id="layoutSelBtn"><span class="tf-sel-label" id="layoutSelLabel">▢ 1</span><span class="caret">▾</span></div>
         <div class="tf-menu" id="layoutMenu">
@@ -682,14 +696,13 @@
           <div class="tf-opt" data-layout="4">⊞&nbsp; Four (grid)</div>
         </div>
       </div>
-      <button class="tbtn" id="btnReplay" title="Bar replay">⏮ Replay</button>
+      <button class="tbtn" id="btnReplay" title="Bar replay"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 5l-9 7 9 7z"/></svg> Replay</button>
       <div class="tbdiv"></div>
       <button class="tbtn" id="btnUndo" title="Undo (Ctrl+Z)" disabled>↩</button>
       <button class="tbtn" id="btnRedo" title="Redo (Ctrl+Y)" disabled>↪</button>
-      <button class="tbtn" id="btnObjTree" title="Object tree (drawings & indicators)">🗂</button>
-      <button class="tbtn" id="btnSettings" title="Chart settings">⚙</button>
-      <button class="tbtn" id="btnTheme" title="Toggle light / dark theme">🌙</button>
-      <button class="tbtn" id="btnFull" title="Fullscreen">⛶</button>
+      <button class="tbtn icon-only" id="btnObjTree" title="Object tree (drawings & indicators)"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.2-8 4.2-8-4.2L12 3z"/><path d="M4 12l8 4.2 8-4.2"/><path d="M4 16.5l8 4.2 8-4.2"/></svg></button>
+      <button class="tbtn icon-only" id="btnSettings" title="Chart settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1M18.4 18.4l-2.1-2.1M7.7 7.7L5.6 5.6"/></svg></button>
+      <button class="tbtn icon-only" id="btnFull" title="Fullscreen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
       <span id="status"><span class="dot"></span>Live</span>
     </div>
     <!-- Multi-chart grid overlay (iframe panels); shown when layout != single -->
@@ -739,9 +752,9 @@
     <div id="wlResize" title="Drag to resize"></div>
     <div id="wlHead"><span id="wlNameBtn" title="Switch watchlist"><span id="wlName">comeback</span> <span class="sub">▾</span></span>
       <span class="wlActions">
-        <span id="wlImport" title="Import watchlist (.txt)">⭳</span>
-        <span id="wlExport" title="Export watchlist (.txt)">⭱</span>
-        <span id="wlAdd" title="Add symbol">＋</span>
+        <span id="wlImport" title="Import watchlist (.txt)"><svg viewBox="0 0 24 24"><path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg></span>
+        <span id="wlExport" title="Export watchlist (.txt)"><svg viewBox="0 0 24 24"><path d="M12 14V4M8 8l4-4 4 4M5 19h14"/></svg></span>
+        <span id="wlAdd" title="Add symbol"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
       </span>
       <input type="file" id="wlImportFile" accept=".txt,text/plain" style="display:none">
       <div id="wlNameMenu" class="popmenu"></div>
@@ -2448,20 +2461,31 @@ chart.subscribeCrosshairMove(p=>{
   const col = c.close>=c.open ? "var(--green)":"var(--red)";
   document.getElementById("ohlc").innerHTML =
     `O<b>${fmt(c.open)}</b> H<b>${fmt(c.high)}</b> L<b>${fmt(c.low)}</b> C<b style="color:${col}">${fmt(c.close)}</b>`;
-  // Embed panel: relay crosshair time to the grid host for cross-panel sync.
-  if(IS_EMBED && p.time!=null && !_xhairFromParent){ try{ parent.postMessage({fvx:"crosshair", time:p.time}, "*"); }catch(e){} }
+  // NOTE: cross-panel crosshair sync is NOT relayed from here. The overlay canvas eats
+  // the real mousemove and drives the crosshair PROGRAMMATICALLY via updateCrosshair →
+  // setCrosshairPosition, so this callback fires identically for a genuine local hover
+  // AND for a host-driven set — relaying here couldn't tell them apart and bounced
+  // (A→host→B→host→A). The relay lives in updateCrosshair / the dcanvas mouseleave
+  // (genuine-hover paths only); see relayXhairToGrid().
 });
+// Embed→host crosshair relay, called ONLY from the genuine local-hover paths (the
+// overlay canvas mousemove/leave). A panel that merely received a crosshair from the
+// host never runs these, so the shared vertical can't echo back and bounce.
+function relayXhairToGrid(time){
+  if(!IS_EMBED) return;
+  try{ parent.postMessage({fvx:"crosshair", time:time==null?null:time}, "*"); }catch(e){}
+}
 // Grid-panel message sync: receive crosshair (draw a matching vertical) + symbol /
 // interval / visible-range changes (SYNC IN LAYOUT). _syncFromParent guards echo
 // loops: a change applied FROM the host must not re-emit back to it.
-let _xhairFromParent=false;
 let _syncFromParent=false;
 window.addEventListener("message", e=>{
   const d=e.data; if(!d||!d.fvx) return;
   if(d.fvx==="crosshair" && IS_EMBED){
-    _xhairFromParent=true;
+    // Draw the shared vertical at the host-relayed time. Safe to just set it: this
+    // panel relays ONLY from its own overlay-canvas hover (relayXhairToGrid), never
+    // from a host-driven set, so this can't echo back and bounce.
     try{ if(d.time==null) chart.clearCrosshairPosition(); else chart.setCrosshairPosition(0, d.time, candle); }catch(err){}
-    setTimeout(()=>{ _xhairFromParent=false; },0);
   }
   if(d.fvx==="setsym" && IS_EMBED && d.sym){ _syncFromParent=true; activeSymbol=d.sym; loadChart(d.sym, activeTF).finally(()=>{ _syncFromParent=false; }); }
   if(d.fvx==="settf" && IS_EMBED && d.tf){ _syncFromParent=true; activeTF=d.tf; loadChart(activeSymbol, d.tf).finally(()=>{ _syncFromParent=false; }); }
@@ -4312,12 +4336,13 @@ function updateCrosshair(p){
   try{
     const price=candle.coordinateToPrice(p.y);
     const time=chart.timeScale().coordinateToTime(p.x);
-    if(price==null || time==null){ chart.clearCrosshairPosition(); syncCrosshairToPanes(null, chart); return; }
+    if(price==null || time==null){ chart.clearCrosshairPosition(); syncCrosshairToPanes(null, chart); relayXhairToGrid(null); return; }
     chart.setCrosshairPosition(price, time, candle);
     updateOhlcLegend(time);
     updateIndLegendValues(time);         // indicator readouts follow the crosshair
     updateDataWindow(time);              // Data window tab (docked panel) too
     syncCrosshairToPanes(time, chart);   // relay onto RSI + indicator/script panes
+    relayXhairToGrid(time);              // relay onto other GRID PANELS (embed only)
   }catch(e){}
 }
 // Show the OHLC of the bar nearest the crosshair time (or the hovered price when
@@ -4578,6 +4603,7 @@ dcanvas.addEventListener("mouseleave", ()=>{
   draw.mouse=null;
   try{ chart.clearCrosshairPosition(); }catch(e){}
   syncCrosshairToPanes(null, chart);     // drop the shared crosshair off every pane
+  relayXhairToGrid(null);                // clear the shared vertical on other grid panels
   updateIndLegendValues(null);           // clear indicator hover readouts
   updateDataWindow(null);                // Data window falls back to the latest bar
   if(lastData.length){ updateOhlcLegend(lastData[lastData.length-1].time); }  // back to latest bar
@@ -8046,29 +8072,10 @@ function toggleFullscreen(){
 document.getElementById("btnFull").onclick=toggleFullscreen;
 document.addEventListener("fullscreenchange", ()=>{ setTimeout(()=>{ resize(); sizeCanvas(); },100); });
 
-// ── Light / dark theme ──
-// Toggles <html class="light"> (CSS vars flip) and re-themes every LWC chart's
-// background / text / grid colors to match. Persisted in localStorage["fv_theme"].
-function applyTheme(light){
-  document.documentElement.classList.toggle("light", light);
-  const btn=document.getElementById("btnTheme"); if(btn) btn.textContent=light?"☀":"🌙";
-  const bg = light?"#ffffff":"#131722", txt = light?"#131722":"#d1d4dc";
-  const grid = light?"#e0e3eb":"#1e222d", border = light?"#e0e3eb":"#2a2e39";
-  const opts={ layout:{ background:{color:bg}, textColor:txt },
-    grid:{ vertLines:{color:grid}, horzLines:{color:grid} },
-    rightPriceScale:{ borderColor:border }, timeScale:{ borderColor:border } };
-  const all=new Set([chart]);
-  try{ if(typeof charts!=="undefined") charts.forEach(c=>all.add(c)); }catch(e){}
-  try{ if(typeof rsiChart!=="undefined") all.add(rsiChart); }catch(e){}
-  try{ if(typeof indicators!=="undefined") indicators.forEach(i=>{ if(i.subChart) all.add(i.subChart); }); }catch(e){}
-  try{ if(typeof scripts!=="undefined") scripts.forEach(s=>{ if(s.subChart) all.add(s.subChart); }); }catch(e){}
-  all.forEach(c=>{ try{ c.applyOptions(opts); }catch(e){} });
-  try{ if(typeof redraw==="function") redraw(); }catch(e){}
-  try{ localStorage.setItem("fv_theme", light?"light":"dark"); }catch(e){}
-}
-document.getElementById("btnTheme").onclick=()=>applyTheme(!document.documentElement.classList.contains("light"));
-// restore persisted theme (default dark)
-try{ if(localStorage.getItem("fv_theme")==="light") applyTheme(true); }catch(e){}
+// ── Dark theme only (light theme removed) ──
+// Ensure any previously persisted light preference is cleared and forced to dark.
+document.documentElement.classList.remove("light");
+try{ localStorage.removeItem("fv_theme"); }catch(e){}
 
 // ── Docked right-sidebar panel controller (TradingView parity) ──
 // Every right-rail icon opens its panel DOCKED here, replacing the watchlist
@@ -8460,14 +8467,28 @@ function updateNotifBadge(){
 }
 function openNotificationsPanel(){
   const seen=notifSeenTs();
+  const clearBtn = ALERT_LOG.length
+    ? '<div style="display:flex;justify-content:flex-end;margin-bottom:8px">'
+        +'<button id="notifClear" style="appearance:none;border:1px solid var(--border);background:var(--panel);'
+        +'color:var(--muted);font-size:11px;font-weight:500;padding:4px 10px;border-radius:6px;cursor:pointer">Clear all</button></div>'
+    : '';
   const rows = ALERT_LOG.length
     ? ALERT_LOG.slice(0,50).map(e=>'<div style="padding:6px 0;border-top:1px solid var(--border);font-size:11px'+(e.ts>seen?';background:rgba(41,98,255,0.06)':'')+'">'
         +'<div style="color:var(--text)">'+escHtml(e.text||"")+'</div>'
         +'<div style="color:var(--muted);font-size:10px">'+escHtml(e.symbol||"")+' · '+new Date(e.ts).toLocaleString()+'</div></div>').join("")
     : '<div style="color:var(--muted);font-size:12px">No alerts fired yet.</div>';
-  railPanelShell("Notifications", rows, "notif");
+  railPanelShell("Notifications", clearBtn+rows, "notif");
+  const cb=document.getElementById("notifClear");
+  if(cb) cb.onclick=clearNotifications;
   try{ localStorage.setItem("fv_notif_seen", String(Date.now())); }catch(e){}
   updateNotifBadge();   // clears the badge (all read now)
+}
+// Clear the fired-alert history (the Notifications list) and refresh the panel + badge.
+function clearNotifications(){
+  ALERT_LOG=[];
+  try{ localStorage.setItem("fv_alert_log","[]"); }catch(e){}
+  openNotificationsPanel();   // re-render (now shows the empty state)
+  updateNotifBadge();
 }
 // ── Help: keyboard-shortcuts dialog ──
 const KEY_SHORTCUTS=[
