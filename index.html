@@ -35,7 +35,7 @@
   /* App owns symbol search in embed mode → symbol name isn't a search trigger here. */
   html.embed #symbolBox{cursor:default;pointer-events:none;}
   /* Narrow phone frame: let the SMA/indicator legend wrap instead of overflowing.
-     Cap the legend so it stops BEFORE the right price-axis gutter (84px in embed) —
+     Cap the legend so it stops BEFORE the right price-axis gutter (72px + margin) —
      otherwise the wrapped SMA line lands on top of the price scale. */
   html.embed #chartLegend{max-width:calc(100% - 106px);}
   html.embed #maLegend{white-space:normal; width:auto; max-width:100%;}
@@ -2650,17 +2650,21 @@ window.addEventListener("message", e=>{
     setTimeout(()=>{ _syncFromParent=false; },0);
   }
   // Named-layout restore: replace this panel's indicator set (mirrors loadIndTemplate).
+  // Cap the batch — window messages are untrusted, an unbounded list is a tab-DoS.
   if(d.fvx==="setinds" && IS_EMBED && Array.isArray(d.inds)){
     try{
       [...indicators].forEach(i=>removeIndicator(i.id, true)); indicators.length=0;
-      d.inds.forEach(r=>addIndicator(r.type,{params:r.params, hidden:r.hidden, silent:true}));
+      d.inds.slice(0,24).forEach(r=>addIndicator(r.type,{params:r.params, hidden:r.hidden, silent:true}));
       renderIndLegend(); layoutPanes(); saveIndicators();
     }catch(err){}
   }
   // Host → embed: activate a drawing tool (the mobile app's own toolbar drives this
-  // engine, since its native drawing toolbar is hidden in embed mode). tool must be a
-  // valid TOOLS key, e.g. "trend" (trendline) or "cross" (crosshair / deselect).
-  if(d.fvx==="settool" && IS_EMBED && typeof d.tool==="string"){ try{ selectTool(d.tool); }catch(err){} }
+  // engine, since its native drawing toolbar is hidden in embed mode). Only accept real
+  // TOOLS keys — an unknown key would set draw.tool to garbage and the next chart click
+  // silently pushes an invisible unknown-type shape into draw.shapes/localStorage.
+  if(d.fvx==="settool" && IS_EMBED && typeof d.tool==="string" && TOOLS.some(t=>t.key===d.tool)){
+    try{ selectTool(d.tool); }catch(err){}
+  }
 });
 // Embed → host: emit visible-range changes for Time/Date-range sync.
 if(IS_EMBED){
