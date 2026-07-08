@@ -6100,11 +6100,15 @@ function redraw(){
   }
   if(draw.pending) drawShape(draw.pending, true, false);
   dctx.restore();
-  // PASS 2 — solid gutter strip + the price-tag pills on top of it (unclipped), so the
-  // axis reads solid like the library/RSI panes and the pills stay fully visible.
-  paintAxisGutter(W,H);
+  // PASS 2 — price-tag pills, unclipped, over the axis gutter. NO background fill here:
+  // the overlay sits ABOVE the library's axis canvas, so painting the gutter would hide
+  // the axis tick labels. The library's axis is already opaque — clipping pass 1 is what
+  // keeps overlay lines/grid from bleeding over it.
   const q=_tagQueue; _tagQueue=null;
-  for(const t of q) paintPriceTag(t.price,t.y,t.color,W);
+  for(const t of q){
+    if(t.text!=null) paintGutterTag(t.text,t.y,t.color,W,t.font);
+    else paintPriceTag(t.price,t.y,t.color,W);
+  }
   syncObjTreeSel();                                   // keep Object tree row highlight in step
 }
 let _tagQueue = null;
@@ -6153,27 +6157,6 @@ const _GRID_STEPS = [
   86400, 172800, 604800,                        // 1d, 2d, 1w
   1209600, 2592000, 7776000, 15552000, 31536000 // 2w, 1mo, 3mo, 6mo, 1y
 ];
-// Solid backdrop over the right price-axis gutter. The overlay canvas (#draw) is
-// transparent and spans the full pane width, so grid lines, drawings, and the
-// price-tag pills all render across the gutter with the chart showing through
-// behind them. Fill the gutter with the chart's own background so it reads as a
-// solid axis strip (like the library's own axis and the RSI pane).
-function axisBg(){
-  // Match the chart's actual background: custom setting first, else theme --bg.
-  try{ if(typeof CHART_SETTINGS!=="undefined" && CHART_SETTINGS.bg) return CHART_SETTINGS.bg; }catch(e){}
-  try{ const v=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim(); if(v) return v; }catch(e){}
-  return "#131722";
-}
-function paintAxisGutter(W,H){
-  const gw=axisW(); if(!(gw>0)) return;
-  dctx.save();
-  dctx.fillStyle=axisBg();
-  dctx.fillRect(W-gw, 0, gw, H);
-  // subtle 1px separator matching the axis border
-  dctx.strokeStyle="rgba(120,123,134,0.25)"; dctx.lineWidth=1;
-  dctx.beginPath(); dctx.moveTo(Math.round(W-gw)+0.5, 0); dctx.lineTo(Math.round(W-gw)+0.5, H); dctx.stroke();
-  dctx.restore();
-}
 function drawTimeGrid(W,H){
   if(!lastData.length) return;
   const t0=xToTime(0), t1=xToTime(W);
@@ -6635,7 +6618,14 @@ function arrowHead(x,y,dir,color){
   dctx.closePath(); dctx.fill(); dctx.restore();
 }
 // Colored price pill pinned to the right axis, like TradingView's horizontal line tag.
+// During redraw()'s clipped pass, gutter pills are queued and painted afterwards on
+// the opaque strip (see PASS 2). Outside redraw (rare direct callers) they paint now.
 function priceTag(price,y,color,W){
+  if(price==null) return;
+  if(_tagQueue){ _tagQueue.push({price,y,color}); return; }
+  paintPriceTag(price,y,color,W);
+}
+function paintPriceTag(price,y,color,W){
   if(price==null) return;
   const txt=fmt(price);
   dctx.save(); dctx.font="11px sans-serif";
@@ -6645,6 +6635,15 @@ function priceTag(price,y,color,W){
   if(dctx.roundRect) dctx.roundRect(x,y-h/2,w,h,3); else dctx.rect(x,y-h/2,w,h);
   dctx.fill();
   dctx.fillStyle="#fff"; dctx.textBaseline="middle"; dctx.fillText(txt,x+5,y+0.5);
+  dctx.restore();
+}
+// Right-edge gutter pill with arbitrary text (e.g. alert 🔔 tags), painted on the
+// opaque gutter strip in redraw's PASS 2.
+function paintGutterTag(txt,y,color,W,font){
+  dctx.save(); dctx.font=font||"10px sans-serif";
+  const w=dctx.measureText(txt).width+10;
+  dctx.fillStyle=color; dctx.fillRect(W-w-2,y-8,w,16);
+  dctx.fillStyle="#fff"; dctx.textBaseline="middle"; dctx.fillText(txt,W-w+2,y+0.5);
   dctx.restore();
 }
 
@@ -8427,9 +8426,11 @@ function drawAlertLines(){
     const lineCol=a.active?alertLineColor:"#888";        // dotted line colour (default white)
     dctx.save(); dctx.strokeStyle=lineCol; dctx.setLineDash([6,4]); dctx.lineWidth=1;
     dctx.beginPath(); dctx.moveTo(0,y); dctx.lineTo(W,y); dctx.stroke(); dctx.setLineDash([]);
-    // right-edge price tag (over the axis)
-    const txt="🔔 "+fmt(a.value); dctx.font="10px sans-serif"; const w=dctx.measureText(txt).width+10;
-    dctx.fillStyle=col; dctx.fillRect(W-w-2,y-8,w,16); dctx.fillStyle="#fff"; dctx.fillText(txt,W-w+2,y+3);
+    // right-edge price tag (over the axis) — queued so it paints on the opaque gutter
+    // strip in redraw's PASS 2 instead of the clipped, see-through pass.
+    const txt="🔔 "+fmt(a.value);
+    if(_tagQueue) _tagQueue.push({text:txt,y,color:col,font:"10px sans-serif"});
+    else paintGutterTag(txt,y,col,W,"10px sans-serif");
 
     let trash=null;
     if(draw.alertHover===a.id){
