@@ -6083,7 +6083,14 @@ function defaultFibConfig(){ const d=loadFibDefault(); return d?JSON.parse(JSON.
 
 function redraw(){
   const W=dcanvas.clientWidth, H=dcanvas.clientHeight;
+  const gw=axisW();                                   // right price-axis gutter width
   dctx.clearRect(0,0,W,H);
+  // PASS 1 — plot content, clipped to the plot area so grid lines and drawings never
+  // bleed into the transparent right price-axis gutter (the bug: the #draw overlay is
+  // see-through, so anything drawn full-width showed the chart behind the axis).
+  dctx.save();
+  dctx.beginPath(); dctx.rect(0,0,Math.max(0,W-gw),H); dctx.clip();
+  _tagQueue = [];                                     // priceTag() collects gutter pills here instead of drawing now
   drawTimeGrid(W,H);                                  // sparse vertical grid at round time intervals
   if(window.volProfileOn) drawVolumeProfile(W,H);     // horizontal volume-by-price histogram
   if(draw.sessions!==false) drawSessionBreaks(W,H);   // day-boundary lines (intraday only)
@@ -6092,8 +6099,15 @@ function redraw(){
     for(const s of draw.shapes){ if(s.hidden) continue; drawShape(s, s.id===draw.sel, s.id===draw.hover); }
   }
   if(draw.pending) drawShape(draw.pending, true, false);
+  dctx.restore();
+  // PASS 2 — solid gutter strip + the price-tag pills on top of it (unclipped), so the
+  // axis reads solid like the library/RSI panes and the pills stay fully visible.
+  paintAxisGutter(W,H);
+  const q=_tagQueue; _tagQueue=null;
+  for(const t of q) paintPriceTag(t.price,t.y,t.color,W);
   syncObjTreeSel();                                   // keep Object tree row highlight in step
 }
+let _tagQueue = null;
 
 // Volume Profile: horizontal histogram of traded volume by price bucket over the
 // VISIBLE bars, drawn on the left edge (TradingView "Volume Profile Visible Range").
@@ -6139,6 +6153,27 @@ const _GRID_STEPS = [
   86400, 172800, 604800,                        // 1d, 2d, 1w
   1209600, 2592000, 7776000, 15552000, 31536000 // 2w, 1mo, 3mo, 6mo, 1y
 ];
+// Solid backdrop over the right price-axis gutter. The overlay canvas (#draw) is
+// transparent and spans the full pane width, so grid lines, drawings, and the
+// price-tag pills all render across the gutter with the chart showing through
+// behind them. Fill the gutter with the chart's own background so it reads as a
+// solid axis strip (like the library's own axis and the RSI pane).
+function axisBg(){
+  // Match the chart's actual background: custom setting first, else theme --bg.
+  try{ if(typeof CHART_SETTINGS!=="undefined" && CHART_SETTINGS.bg) return CHART_SETTINGS.bg; }catch(e){}
+  try{ const v=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim(); if(v) return v; }catch(e){}
+  return "#131722";
+}
+function paintAxisGutter(W,H){
+  const gw=axisW(); if(!(gw>0)) return;
+  dctx.save();
+  dctx.fillStyle=axisBg();
+  dctx.fillRect(W-gw, 0, gw, H);
+  // subtle 1px separator matching the axis border
+  dctx.strokeStyle="rgba(120,123,134,0.25)"; dctx.lineWidth=1;
+  dctx.beginPath(); dctx.moveTo(Math.round(W-gw)+0.5, 0); dctx.lineTo(Math.round(W-gw)+0.5, H); dctx.stroke();
+  dctx.restore();
+}
 function drawTimeGrid(W,H){
   if(!lastData.length) return;
   const t0=xToTime(0), t1=xToTime(W);
