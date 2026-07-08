@@ -273,8 +273,11 @@
   .row .flag{flex:none; font-size:8px; line-height:1; text-align:center; width:0; overflow:visible;}
   .row .flag:not(:empty){width:9px; margin-right:1px;}
   .row .sym{flex:1; display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;}
-  .row .sym .nm{font-size:12px; font-weight:500; color:#d1d4dc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .row .sym .exbadge{flex:none; font-size:9px; font-weight:600; letter-spacing:.3px; color:var(--muted);
+  /* Ticker holds its space; the exchange badge is the first thing to give when the
+     watchlist is narrowed (min-width:0 lets it shrink to nothing before the nm). */
+  .row .sym .nm{flex:1 0 auto; min-width:0; font-size:12px; font-weight:500; color:#d1d4dc; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .row .sym .exbadge{flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:clip; white-space:nowrap;
+    font-size:9px; font-weight:600; letter-spacing:.3px; color:var(--muted);
     background:#2a2e39; border-radius:3px; padding:1px 4px; text-transform:uppercase;}
   .row .ic{width:18px; height:18px; border-radius:50%; flex-shrink:0; object-fit:contain;
     background:#2a2e39; color:#fff; font-size:8px; display:flex; align-items:center;
@@ -868,6 +871,14 @@ function legShort(leg){
   if(r.exchange.id==="COINBASE") return r.rest;
   if(r.exchange.id==="YAHOO")    return r.rest;
   return r.rest+(r.isPerp?".P":"");
+}
+// Clean display label for any symbol: a plain leg → its ticker; a spread A/B →
+// each leg shortened (drops BINANCE:/BYBIT: prefixes), e.g.
+// "BINANCE:NEARUSDT/BINANCE:INJUSDT" → "NEARUSDT/INJUSDT".
+function symLabel(sym){
+  return String(sym).includes("/")
+    ? String(sym).split("/").map(legShort).join("/")
+    : legShort(sym);
 }
 // Venue label for the live-status line, derived from the active symbol (handles ratios).
 function activeVenueLabel(){
@@ -2319,7 +2330,7 @@ async function loadChart(symbol, tf, keepView){
     if(window._fvBootLoadDone) try{ parent.postMessage({fvx:"panechange", sym:symbol, tf:tf}, "*"); }catch(e){}
     window._fvBootLoadDone = true;
   }
-  document.getElementById("symName").textContent = symbol.includes("/") ? symbol : legShort(symbol);
+  document.getElementById("symName").textContent = symLabel(symbol);
   // venue label: for a ratio, show both sides' venues if they differ
   const exEl = document.getElementById("exName");
   if(exEl){
@@ -2334,7 +2345,7 @@ async function loadChart(symbol, tf, keepView){
   document.getElementById("tfName").textContent = (TF[tf]||{}).label || tf;
   // Mirror symbol/tf/exchange into the floating on-chart legend row.
   const legSym=document.getElementById("legSym"), legMeta=document.getElementById("legMeta");
-  if(legSym) legSym.textContent = symbol.includes("/") ? symbol : legShort(symbol);
+  if(legSym) legSym.textContent = symLabel(symbol);
   if(legMeta) legMeta.textContent = "· "+((TF[tf]||{}).label||tf)+" · "+(document.getElementById("exName").textContent||"");
   // clear any stale "No data" error from the previous symbol and show progress.
   let paintedFromCache = false;
@@ -2502,7 +2513,7 @@ function sortedSymbols(symbols){
   if(!wlSort) return symbols;
   const key=wlSort.key;
   const val=(sym)=>{
-    if(key==="sym") return (sym.includes("/")?sym:legShort(sym)).toLowerCase();
+    if(key==="sym") return symLabel(sym).toLowerCase();
     const p=PRICE_CACHE[sym]||{};
     return key==="last"?(p.price??-Infinity) : key==="chg"?(p.chgAbs??-Infinity) : (p.chgPct??-Infinity);
   };
@@ -2547,7 +2558,7 @@ function buildWatchlist(){
       // Cleaner display: ratios verbatim; otherwise the venue ticker + a small
       // exchange tag (Binance/Bybit; Coinbase implied so left untagged).
       const exMeta = isRatio ? null : resolveLeg(sym).exchange;
-      const nmLabel = isRatio ? sym : legShort(sym);
+      const nmLabel = symLabel(sym);
       const exBadge = (exMeta && exMeta.id!=="COINBASE")
         ? `<span class="exbadge">${exMeta.label}</span>` : "";
       const flagCol = SYMBOL_FLAGS[sym];
@@ -3200,7 +3211,7 @@ function showSectionMenu(name, x, y){
 }
 // Right-click a watchlist row → flag it with a color (or clear the flag).
 function showRowMenu(sym, x, y){
-  const items=[ mi("Open "+ (sym.includes("/")?sym:legShort(sym)), ()=>{ const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click(); }), msep() ];
+  const items=[ mi("Open "+ symLabel(sym), ()=>{ const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click(); }), msep() ];
   FLAG_COLORS.forEach(c=> items.push(mi("Flag", ()=>setSymbolFlag(sym,c), c)));
   items.push(msep(), mi("Clear flag", ()=>setSymbolFlag(sym,null)));
   showCtx(x,y,items);
@@ -9094,12 +9105,12 @@ document.getElementById("btnCompare").onclick=()=>{
 function showSymbolInfo(x,y){
   const sym=activeSymbol;
   const rows=[];
-  rows.push(["Symbol", sym]);
+  rows.push(["Symbol", symLabel(sym)]);
   if(sym.includes("/")){
     const [a,b]=sym.split("/");
     rows.push(["Type","Spread / Ratio"]);
-    rows.push(["Numerator", a+" ("+resolveLeg(a).exchange.label+")"]);
-    rows.push(["Denominator", b+" ("+resolveLeg(b).exchange.label+")"]);
+    rows.push(["Numerator", legShort(a)+" ("+resolveLeg(a).exchange.label+")"]);
+    rows.push(["Denominator", legShort(b)+" ("+resolveLeg(b).exchange.label+")"]);
   } else {
     const r=resolveLeg(sym);
     rows.push(["Exchange", r.exchange.label]);

@@ -26,8 +26,7 @@ await p.evaluate(() => {
   PRODUCTS = [
     { leg:'NEAR-USD', id:'NEAR-USD', base:'NEAR', quote:'USD', name:'Near', exLabel:'Coinbase', isPerp:false },
     { leg:'INJ-USD',  id:'INJ-USD',  base:'INJ',  quote:'USD', name:'Injective', exLabel:'Coinbase', isPerp:false },
-  ];
-  window.loadProducts = () => Promise.resolve(PRODUCTS);
+  ];  // loadProducts() short-circuits when PRODUCTS is already set → no network.
 });
 
 // t1 — dialog opens with a Spread tab.
@@ -73,8 +72,14 @@ const t4 = await p.evaluate(async () => {
       && !symDlg.classList.contains('open');
 });
 
-const pass = t1 && t2 && t3 && t4 && errs.length===0;
-console.log(JSON.stringify({ t1, t2, t3, t4, errs }, null, 2));
+// t5 — display label drops venue prefixes: BINANCE:NEARUSDT/BINANCE:INJUSDT → NEARUSDT/INJUSDT.
+const t5 = await p.evaluate(() =>
+  symLabel('BINANCE:NEARUSDT/BINANCE:INJUSDT') === 'NEARUSDT/INJUSDT'
+  && symLabel('BINANCE:BTCUSDT.P/BYBIT:ETHUSDT') === 'BTCUSDT.P/ETHUSDT'
+  && symLabel('BTC-USD') === 'BTC-USD');
+
+const pass = t1 && t2 && t3 && t4 && t5 && errs.length===0;
+console.log(JSON.stringify({ t1, t2, t3, t4, t5, errs }, null, 2));
 console.log(pass ? 'PASS' : 'FAIL');
 await b.close();
 process.exit(pass ? 0 : 1);

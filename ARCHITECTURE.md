@@ -52,7 +52,7 @@ A watchlist entry is called a **leg**. The routing key is an exchange prefix:
 | `BYBIT:BTCUSDT.P` | Bybit linear perp | same, `category=linear` |
 | `YF:AAPL` | Yahoo Finance | stocks, ETFs, forex, metals, indices |
 
-`resolveLeg(leg)` parses the prefix and returns `{exchange, rest, isPerp, leg}`. Helper functions `legBase()` and `legShort()` derive the base ticker and display label.
+`resolveLeg(leg)` parses the prefix and returns `{exchange, rest, isPerp, leg}`. Helper functions `legBase()` and `legShort()` derive the base ticker and display label. `symLabel(sym)` is the display formatter used everywhere a symbol is shown (watchlist row, topbar `#symName`/`#legSym`, sort key, context menus, symbol-info popover): a plain leg → its `legShort`; a spread `A/B` → each leg run through `legShort` and rejoined, so `BINANCE:NEARUSDT/BINANCE:INJUSDT` renders as `NEARUSDT/INJUSDT` (venue prefixes stripped; no exchange badge on ratios). The raw prefixed leg is still what's stored and fetched.
 
 Coinbase and Binance/Bybit send permissive CORS headers, so the browser fetches them directly. Yahoo Finance does not; those calls are relayed through `proxyJSON()`.
 
@@ -471,7 +471,7 @@ For `price`-vs-`value` alerts, `redraw` calls `drawAlertLines()` (skipped entire
 
 **Floating on-chart legend** (`#chartLegend`, TradingView-style) — a semi-transparent box pinned top-left over the chart (inside `#chartWrap`), holding three stacked rows: `#legSymRow` (symbol · tf · exchange + OHLC), `#maLegend` (the six MAs, colored, tabular-nums), and `#indLegend` (one row per added indicator with eye/gear/× + hover value). The symbol row is synced in `loadChart`; OHLC via `updateOhlcLegend`. These values were moved off the top toolbar (which now holds only controls) to match TradingView. **`updateOhlcLegend(time)`** finds the bar nearest the crosshair (or the latest bar on load, from `renderData`) and renders `O H L C` plus the **change** (abs + %) vs the previous close, green/red.
 
-**Symbol search** — the top-bar symbol name (`#symbolBox`, with a 🔍 icon) is clickable → `openAddSymbolDlg(null)`, opening the `#symDlg` search modal (categories All/Coinbase/Binance/Bybit/Stocks, live-filtered, keyboard-navigable). Right-clicking it opens `showSymbolInfo` — a popover with the symbol's structured details (symbol, exchange/type or numerator/denominator for ratios, base/quote, timeframe, last).
+**Symbol search** — the top-bar symbol name (`#symbolBox`, with a 🔍 icon) is clickable → `openAddSymbolDlg(null)`, opening the `#symDlg` search modal (categories All/Coinbase/Binance/Bybit/Stocks/Spread, live-filtered, keyboard-navigable; the Spread tab builds an A/B ratio leg). Right-clicking it opens `showSymbolInfo` — a popover with the symbol's structured details (symbol, exchange/type or numerator/denominator for ratios, base/quote, timeframe, last).
 
 **Infinite scroll-back** — `chart.timeScale().subscribeVisibleLogicalRangeChange` fires `loadOlderHistory()` when the view's `from` index drops below 30 (near the left edge of loaded bars). It fetches a few older pages via `fetchOlderPages(leg, tf, oldestTime, pages)` (both legs re-`makeRatio`'d for spreads), prepends the bars to `lastData`, repaints with `keepView`, and shifts the visible logical range by the prepended count so the view doesn't jump. Guards: `_loadingOlder` (in-flight) and `_historyExhausted` (a short page = start of history, or the 50k-bar `MAX_BARS` ceiling is reached — the older batch is trimmed so `lastData` never exceeds 50k), both reset on symbol/TF change in `loadChart`.
 
@@ -541,11 +541,13 @@ HTML5 drag-and-drop via `wlDragWire(row)`. Dragging a row over another shows a b
 
 ### Add-symbol dialog — `openAddSymbolDlg`
 
-Opens `#symDlg` with a search input and exchange tabs (All / Coinbase / Binance / Bybit / TradingView). `loadProducts()` fetches the full product list from all four crypto venues in parallel via `Promise.allSettled` (a venue that fails is silently skipped). Results are cached in `PRODUCTS`.
+Opens `#symDlg` with a search input and exchange tabs (All / Coinbase / Binance / Bybit / TradingView / **Spread**). `loadProducts()` fetches the full product list from all four crypto venues in parallel via `Promise.allSettled` (a venue that fails is silently skipped). Results are cached in `PRODUCTS`.
 
 The "TradingView" tab fetches from Yahoo Finance's search endpoint (`/v1/finance/search`) via `fetchTVResults(q)` then `proxyJSON`. Results are cached in `tvCache` per query. `scheduleTVSearch(q)` debounces remote calls by 220 ms and guards against stale async responses with a sequence counter (`tvSeq`).
 
 `symMatches(q)` scores and ranks results: exact ID match = 100, exact base = 90, prefix = 80, name substring = 40. Yahoo results receive a baseline of 50 so relevant remote matches surface above loose crypto ones.
+
+**Spread tab — `renderSpreadBuilder`.** Selecting the **Spread** tab swaps the flat result list for a two-slot composer (`symDlgState.spread = {a, b, slot}`) that builds an `A/B` ratio leg (the app's original raison d'être — chart `NEAR-USD/INJ-USD` and any other pair). Two chips (Numerator A `/` Denominator B) sit above the same live search list; `symMatches` searches **every venue** for the Spread tab (both legs can come from anywhere — Coinbase, Binance, Bybit, or a Yahoo stock/FX/metal). Clicking a row (`chooseSpreadLeg`) fills the active slot and auto-advances A→B; the ✕ on a chip clears it. When both slots are filled, "Add spread" pushes `"<legA>/<legB>"` into the section via `pushSymbol` (which the existing `makeRatio` pipeline renders unchanged) and closes the dialog. Verified: `test/audit_spread_builder.mjs`.
 
 ### Live prices — `refreshPrices`
 
