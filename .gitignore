@@ -14,5 +14,10 @@ tmp/
 test/node_modules/
 test/*.png
 test/**/*.png
+test/screenshots/
+# Playwright tests also drop bare-filename screenshots at the repo root
+*.png
+!assets/*.png
+!images/*.png
 _docs/index.full.backup.html
 .vercel
