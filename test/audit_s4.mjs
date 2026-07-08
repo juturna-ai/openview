@@ -11,7 +11,7 @@ page.on('pageerror', e => consoleErrors.push('PAGEERROR: ' + e.message));
 const results = {};
 
 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-await page.waitForTimeout(3000);
+await page.waitForTimeout(4500);   // full app boot before the toolbar is interactive
 await page.screenshot({ path: 'test/s4_00_initial.png' });
 
 // ── Open Indicators dialog ──
@@ -34,6 +34,7 @@ const renderedCats = await page.locator('#indList .indcat').allTextContents();
 results.renderedCats = renderedCats;
 
 // ── Test search filter ──
+await page.locator('#indSearch').waitFor({ state: 'visible', timeout: 5000 });
 await page.fill('#indSearch', 'rsi');
 await page.waitForTimeout(200);
 results.searchRsiMatches = await page.locator('#indList .pi span:first-child').allTextContents();
@@ -107,7 +108,13 @@ if (await gearBtn.count()) {
   // change color if present
   const colorInput = page.locator('#settingsDlg input[type="color"]');
   if (await colorInput.count()) {
-    await colorInput.first().fill('#ff00ff');
+    // Native <input type="color"> can't be driven by Playwright .fill() reliably
+    // (visibility/editable checks flake on the OS color widget) — set the value and
+    // dispatch input/change the way a real pick would.
+    await page.evaluate(() => {
+      const el = document.querySelector('#settingsDlg input[type="color"]');
+      if (el) { el.value = '#ff00ff'; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }
+    });
     await page.waitForTimeout(300);
     results.colorChangedApplied = await page.evaluate(() => {
       const ind = indicators.find(i=>i.params && i.params.color);

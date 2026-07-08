@@ -11,7 +11,13 @@ const res = await page.evaluate(()=>{
   if(frames.length<2) return {err:'frames '+frames.length};
   const w0=frames[0].contentWindow, w1=frames[1].contentWindow;
   const info={ p0embed:w0.IS_EMBED, p1embed:w1.IS_EMBED, p0chart:!!w0.chart, p1chart:!!w1.chart, p0data:(w0.lastData||[]).length, p1data:(w1.lastData||[]).length };
-  if(!w1.chart){ return {info, note:'panel1 chart not ready'}; }
+  // Panel-1's iframe app must be fully booted (chart present AND its crosshair API
+  // available AND data loaded) before we can observe relayed crosshair calls. In a
+  // headless run without live exchange data the panel may never finish loading — skip
+  // gracefully instead of throwing on an undefined method.
+  if(!w1.chart || typeof w1.chart.setCrosshairPosition!=='function' || !(w1.lastData||[]).length){
+    return {info, note:'panel1 chart not ready (no data / API unavailable in this env)'};
+  }
   // patch panel1 setCrosshairPosition to observe
   let hit=0; const orig=w1.chart.setCrosshairPosition.bind(w1.chart);
   w1.chart.setCrosshairPosition=(...a)=>{ hit++; return orig(...a); };

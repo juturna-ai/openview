@@ -10,16 +10,16 @@ await page.waitForTimeout(5000);   // let prices load for sort
 const rowH = await page.evaluate(()=>{ const r=document.querySelector('.row'); return r?r.getBoundingClientRect().height:null; });
 const headersClickable = await page.locator('#wlCols span[data-sort]').count();
 
-// capture PRIVACY section order before + after sorting by Last
+// capture ALPHA section order before + after sorting by Last
 const orderBefore = await page.evaluate(()=>{
-  // GROUPS order (source of truth) for PRIVACY
-  const g=GROUPS.find(g=>g.name==='PRIVACY'); return g?g.symbols.slice():null;
+  // GROUPS order (source of truth) for ALPHA
+  const g=GROUPS.find(g=>g.name==='ALPHA'); return g?g.symbols.slice():null;
 });
 // click "Last" header to sort
 await page.locator('#wlCols span[data-sort="last"]').click();
 await page.waitForTimeout(500);
-const groupsUnchanged = await page.evaluate(sb=>{ const g=GROUPS.find(g=>g.name==='PRIVACY'); return JSON.stringify(g.symbols)===JSON.stringify(sb); }, orderBefore);
-// DOM order of PRIVACY rows after sort (should differ from GROUPS if prices vary)
+const groupsUnchanged = await page.evaluate(sb=>{ const g=GROUPS.find(g=>g.name==='ALPHA'); return g ? JSON.stringify(g.symbols)===JSON.stringify(sb) : null; }, orderBefore);
+// DOM order of ALPHA rows after sort (should differ from GROUPS if prices vary)
 const domAfter = await page.evaluate(()=>{
   const rows=Array.from(document.querySelectorAll('#wlBody .row')); return rows.map(r=>r.dataset.sym).slice(0,20);
 });

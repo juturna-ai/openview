@@ -2734,11 +2734,14 @@ function buildWatchlist(){
       if(isRatio){
         icon = `<span class="ic" style="background:#8e44ad">÷</span>`;
       } else if(NO_LOGO.has(base)){
-        icon = `<span class="ic" style="background:#2962ff">${base[0]}</span>`;
+        icon = `<span class="ic" style="background:#2962ff">${escHtml(base[0]||"")}</span>`;
       } else {
-        // <img>; if it 404s, swap to a letter circle on error
-        icon = `<img class="ic" src="${logoForBase(base)}" alt="${base}"
-          onerror="this.outerHTML='<span class=\\'ic\\' style=\\'background:#2962ff\\'>${base[0]}</span>'">`;
+        // <img>; if it 404s, swap to a letter circle on error. Escape the derived base
+        // (same discipline as the pair card) so a tampered/odd stored symbol can't
+        // inject markup into the watchlist row or the inline onerror handler.
+        const initial = escHtml(base[0]||"");
+        icon = `<img class="ic" src="${logoForBase(base)}" alt="${escHtml(base)}"
+          onerror="this.outerHTML='<span class=\\'ic\\' style=\\'background:#2962ff\\'>${initial}</span>'">`;
       }
       row.dataset.group = g.name;           // a symbol may live in >1 group; key edits by group+sym
       row.draggable = true;
@@ -4062,8 +4065,11 @@ async function refreshPrices(){
       const [a,b] = sym.split("/");
       const sa = stats[a], sb = stats[b];
       if(!sa || !sb) return;
+      // Guard against a zero/NaN denominator leg (degenerate/illiquid ticker) — an
+      // Infinity/NaN ratio would corrupt watchlist sort and change values.
+      if(!(sa.last>0) || !(sb.last>0)) return;
       price = sa.last / sb.last;
-      prev  = (sa.open && sb.open) ? sa.open/sb.open : price;
+      prev  = (sa.open>0 && sb.open>0) ? sa.open/sb.open : price;
     } else {
       const s = stats[sym];
       if(!s) return;
@@ -4103,8 +4109,10 @@ function fmtPrice(v){
   if(a >= 1000) return v.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
   if(a >= 1)    return v.toFixed(a>=100?2:3);
   if(a >= 0.001) return v.toFixed(a>=0.1?4:5);
-  // very small: show enough significant digits (e.g. BONK 0.00000424)
-  return v.toFixed(8).replace(/0+$/,"");
+  // very small: show enough significant digits (e.g. BONK 0.00000424). Strip trailing
+  // zeros, and a trailing dot too — values under 1e-8 round to "0.00000000" and would
+  // otherwise render as the malformed "0.".
+  return v.toFixed(8).replace(/0+$/,"").replace(/\.$/,"");
 }
 
 // ── Timeframe selector (TradingView-style sectioned dropdown) ──
@@ -6095,22 +6103,28 @@ function redraw(){
   dctx.save();
   dctx.beginPath(); dctx.rect(0,0,Math.max(0,W-gw),H); dctx.clip();
   _tagQueue = [];                                     // priceTag() collects gutter pills here instead of drawing now
-  drawTimeGrid(W,H);                                  // sparse vertical grid at round time intervals
-  if(window.volProfileOn) drawVolumeProfile(W,H);     // horizontal volume-by-price histogram
-  if(draw.sessions!==false) drawSessionBreaks(W,H);   // day-boundary lines (intraday only)
-  drawAlertLines();
-  if(!draw.hidden){
-    for(const s of draw.shapes){ if(s.hidden) continue; drawShape(s, s.id===draw.sel, s.id===draw.hover); }
+  // try/finally so a throw while drawing a malformed shape can't leave the clip (and an
+  // unbalanced save) applied to dctx — that would permanently corrupt every later frame.
+  try{
+    drawTimeGrid(W,H);                                // sparse vertical grid at round time intervals
+    if(window.volProfileOn) drawVolumeProfile(W,H);   // horizontal volume-by-price histogram
+    if(draw.sessions!==false) drawSessionBreaks(W,H); // day-boundary lines (intraday only)
+    drawAlertLines();
+    if(!draw.hidden){
+      for(const s of draw.shapes){ if(s.hidden) continue; drawShape(s, s.id===draw.sel, s.id===draw.hover); }
+    }
+    if(draw.pending) drawShape(draw.pending, true, false);
+  } finally {
+    dctx.restore();
   }
-  if(draw.pending) drawShape(draw.pending, true, false);
-  dctx.restore();
   // PASS 2 — price-tag pills, unclipped, over the axis gutter. NO background fill here:
   // the overlay sits ABOVE the library's axis canvas, so painting the gutter would hide
   // the axis tick labels. The library's axis is already opaque — clipping pass 1 is what
   // keeps overlay lines/grid from bleeding over it.
   const q=_tagQueue; _tagQueue=null;
   for(const t of q){
-    if(t.text!=null) paintGutterTag(t.text,t.y,t.color,W,t.font);
+    if(t.handle) paintHandle(t.x,t.y);
+    else if(t.text!=null) paintGutterTag(t.text,t.y,t.color,W,t.font);
     else paintPriceTag(t.price,t.y,t.color,W);
   }
   syncObjTreeSel();                                   // keep Object tree row highlight in step
@@ -6212,7 +6226,11 @@ function strokeLine(x1,y1,x2,y2,st){
   dctx.beginPath(); dctx.moveTo(x1,y1); dctx.lineTo(x2,y2); dctx.stroke();
   dctx.restore();
 }
-function handle(x,y){ dctx.save(); dctx.fillStyle="#fff"; dctx.strokeStyle="#2962ff"; dctx.lineWidth=1.5;
+// Selection handles must stay visible even when a shape endpoint sits in the right
+// price-axis gutter (which pass-1 clips). During redraw they queue and paint in the
+// unclipped pass 2, matching the pill-queue pattern; outside redraw they paint now.
+function handle(x,y){ if(_tagQueue){ _tagQueue.push({handle:true,x,y}); return; } paintHandle(x,y); }
+function paintHandle(x,y){ dctx.save(); dctx.fillStyle="#fff"; dctx.strokeStyle="#2962ff"; dctx.lineWidth=1.5;
   dctx.beginPath(); dctx.arc(x,y,4.5,0,7); dctx.fill(); dctx.stroke(); dctx.restore(); }
 
 function drawShape(s, selected, hovered){
@@ -7011,7 +7029,7 @@ function aroonCalc(data,len){ const up=new Array(data.length).fill(null), dn=new
     up[i]=(len-hiIdx)/len*100; dn[i]=(len-loIdx)/len*100; } return { up:pair(data,up), dn:pair(data,dn) }; }
 function supertrendCalc(data,atrLen,factor){ const tr=trA(data); const atr=rmaA(tr,atrLen);
   const o=new Array(data.length).fill(null); let dir=1, finalUp=null, finalLo=null;
-  for(let i=0;i<data.length;i++){ if(atr[i]==null){ continue; } const hl2=(data[i].high+data[i].low)/2;
+  for(let i=0;i<data.length;i++){ if(i===0||atr[i]==null){ continue; } const hl2=(data[i].high+data[i].low)/2;
     const bUp=hl2+factor*atr[i], bLo=hl2-factor*atr[i];
     finalUp = (finalUp==null||bUp<finalUp||data[i-1].close>finalUp)?bUp:finalUp;
     finalLo = (finalLo==null||bLo>finalLo||data[i-1].close<finalLo)?bLo:finalLo;
