@@ -34,14 +34,13 @@
   html.embed #topbar{left:0;}
   /* App owns symbol search in embed mode → symbol name isn't a search trigger here. */
   html.embed #symbolBox{cursor:default;pointer-events:none;}
-  /* Narrow phone frame: let the SMA/indicator legend wrap instead of overflowing. */
-  html.embed #chartLegend{max-width:92%;}
+  /* Narrow phone frame: let the SMA/indicator legend wrap instead of overflowing.
+     Cap the legend so it stops BEFORE the right price-axis gutter (84px in embed) —
+     otherwise the wrapped SMA line lands on top of the price scale. */
+  html.embed #chartLegend{max-width:calc(100% - 106px);}
   html.embed #maLegend{white-space:normal; width:auto; max-width:100%;}
   /* App shows OHLC in its own UI → hide the engine's OHLC legend row in embed mode. */
   html.embed #ohlcRow{display:none;}
-  /* Hide the bar-close countdown pill in embed mode — it overlaps the top price label
-     and collides with the wrapped SMA legend on the narrow phone frame. */
-  html.embed #barCountdown{display:none !important;}
   /* ── Multi-chart grid (iframe panels) ── */
   #chartGrid{display:none; position:absolute; top:38px; left:52px; right:0; bottom:0; z-index:35;
     background:var(--bg); gap:2px; grid-auto-rows:1fr;}
@@ -291,7 +290,7 @@
   .row .del:hover{color:var(--red); background:#2a2e39;}
   .row .del svg{width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.6;
     stroke-linecap:round; stroke-linejoin:round;}
-  /* view toggle: sits just left of the trash, hides/shows the price columns list-wide */
+  /* view toggle: sits just left of the trash; masks THIS symbol's price cells (••••••) */
   .row .eye{position:absolute; right:34px; top:50%; transform:translateY(-50%);
     width:22px; height:22px; border-radius:4px; display:none; align-items:center;
     justify-content:center; color:var(--muted); background:#1e222dcc; cursor:pointer; z-index:2;}
@@ -691,12 +690,18 @@
     display:flex; align-items:center; justify-content:center; border-radius:6px; flex:none;}
   #pairCard .pc-x:hover{color:var(--text); background:var(--hover);}
   /* Price block: big number + a change chip. */
-  #pairCard .pc-price{padding:14px 16px 16px; border-bottom:1px solid var(--border);}
+  #pairCard .pc-price{padding:14px 16px 16px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:16px;}
+  #pairCard .pc-price-main{flex:none;}
   #pairCard .pc-last{font-size:30px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-.5px; line-height:1;}
   #pairCard .pc-chg{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700;
     margin-top:9px; padding:3px 9px; border-radius:6px; font-variant-numeric:tabular-nums;}
   #pairCard .pc-chg.up{color:var(--green); background:#26a69a1c;}
   #pairCard .pc-chg.down{color:var(--red); background:#ef53501c;}
+  #pairCard .pc-desc{flex:1; min-width:0; text-align:right; font-size:12px; line-height:1.5; color:var(--text);}
+  #pairCard .pc-desc a{color:var(--accent,#2962ff); text-decoration:none; font-weight:600;}
+  #pairCard .pc-desc a:hover{text-decoration:underline;}
+  #pairCard .pc-desc .pc-site{display:block; margin-top:4px;}
   #pairCard .pc-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:var(--border);}
   #pairCard .pc-cell{background:var(--panel); padding:10px 14px; position:relative; transition:background .12s;}
   #pairCard .pc-cell.has-help{cursor:help;}
@@ -774,6 +779,7 @@
     text-transform:uppercase; letter-spacing:.3px; background:var(--panel); border-bottom:1px solid var(--border);}
   #pairCard .pc-sma-tbl th:first-child, #pairCard .pc-sma-tbl td:first-child{text-align:left; font-weight:700;
     color:var(--muted); position:sticky; left:0; background:var(--panel); z-index:1;}
+  #pairCard .pc-sma-tbl tbody td:first-child{color:var(--text);}
   #pairCard .pc-sma-tbl tbody tr{border-top:1px solid var(--border);}
   #pairCard .pc-sma-tbl tbody tr:hover td{background:var(--panel2);}
   #pairCard .pc-sma-tbl tbody tr:hover td:first-child{background:var(--panel2);}
@@ -1188,7 +1194,9 @@ function allSymbols(){ return [...new Set(GROUPS.flatMap(g=>g.symbols))]; }
 // Coin logos from CoinCap's free icon CDN (BASE symbol, lowercased).
 // ASTER isn't on CoinCap → falls back to a letter circle.
 const NO_LOGO = new Set(["ASTER","NIL"]);
-function logoForBase(base){ return `https://assets.coincap.io/assets/icons/${String(base).toLowerCase()}@2x.png`; }
+// encodeURIComponent so a hostile base (from an old persisted symbol) can't break out
+// of the src attribute / inject markup when this URL lands in an <img src>.
+function logoForBase(base){ return `https://assets.coincap.io/assets/icons/${encodeURIComponent(String(base).toLowerCase())}@2x.png`; }
 function logoUrl(sym){
   const base = legBase(sym).toLowerCase();
   return `https://assets.coincap.io/assets/icons/${base}@2x.png`;
@@ -1241,9 +1249,8 @@ try{ const raw=localStorage.getItem("fv_rsi_params"); if(raw){ const p=JSON.pars
 const RSI_MA_TYPES = ["SMA","EMA","WMA","RMA","VWMA","Bollinger Bands"];
 function saveRsiParams(){ try{ localStorage.setItem("fv_rsi_params", JSON.stringify(RSI_PARAMS)); }catch(e){} }
 // Fixed right-axis gutter width shared by every pane so their plot areas align
-// horizontally (wide enough for "110,000.00"-class price labels). Widen in embed mode
-// so the price/SMA tags clear the mobile app's rounded phone-frame border.
-const PRICE_AXIS_W = IS_EMBED ? 84 : 72;
+// horizontally (wide enough for "110,000.00"-class price labels).
+const PRICE_AXIS_W = 72;
 
 // Time-axis tick label, derived purely from the tick's UTC date so labels stay
 // clean across the padded future region (no skipped months / stray day numbers).
@@ -2287,7 +2294,9 @@ function updateCountdown(){
   const now=Date.now()/1000;
   const closeAt=(Math.floor(now/step)+1)*step;   // next bucket boundary
   el.textContent=fmtCountdown(closeAt-now);
-  el.style.top="8px";   // pin to the top of the price axis, clear of the last-price + MA labels
+  // Pin to the top of the price axis; in embed (phone) sit below the topmost axis
+  // label so the pill doesn't cover it on the narrow frame.
+  el.style.top = IS_EMBED ? "26px" : "8px";
   el.style.display="block";
 }
 
@@ -2953,7 +2962,13 @@ function normSym(input){
     const parts = s.split("/").map(p=>normSym(p));
     return parts.every(Boolean) ? parts.join("/") : null;
   }
-  if(!s.includes("-")) s = s + "-USD";       // bare base → assume USD quote
+  // Allowlist: real tickers only use A–Z 0–9 and these separators (Coinbase "-",
+  // venue prefix ":", Yahoo "." / "=" / "^"). Stripping everything else keeps hostile
+  // input (e.g. "<img onerror=…>") out of the symbol, which is later interpolated raw
+  // into a logo <img src> — closing a stored-XSS vector at the source.
+  s = s.replace(/[^A-Z0-9:.=^\-]/g, "");
+  if(!s) return null;
+  if(!s.includes("-") && !s.includes(":")) s = s + "-USD";   // bare base → assume USD quote
   return s;
 }
 // Add a normalised symbol to a group by name. Returns "added" | "dupe" | "nogroup".
@@ -3513,7 +3528,10 @@ const PC_HELP = {
 function pcCell(k,v){
   const help = PC_HELP[k];
   const attr = help ? ` data-help="${escHtml(help)}"` : "";
-  return `<div class="pc-cell${help?" has-help":""}"${attr}><div class="pc-k">${escHtml(k)}</div><div class="pc-v">${v==null||v===""?"—":v}</div></div>`;
+  // Escape the value: some callers pass raw API strings (e.g. Yahoo's currency code),
+  // so this is the single choke-point that keeps untrusted data out of innerHTML.
+  const val = (v==null||v==="") ? "—" : escHtml(String(v));
+  return `<div class="pc-cell${help?" has-help":""}"${attr}><div class="pc-k">${escHtml(k)}</div><div class="pc-v">${val}</div></div>`;
 }
 // Wrap a list of pcCell() strings in a .pc-grid, padding the final row with blank
 // filler cells so a partially-filled row never leaves a dark gap. `cols` = grid width.
@@ -3555,7 +3573,7 @@ function openPairInfoCard(sym){
     + `<div class="pc-arrow right" id="pcNext" title="Next page"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>`
     + `<div class="pc-track">`
     +   `<div class="pc-page" id="pcPage0">`
-    +     `<div class="pc-price"><div class="pc-last" id="pcLast">…</div><div class="pc-chg" id="pcChg"></div></div>`
+    +     `<div class="pc-price"><div class="pc-price-main"><div class="pc-last" id="pcLast">…</div><div class="pc-chg" id="pcChg"></div></div><div class="pc-desc" id="pcDesc" style="display:none"></div></div>`
     +     `<div id="pcBody"><div style="padding:18px 16px;color:var(--muted);font-size:12px">Loading market data…</div></div>`
     +   `</div>`
     +   `<div class="pc-page" id="pcPage1">`
@@ -3590,14 +3608,36 @@ function openPairInfoCard(sym){
     });
 }
 
+// Brief, static asset blurbs + official sites (no network call). Keyed by base
+// ticker (legBase). Unknown assets simply render no blurb — never fabricated.
+const ASSET_INFO = {
+  BTC:  { d:"Bitcoin — the original decentralized cryptocurrency. Core features: fixed 21M supply, proof-of-work security, censorship-resistant peer-to-peer payments, and a store-of-value 'digital gold' thesis.", w:"https://bitcoin.org" },
+  ETH:  { d:"Ethereum — the leading smart-contract platform. Core features: Turing-complete EVM, proof-of-stake consensus, staking yield, and the base layer for DeFi, NFTs, and layer-2 rollups.", w:"https://ethereum.org" },
+  SOL:  { d:"Solana — a high-performance layer-1. Core features: 50k+ TPS via proof-of-history + PoS, sub-cent fees, parallel execution, and a fast-growing DeFi, NFT, and payments ecosystem.", w:"https://solana.com" },
+  NEAR: { d:"NEAR Protocol — an AI-focused, privacy-conscious layer-1. Core features: Nightshade sharding for scalability, human-readable accounts, low fees, and a Blockchain Operating System with user-owned AI and data.", w:"https://near.org" },
+  INJ:  { d:"Injective — a finance-optimized layer-1. Core features: native on-chain order book, MEV-resistant execution, cross-chain interoperability (IBC/Ethereum), and a deflationary weekly INJ token burn.", w:"https://injective.com" },
+  TAO:  { d:"Bittensor — a decentralized AI network. Core features: incentivized subnets that train and serve machine-learning models, a peer-to-peer model marketplace, and Bitcoin-style halving emissions rewarding useful intelligence.", w:"https://bittensor.com" },
+  ASTER:{ d:"Aster — a decentralized derivatives exchange. Core features: multi-chain perpetuals trading, deep liquidity and low fees, hidden/limit order types, and yield-bearing collateral.", w:"https://www.asterdex.com" },
+  XRP:  { d:"XRP — a payments-focused digital asset. Core features: 3–5 second settlement, negligible fees, energy-light XRP Ledger consensus, and a built-in decentralized exchange for cross-border value transfer.", w:"https://xrpl.org" },
+  ADA:  { d:"Cardano — a research-driven proof-of-stake layer-1. Core features: peer-reviewed development, Ouroboros consensus, native staking, and Plutus smart contracts focused on scalability and formal security.", w:"https://cardano.org" },
+  DOGE: { d:"Dogecoin — a community meme-born cryptocurrency. Core features: fast low-fee payments, an inflationary uncapped supply, Scrypt proof-of-work, and one of crypto's most active tipping communities.", w:"https://dogecoin.com" },
+  AVAX: { d:"Avalanche — a fast smart-contract platform. Core features: sub-second finality, customizable Subnets/app-chains, low fees, and EVM compatibility across its three-chain (X/C/P) architecture.", w:"https://www.avax.network" },
+  LINK: { d:"Chainlink — the leading decentralized oracle network. Core features: tamper-proof real-world data feeds, verifiable randomness (VRF), and CCIP cross-chain messaging securing DeFi and enterprise contracts.", w:"https://chain.link" },
+  MATIC:{ d:"Polygon — Ethereum scaling infrastructure. Core features: low-cost high-speed transactions, zk-rollup technology (Polygon zkEVM), the AggLayer for unified liquidity, and full EVM compatibility.", w:"https://polygon.technology" },
+  DOT:  { d:"Polkadot — a multichain interoperability network. Core features: a shared-security relay chain, parachains for specialized app-chains, cross-chain messaging (XCM), and on-chain governance.", w:"https://polkadot.network" },
+  LTC:  { d:"Litecoin — an early peer-to-peer payments coin. Core features: fast 2.5-minute blocks, low fees, Scrypt proof-of-work, an 84M supply cap, and optional MimbleWimble privacy.", w:"https://litecoin.org" },
+};
 function renderPairCard(sym, stats, data, isSpread){
   const cached = PRICE_CACHE[sym] || {};
   // Price + change: prefer live ticker, fall back to the watchlist cache, then candles.
-  let last = stats && stats.last!=null ? stats.last : (cached.price!=null ? cached.price : (data.length?data[data.length-1].close:null));
-  let open = stats && stats.open!=null ? stats.open : null;
+  // Use isFinite (not !=null): API fields are coerced with +x, so a missing field is NaN,
+  // and NaN!=null is true — an isFinite check is what actually rejects bad numbers.
+  const num = x => (x!=null && isFinite(x)) ? x : null;
+  let last = num(stats && stats.last) ?? num(cached.price) ?? (data.length?data[data.length-1].close:null);
+  let open = num(stats && stats.open);
   let chgPct = (open!=null && open!==0 && last!=null) ? (last/open-1)*100
-             : (cached.chgPct!=null ? cached.chgPct : null);
-  let chgAbs = (open!=null && last!=null) ? (last-open) : (cached.chgAbs!=null ? cached.chgAbs : null);
+             : num(cached.chgPct);
+  let chgAbs = (open!=null && last!=null) ? (last-open) : num(cached.chgAbs);
   const up = (chgAbs??0) >= 0;
 
   document.getElementById("pcLast").textContent = last!=null ? fmtPrice(last) : "—";
@@ -3606,6 +3646,18 @@ function renderPairCard(sym, stats, data, isSpread){
     chgEl.className = "pc-chg "+(up?"up":"down");
     chgEl.textContent = `${up?"+":"−"}${fmtPrice(Math.abs(chgAbs))}  (${up?"+":"−"}${Math.abs(chgPct).toFixed(2)}%) · 24h`;
   } else chgEl.textContent = "";
+
+  // Brief asset description + official site (single symbols only), centered under price.
+  const descEl = document.getElementById("pcDesc");
+  if(descEl){
+    const info = (!isSpread) ? ASSET_INFO[legBase(sym)] : null;
+    if(info){
+      let host=""; try{ host=new URL(info.w).host.replace(/^www\./,""); }catch(_){}
+      descEl.innerHTML = escHtml(info.d)
+        + (info.w?`<a class="pc-site" href="${escHtml(info.w)}" target="_blank" rel="noopener noreferrer">${escHtml(host||info.w)} ↗</a>`:"");
+      descEl.style.display = "";
+    } else { descEl.innerHTML = ""; descEl.style.display = "none"; }
+  }
 
   // 24h high/low/volume from the ticker; fall back to the last ~24h of daily candles.
   let high = stats && isFinite(stats.high) ? stats.high : null;
@@ -3642,11 +3694,11 @@ function renderPairCard(sym, stats, data, isSpread){
   const extraCells = extraCellsArr.length;
 
   const pairCells = [
-    pcCell("Symbol", escHtml(symLabel(sym))),
+    pcCell("Symbol", symLabel(sym)),                 // pcCell escapes the value itself
     pcCell("Type", isSpread?"Spread / Ratio":(resolveLeg(sym).isPerp?"Perpetual":"Spot")),
     ...(isSpread
-        ? [pcCell("Numerator", escHtml(legShort(sym.split("/")[0]))), pcCell("Denominator", escHtml(legShort(sym.split("/")[1])))]
-        : [pcCell("Exchange", escHtml(resolveLeg(sym).exchange.label))]),
+        ? [pcCell("Numerator", legShort(sym.split("/")[0])), pcCell("Denominator", legShort(sym.split("/")[1]))]
+        : [pcCell("Exchange", resolveLeg(sym).exchange.label)]),
   ];
   // Technicals: rsiBar spans the full row, then 6 stat cells (grid-fills evenly).
   const techTail = pcGrid([
@@ -3761,7 +3813,10 @@ function loadSmaPage(sym, isSpread){
   if(_smaPageSym===sym) return;
   _smaPageSym = sym;
   const wrap = document.getElementById("pcSmaWrap"); if(!wrap) return;
-  const head = `<tr><th>TF</th>${PC_SMA_PERIODS.map(p=>`<th>${p}</th>`).join("")}</tr>`;
+  const head = `<tr><th>TF</th>${PC_SMA_PERIODS.map(p=>{
+    const ma = MAS.find(m=>m.p===p);
+    return `<th${ma?` style="color:${ma.color}"`:""}>${p}</th>`;
+  }).join("")}</tr>`;
   const body = PC_RSI_TFS.map(tf=>
     `<tr data-tf="${tf}"><td>${(TF[tf]||{}).label||tf}</td>`
     + PC_SMA_PERIODS.map(()=>`<td class="pending">…</td>`).join("") + `</tr>`).join("");
@@ -4035,6 +4090,7 @@ async function refreshPrices(){
 // Price formatting that preserves small-decimal precision like TradingView
 // (e.g. 0.00000424, 0.05233, 1.813, 59,716.00).
 function fmtPrice(v){
+  if(v==null || !isFinite(v)) return "—";   // guard undefined/NaN/±Infinity (missing API fields)
   const a = Math.abs(v);
   if(a === 0) return "0";
   if(a >= 1000) return v.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
