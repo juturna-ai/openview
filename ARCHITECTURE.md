@@ -443,6 +443,7 @@ For `price`-vs-`value` alerts, `redraw` calls `drawAlertLines()` (skipped entire
 | Key pattern | What is stored | Written by | Read by |
 |---|---|---|---|
 | `fv_watchlist` | `GROUPS[]` — array of `{name, symbols[], collapsed?}` | `saveGroups()` | `loadGroups()` at boot |
+| `fv_wl_reset_v3` | `"1"` — one-time stamp; presence means the comeback-list default reset already ran | `migrateComebackDefault()` | same (guard check at boot) |
 | `fv_draw_<symbol>` | `draw.shapes[]` — array of `{id, type, pts, style, text?}`. Keyed **per symbol only** (not per TF): shape points store absolute time+price, so a drawing made on any timeframe shows on every timeframe of that symbol. `loadPersisted()` runs a one-time `migrateLegacyDraw()` that merges any legacy `fv_draw_<symbol>_<tf>` entries into this key (deduped by shape id) and deletes them. | `persist()` | `loadPersisted()` on symbol/TF change and at boot |
 | `fv_scripts_<symbol>` | `[{name, code}]` — user script name and source | `saveScripts()` | `loadScripts()` on symbol change and at boot |
 | `fv_alerts_<symbol>` | `[{id, source, op, target, value, trigger, expiry, message, notify, sound, webhook, active}]` | `saveAlerts()` | `loadAlerts()` on symbol change and at boot |
@@ -526,7 +527,7 @@ Drawings are keyed per **symbol + timeframe** so a BTC-USD 1D layout does not cl
 
 ## 10. Watchlist
 
-The watchlist panel (`#watchlist`, 300 px fixed right) renders `GROUPS[]` as collapsible sections with draggable rows.
+The watchlist panel (`#watchlist`, 300 px fixed right) renders `GROUPS[]` as collapsible sections with draggable rows. `DEFAULT_GROUPS` seeds two sections (ALPHA, SECTION 2). A one-time migration (`migrateComebackDefault`, guarded by `localStorage["fv_wl_reset_v3"]`) resets the "comeback" list to that default once per browser, then never again — so a user's later customisations survive reloads. Section headers show a `−` glyph when expanded and `+` when collapsed (`.caret`; click toggles collapse). **Whole sections are draggable to reorder**: each header is `draggable` and wired by `groupDragWire` (`wlGroupDrag` state, `.gdrop-above`/`.gdrop-below` indicators) → `moveGroup(fromName,toName,before)` splices the group within `GROUPS`; a completed drag sets `_groupDragged` to swallow the trailing collapse-click. This is distinct from row (symbol) drag (`wlDragWire`/`moveSymbol`) and from dropping a symbol onto a header (`sectionDropWire`); all three drop paths guard on their own drag state so they never collide.
 
 ### Groups and rows
 

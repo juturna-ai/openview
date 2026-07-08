@@ -241,8 +241,7 @@
     letter-spacing:.4px; border-bottom:1px solid rgba(42,46,57,.5);
     display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; position:relative;}
   .section:hover{background:rgba(42,46,57,.35);}
-  .section .caret{font-size:9px; width:10px; flex-shrink:0; transition:transform .12s; color:var(--muted);}
-  .section.collapsed .caret{transform:rotate(-90deg);}
+  .section .caret{font-size:13px; line-height:1; width:10px; text-align:center; flex-shrink:0; color:var(--muted); font-weight:600;}
   .section .gname{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   /* section trash: hidden until header hover, far right */
   .section .gdel{display:none; align-items:center; justify-content:center; width:20px; height:20px;
@@ -253,6 +252,10 @@
     stroke-linecap:round; stroke-linejoin:round;}
   /* section drop indicator (drag a symbol onto a collapsed/empty section header) */
   .section.drop-into{box-shadow:inset 0 0 0 1px var(--accent);}
+  /* whole-section reorder indicators (drag a section header above/below another) */
+  .section.gdrop-above{box-shadow:inset 0 2px 0 0 var(--accent);}
+  .section.gdrop-below{box-shadow:inset 0 -2px 0 0 var(--accent);}
+  .section.gdragging{opacity:.5;}
   .row{display:flex; align-items:center; height:28px; padding:0 10px 0 8px; cursor:pointer; position:relative;}
   .row:hover{background:var(--hover);}
   .row.active{background:#1c2c4a;}
@@ -506,6 +509,29 @@
     display:flex;justify-content:center;gap:6px;flex-wrap:wrap;}
   .symdlg .symfoot kbd{background:#131722;border:1px solid var(--border);border-radius:4px;
     padding:1px 6px;font-size:10px;color:#d1d4dc;font-family:inherit;}
+  /* ── Spread builder ── */
+  .symdlg .sp-build{padding:4px 2px 12px;border-bottom:1px solid var(--border);margin-bottom:8px;}
+  .symdlg .sp-slots{display:flex;align-items:flex-end;gap:8px;}
+  .symdlg .sp-slots .sp-div{font-size:22px;color:var(--muted);font-weight:600;padding-bottom:9px;}
+  .symdlg .sp-slot{flex:1;min-width:0;cursor:pointer;}
+  .symdlg .sp-slot .sp-lab{display:block;font-size:10.5px;color:var(--muted);margin-bottom:4px;padding-left:2px;}
+  .symdlg .sp-chip{display:flex;align-items:center;gap:8px;background:#131722;border:1px solid var(--border);
+    border-radius:8px;padding:8px 10px;min-height:22px;}
+  .symdlg .sp-slot.active .sp-chip{border-color:var(--accent);}
+  .symdlg .sp-slot .sp-ph{color:var(--muted);font-size:12.5px;}
+  .symdlg .sp-slot .ic{width:20px;height:20px;border-radius:50%;flex:none;object-fit:cover;
+    display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;}
+  .symdlg .sp-slot .sp-id{flex:1;min-width:0;font-size:13px;font-weight:600;color:#d1d4dc;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .symdlg .sp-slot .sp-x{flex:none;color:var(--muted);font-size:15px;cursor:pointer;padding:0 2px;}
+  .symdlg .sp-slot .sp-x:hover{color:#fff;}
+  .symdlg .sp-preview{font-size:11.5px;color:var(--muted);margin:10px 2px 8px;}
+  .symdlg .sp-preview b{color:#d1d4dc;}
+  .symdlg .sp-add{width:100%;appearance:none;border:none;border-radius:8px;background:var(--accent);
+    color:#fff;font-size:13px;font-weight:600;padding:9px;cursor:pointer;}
+  .symdlg .sp-add:disabled{background:var(--border);color:var(--muted);cursor:default;}
+  .symdlg .sp-pickhint{font-size:11px;color:var(--muted);margin:2px 2px 6px;}
+  .symdlg .sp-pickhint b{color:var(--accent);}
 
   /* ── Bar replay control bar ── */
   #replayBar{position:absolute; bottom:12px; left:50%; transform:translateX(-50%); z-index:110;
@@ -853,14 +879,8 @@ function activeVenueLabel(){
 // Coinbase uses BASE-USD. Watchlist mirrors the TradingView "comeback" layout.
 // Symbols Coinbase doesn't list (XVG, XMR, NIL, DUSK) still appear but show "—".
 const DEFAULT_GROUPS = [
-  { name:"SPREADS", symbols:["NEAR-USD/INJ-USD"] },
-  { name:"MEME",    symbols:["BONK-USD"] },
-  { name:"PRIVACY", symbols:["XVG-USD","DASH-USD","XMR-USD","NIL-USD","ZEC-USD","HYPE-USD"] },
-  { name:"OMEGA",   symbols:["TON-USD","HBAR-USD","SUI-USD","XLM-USD","SEI-USD"] },
-  { name:"ALPHA",   symbols:["FET-USD","DUSK-USD","RENDER-USD","ASTER-USD","TAO-USD","INJ-USD","NEAR-USD"] },
+  { name:"ALPHA",   symbols:["ASTER-USD","TAO-USD","INJ-USD","NEAR-USD"] },
   { name:"SECTION 2", symbols:["BTC-USD","XRP-USD","BNB-USD","ETH-USD","LINK-USD","BCH-USD","SOL-USD"] },
-  { name:"BTC PAIRS", symbols:["ETH-BTC","SOL-BTC","LINK-BTC"] },
-  { name:"SECTION 3", symbols:["ADA-USD","DOGE-USD","AVAX-USD","DOT-USD"] },
 ];
 
 // The watchlist layout is user-editable (drag to reorder, trash to remove) and
@@ -890,6 +910,24 @@ let WATCHLISTS = {}, ACTIVE_WL = "comeback";
   if(!Object.keys(WATCHLISTS).length){ WATCHLISTS[ACTIVE_WL]=GROUPS; }        // migrate legacy
   if(!WATCHLISTS[ACTIVE_WL]) ACTIVE_WL=Object.keys(WATCHLISTS)[0];
   GROUPS = WATCHLISTS[ACTIVE_WL] || GROUPS;
+})();
+// One-time reset of the "comeback" list to the current DEFAULT_GROUPS (the 5
+// sections PRIVACY/OMEGA/ALPHA/SECTION 2/BTC PAIRS). Runs ONCE per browser,
+// guarded by a version stamp, so a user who has since re-customised isn't reset
+// again on every load. Only touches the "comeback" list; other named lists are
+// left alone.
+(function migrateComebackDefault(){
+  const STAMP = "fv_wl_reset_v3";
+  try{
+    if(localStorage.getItem(STAMP)) return;                 // already applied
+    if(WATCHLISTS["comeback"]){
+      WATCHLISTS["comeback"] = JSON.parse(JSON.stringify(DEFAULT_GROUPS));
+      if(ACTIVE_WL==="comeback") GROUPS = WATCHLISTS["comeback"];
+      localStorage.setItem("fv_watchlists", JSON.stringify(WATCHLISTS));
+      if(ACTIVE_WL==="comeback") localStorage.setItem(WL_KEY, JSON.stringify(GROUPS));
+    }
+    localStorage.setItem(STAMP, "1");
+  }catch(e){}
 })();
 function saveGroups(){
   WATCHLISTS[ACTIVE_WL]=GROUPS;
@@ -2477,12 +2515,14 @@ function buildWatchlist(){
     const s = document.createElement("div");
     s.className = "section" + (g.collapsed ? " collapsed" : "");
     s.dataset.group = g.name;
-    s.innerHTML = `<span class="caret">▾</span><span class="gname">${escHtml(g.name)}</span>`
+    s.innerHTML = `<span class="caret" title="${g.collapsed?'Expand':'Collapse'} section">${g.collapsed?'+':'−'}</span><span class="gname">${escHtml(g.name)}</span>`
       + `<span class="gdel" title="Remove section">${icTrashWl()}</span>`;
-    s.onclick = (e)=>{ if(e.target.closest(".gdel")) return; toggleGroupCollapse(g.name); };
+    s.onclick = (e)=>{ if(e.target.closest(".gdel")) return; if(_groupDragged){ _groupDragged=false; return; } toggleGroupCollapse(g.name); };
     s.querySelector(".gdel").onclick = (e)=>{ e.stopPropagation(); removeGroup(g.name); };
     s.oncontextmenu = (e)=>{ e.preventDefault(); e.stopPropagation(); showSectionMenu(g.name, e.clientX, e.clientY); };
     sectionDropWire(s, g.name);     // allow dropping a symbol onto the header (esp. when collapsed)
+    s.draggable = true;
+    groupDragWire(s, g.name);       // drag the header itself to reorder whole sections
     body.appendChild(s);
     if(g.collapsed) return;         // header only; rows hidden while collapsed
     sortedSymbols(g.symbols).forEach(sym=>{
@@ -2853,8 +2893,9 @@ function openAddSymbolDlg(groupName){
     groupName = GROUPS[0].name;
   }
   closeAllPopups();
-  symDlgState = { group:groupName, results:[], cur:0, ex:"ALL", tv:[], tvQuery:"", tvLoading:false };
-  const tabs = [["ALL","All"],["Coinbase","Coinbase"],["Binance","Binance"],["Bybit","Bybit"],["TradingView","Stocks & more"]]
+  symDlgState = { group:groupName, results:[], cur:0, ex:"ALL", tv:[], tvQuery:"", tvLoading:false,
+                  spread:{ a:null, b:null, slot:"a" } };
+  const tabs = [["ALL","All"],["Coinbase","Coinbase"],["Binance","Binance"],["Bybit","Bybit"],["TradingView","Stocks & more"],["Spread","Spread"]]
     .map(([id,label])=>`<button class="symtab${id==="ALL"?" cur":""}" data-ex="${id}">${label}</button>`).join("");
   symDlg.innerHTML =
     `<div class="dh"><span>Add symbol <span class="exch" style="color:var(--muted);font-weight:400;font-size:12px">· ${escHtml(groupName)}</span></span><span class="cl" id="symClose">×</span></div>`
@@ -2905,7 +2946,8 @@ function symMatches(q){
   const tv = (symDlgState && symDlgState.tv) || [];
   let pool;
   if(exFilter==="TradingView")      pool = tv;
-  else if(exFilter && exFilter!=="ALL") pool = (PRODUCTS || []).filter(p=>p.exLabel===exFilter);
+  // Spread builder searches every venue (both legs can come from anywhere), like All.
+  else if(exFilter && exFilter!=="ALL" && exFilter!=="Spread") pool = (PRODUCTS || []).filter(p=>p.exLabel===exFilter);
   else                              pool = [...(PRODUCTS || []), ...tv];
 
   q = q.trim().toUpperCase();
@@ -2971,6 +3013,7 @@ function paintSymStatus(){
 function renderSymResults(q){
   if(!symDlgState) return;
   const list = document.getElementById("symList"); if(!list) return;
+  if(symDlgState.ex==="Spread"){ renderSpreadBuilder(q); return; }
   scheduleTVSearch(q);                              // enrich with global markets (async)
   paintSymStatus();
   const g = GROUPS.find(x=>x.name===symDlgState.group);
@@ -3013,6 +3056,93 @@ function renderSymResults(q){
   });
 }
 
+// ── Spread builder ──
+// Two-slot composer (A / B) that writes an A/B ratio leg into the section. Reuses
+// the same product pool + TradingView enrichment as the flat search; picking a row
+// fills the active slot (A first, then B). "Add spread" pushes "<legA>/<legB>".
+function spreadIcon(base){
+  base = (base||"?").toUpperCase();
+  return NO_LOGO.has(base)
+    ? `<span class="ic" style="background:#2962ff">${escHtml(base[0]||"?")}</span>`
+    : `<img class="ic" src="${logoForBase(base)}" alt="${escHtml(base)}" onerror="this.outerHTML='<span class=\\'ic\\' style=\\'background:#2962ff\\'>${escHtml(base[0]||"?")}</span>'">`;
+}
+function spreadSlotChip(which){
+  const sp = symDlgState.spread, p = sp[which], active = sp.slot===which;
+  const label = which==="a" ? "Numerator (A)" : "Denominator (B)";
+  const inner = p
+    ? `${spreadIcon(p.base)}<span class="sp-id">${escHtml(p.id)}</span><span class="sp-x" data-clear="${which}" title="Clear">×</span>`
+    : `<span class="sp-ph">Pick ${which.toUpperCase()}…</span>`;
+  return `<div class="sp-slot${active?" active":""}${p?" filled":""}" data-slot="${which}"><span class="sp-lab">${label}</span><div class="sp-chip">${inner}</div></div>`;
+}
+function renderSpreadBuilder(q){
+  const list = document.getElementById("symList"); if(!list) return;
+  scheduleTVSearch(q);                              // enrich picker with global markets
+  paintSymStatus();
+  const sp = symDlgState.spread;
+  const res = symMatches(q);
+  symDlgState.results = res;
+  if(symDlgState.cur >= res.length) symDlgState.cur = 0;
+
+  const ready = sp.a && sp.b;
+  const spreadLeg = ready ? `${sp.a.leg}/${sp.b.leg}` : "";
+  const g = GROUPS.find(x=>x.name===symDlgState.group);
+  const dupe = ready && g && g.symbols.includes(spreadLeg);
+
+  const rows = res.length
+    ? res.map((p,i)=>{
+        const exTag = p.exLabel==="TradingView"
+          ? [p.tvVenue, p.tvType].filter(Boolean).join(" · ") || "TradingView"
+          : p.exLabel + (p.isPerp ? " · Perp" : "");
+        return `<div class="symrow${i===symDlgState.cur?" cur":""}" data-i="${i}">`
+             +   spreadIcon(p.base)
+             +   `<span class="meta"><span class="id">${escHtml(p.id)}</span><span class="nm">${escHtml(p.name)}</span></span>`
+             +   `<span class="exch">${escHtml(exTag)}</span>`
+             +   `<span class="plus">＋</span>`
+             + `</div>`;
+      }).join("")
+    : `<div class="symempty">${symDlgState.tvLoading?"Searching global markets…":`No matches${q.trim()?` for “${escHtml(q.trim())}”`:""}.`}</div>`;
+
+  list.innerHTML =
+      `<div class="sp-build">`
+    +   `<div class="sp-slots">`
+    +     spreadSlotChip("a")
+    +     `<span class="sp-div">/</span>`
+    +     spreadSlotChip("b")
+    +   `</div>`
+    +   `<div class="sp-preview">${ready?`Spread: <b>${escHtml(sp.a.id)} / ${escHtml(sp.b.id)}</b>`:"Search below and click a symbol to fill the active slot."}</div>`
+    +   `<button class="sp-add" id="spAdd"${ready&&!dupe?"":" disabled"}>${dupe?"Already added ✓":"Add spread"}</button>`
+    + `</div>`
+    + `<div class="sp-pickhint">Fill slot <b>${sp.slot.toUpperCase()}</b> — type to search any market:</div>`
+    + rows;
+
+  list.querySelectorAll(".sp-slot").forEach(el=>{
+    el.onclick = e=>{
+      if(e.target.dataset.clear){ sp[e.target.dataset.clear]=null; sp.slot=e.target.dataset.clear; renderSpreadBuilder(document.getElementById("symInput").value); return; }
+      sp.slot = el.dataset.slot; renderSpreadBuilder(document.getElementById("symInput").value);
+    };
+  });
+  list.querySelectorAll(".symrow").forEach(rowEl=>{
+    const i = +rowEl.dataset.i;
+    rowEl.onmouseenter = ()=>{ symDlgState.cur = i; highlightSymRow(); };
+    rowEl.onclick = ()=>chooseSpreadLeg(i);
+  });
+  const addBtn = document.getElementById("spAdd");
+  if(addBtn) addBtn.onclick = ()=>{
+    if(!(sp.a && sp.b)) return;
+    const leg = `${sp.a.leg}/${sp.b.leg}`;
+    const r = pushSymbol(symDlgState.group, leg);
+    if(r==="added") closeSymDlg();
+  };
+}
+function chooseSpreadLeg(i){
+  if(!symDlgState) return;
+  const p = symDlgState.results[i]; if(!p) return;
+  const sp = symDlgState.spread;
+  sp[sp.slot] = p;
+  sp.slot = sp.slot==="a" ? "b" : "a";              // advance to the next empty-ish slot
+  renderSpreadBuilder(document.getElementById("symInput").value);
+}
+
 function highlightSymRow(){
   const list = document.getElementById("symList"); if(!list) return;
   list.querySelectorAll(".symrow").forEach(r=>r.classList.toggle("cur", +r.dataset.i===symDlgState.cur));
@@ -3040,6 +3170,7 @@ function onSymKey(e){
   else if(e.key==="ArrowUp"){ e.preventDefault(); if(n){ symDlgState.cur=(symDlgState.cur-1+n)%n; highlightSymRow(); } }
   else if(e.key==="Enter"){
     e.preventDefault();
+    if(symDlgState.ex==="Spread"){ if(n) chooseSpreadLeg(symDlgState.cur); return; }
     if(n){ chooseSym(symDlgState.cur); }
     else {                                          // no list (e.g. products failed) → accept raw text
       const sym = normSym(document.getElementById("symInput").value);
@@ -3091,6 +3222,60 @@ function sectionDropWire(el, name){
     const lastSym = g && g.symbols.length ? g.symbols[g.symbols.length-1] : null;
     moveSymbol(wlDrag.group, wlDrag.sym, name, lastSym, /*before=*/false);
   });
+}
+
+// ── Drag whole sections to reorder ──
+// Grab a section HEADER and drop it above/below another header to move the entire
+// group up or down. Distinct from wlDrag (a single symbol row); guarded so the two
+// drop paths never fire on the same gesture. A completed drag suppresses the click
+// that would otherwise collapse/expand the header.
+let wlGroupDrag = null;      // name of the section being dragged
+let _groupDragged = false;   // set on drop so the trailing click doesn't toggle collapse
+function groupDragWire(el, name){
+  el.addEventListener("dragstart", e=>{
+    // Only start a section drag when NOT dragging a symbol row (rows sit inside body,
+    // headers are separate elements, so this is just belt-and-suspenders).
+    wlGroupDrag = name;
+    el.classList.add("gdragging");
+    e.dataTransfer.effectAllowed = "move";
+    try{ e.dataTransfer.setData("text/plain", name); }catch{}
+  });
+  el.addEventListener("dragend", ()=>{
+    el.classList.remove("gdragging");
+    document.querySelectorAll(".section.gdrop-above,.section.gdrop-below")
+      .forEach(s=>s.classList.remove("gdrop-above","gdrop-below"));
+    wlGroupDrag = null;
+  });
+  el.addEventListener("dragover", e=>{
+    if(!wlGroupDrag || wlGroupDrag===name) return;   // no symbol drag, and not over itself
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const before = (e.clientY - el.getBoundingClientRect().top) < el.offsetHeight/2;
+    el.classList.toggle("gdrop-above", before);
+    el.classList.toggle("gdrop-below", !before);
+  });
+  el.addEventListener("dragleave", ()=>el.classList.remove("gdrop-above","gdrop-below"));
+  el.addEventListener("drop", e=>{
+    if(!wlGroupDrag) return;
+    e.preventDefault(); e.stopPropagation();
+    const before = el.classList.contains("gdrop-above");
+    el.classList.remove("gdrop-above","gdrop-below");
+    _groupDragged = true;                     // swallow the click that follows a drop
+    moveGroup(wlGroupDrag, name, before);
+  });
+}
+// Move section `fromName` to sit before/after section `toName`. No-op on self.
+function moveGroup(fromName, toName, before){
+  if(fromName===toName) return;
+  const fi = GROUPS.findIndex(g=>g.name===fromName);
+  if(fi<0) return;
+  const [moved] = GROUPS.splice(fi,1);        // pull the section out
+  let ti = GROUPS.findIndex(g=>g.name===toName);
+  if(ti<0) ti = GROUPS.length;                // target vanished → append
+  GROUPS.splice(before ? ti : ti+1, 0, moved);
+  saveGroups();
+  buildWatchlist();
+  refreshPrices();
 }
 
 // Coinbase has no bulk 24hr endpoint; use per-product /stats (24h open/last).
