@@ -232,8 +232,8 @@
   html.rsi-axis-drag, html.rsi-axis-drag *{cursor:ns-resize !important;}
   /* Hover pill on an RSI alert line (mirrors the main pane's on-line pill). */
   #rsiAlertPill{position:absolute; z-index:7; display:none; transform:translateY(-50%);
-    align-items:center; gap:8px; background:#1e222d; border:1px solid #9aa0aa;
-    color:#d1d4dc; font-size:11px; padding:3px 8px; border-radius:4px; white-space:nowrap;
+    align-items:center; gap:6px; background:#1e222d; border:1px solid #9aa0aa;
+    color:#d1d4dc; font-size:10px; padding:2px 6px; border-radius:4px; white-space:nowrap;
     pointer-events:none; box-shadow:0 2px 8px #0006;}
   #rsiAlertPill .trash{cursor:pointer; opacity:.8; pointer-events:auto;}
   #rsiAlertPill .trash:hover{opacity:1;}
@@ -5210,6 +5210,11 @@ dcanvas.addEventListener("mousedown", e=>{
       } }
   }
 
+  // ── A press anywhere else dismisses the on-line alert pill. On touch no mousemove
+  // fires between taps, so the hover set by tapping the line would otherwise stick
+  // forever — tap the line to show the pill, tap anywhere else to hide it. ──
+  if(draw.alertHover!=null){ draw.alertHover=null; redraw(); }
+
   // ── CROSSHAIR mode: click a shape → select/drag it; click empty → pan the chart ──
   if(draw.tool==="cross"){
     const hit = draw.locked ? null : hitTest(p);
@@ -8840,10 +8845,11 @@ function alertTargetValue(a){ return a.target==="value" ? a.value : alertSourceV
 function opLabel(op){ return ({crossing:"Crossing", crossUp:"Crossing Up", crossDown:"Crossing Down", gt:"Greater Than", lt:"Less Than"})[op]||op; }
 
 function defaultAlertMessage(a){
-  const lhs=sourceLabel(a.source);
+  // Plain price alerts omit the "Price" label — the symbol already implies it.
+  const lhs=a.source==="price" ? "" : ` ${sourceLabel(a.source)}`;
   const rhs=a.target==="value" ? fmt(a.value) : sourceLabel(a.target);
   const iv=a.interval && TF[a.interval] ? ` [${TF[a.interval].label}]` : "";
-  return `${activeSymbol} ${lhs}${iv} ${opLabel(a.op)} ${rhs}`;
+  return `${activeSymbol}${lhs}${iv} ${opLabel(a.op)} ${rhs}`;
 }
 
 function removeAlert(id){ const i=alerts.findIndex(a=>a.id===id); if(i>=0){ alerts.splice(i,1); saveAlerts(); redraw(); renderAlertsPanel(); } }
@@ -8870,9 +8876,9 @@ function drawAlertLines(){
       // TradingView-style hover pill on the line: full condition text + clickable trash
       // (matches the RSI-pane pill, which shows the whole "SYM Price Crossing …" label
       // rather than just the bare number).
-      const label=defaultAlertMessage(a); dctx.font="11px sans-serif";
+      const label=defaultAlertMessage(a); dctx.font="10px sans-serif";
       const lw=dctx.measureText(label).width;
-      const padL=10, gap=8, iconW=16, boxH=20;
+      const padL=7, gap=6, iconW=14, boxH=16;
       const boxW=padL+lw+gap+iconW+padL;
       // Keep the pill on-screen: start at x=70 but shift left if it would overflow the plot.
       const maxX=(dcanvas.clientWidth-axisW())-boxW-4;
