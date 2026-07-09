@@ -211,7 +211,7 @@
   /* Countdown-to-bar-close pill, pinned to the right price axis at the last price. */
   #barCountdown{position:absolute; right:0; z-index:6; display:none;
     width:72px; text-align:center; box-sizing:border-box;
-    background:#2962ff; color:#fff; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;
+    background:#4E3470; color:#fff; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;
     padding:2px 6px; border-radius:3px; pointer-events:none; white-space:nowrap;}
   #rsiLabel b{font-weight:600;}
   #rsi{width:100%; height:100%;}
@@ -221,6 +221,13 @@
   #rsi.axis-hover, #rsi.axis-hover *{cursor:ns-resize !important;}
   #rsi.alert-hover, #rsi.alert-hover *{cursor:ns-resize !important;}
   html.rsi-axis-drag, html.rsi-axis-drag *{cursor:ns-resize !important;}
+  /* Hover pill on an RSI alert line (mirrors the main pane's on-line pill). */
+  #rsiAlertPill{position:absolute; z-index:7; display:none; transform:translateY(-50%);
+    align-items:center; gap:8px; background:#1e222d; border:1px solid #9aa0aa;
+    color:#d1d4dc; font-size:11px; padding:3px 8px; border-radius:4px; white-space:nowrap;
+    pointer-events:none; box-shadow:0 2px 8px #0006;}
+  #rsiAlertPill .trash{cursor:pointer; opacity:.8; pointer-events:auto;}
+  #rsiAlertPill .trash:hover{opacity:1;}
 
   #watchlist{width:var(--wl-w,300px); background:var(--bg); border-left:1px solid var(--border);
     display:flex; flex-direction:column; overflow:hidden; position:relative;}
@@ -377,6 +384,8 @@
   .popmenu .mi:hover{background:var(--accent); color:#fff;}
   .popmenu .msep{height:1px; background:var(--border); margin:4px 0;}
   .popmenu .sw{width:12px; height:12px; border-radius:2px; display:inline-block;}
+  .popmenu .mi svg{width:15px; height:15px; flex:none; fill:none; stroke:currentColor;
+    stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round;}
 
   /* ── side panels (indicators / alerts) ── */
   .panel{position:absolute; display:none; z-index:300; top:90px; left:60px; width:340px; max-height:70vh;
@@ -513,6 +522,15 @@
   .alertdlg .notif label{display:flex;align-items:center;gap:6px;font-size:13px;color:#d1d4dc;cursor:pointer;}
   .alertdlg .notif input[type=checkbox]{width:auto;}
   .alertdlg .hint{font-size:11px;color:#b8bcc6;}
+  /* Custom sound-kind dropdown: native <option> can't render SVG icons. */
+  .alertdlg .selkind{position:relative;}
+  .alertdlg .selkind > button{width:100%;padding:8px 10px;background:#131722;border:1px solid var(--border);
+    border-radius:6px;color:#d1d4dc;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:7px;text-align:left;}
+  .alertdlg .selkind > button:focus{border-color:var(--accent);outline:none;}
+  .alertdlg .selkind svg{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;
+    stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+  .alertdlg .selkind .car{margin-left:auto;color:var(--muted);font-size:10px;}
+  .alertdlg .selkind .popmenu{left:0;right:0;top:calc(100% + 4px);min-width:0;}
 
   /* ── Add-symbol search dialog (TradingView-style) ── */
   .symdlg{width:500px;}
@@ -887,6 +905,7 @@
     <div id="rsiWrap">
       <div id="rsiLabel"><span id="rsiName">RSI 14 close</span> <b id="rsiVal" style="color:#7e57c2">—</b> <b id="rsiMaVal" style="color:#e0a82e">—</b></div>
       <div id="rsi"></div>
+      <div id="rsiAlertPill"><span class="txt"></span><span class="trash">🗑</span></div>
     </div>
     <div id="subPanes"></div>
     <!-- Bottom bar (TradingView): date-range shortcuts left, timezone + scale toggles right -->
@@ -1220,6 +1239,11 @@ let activeTF = "1d";  // timeframe key into TF{}
 // NOT persist active state (so grid panels don't clobber each other or the main app).
 const _params = new URLSearchParams(location.search);
 const IS_EMBED = _params.get("embed")==="1";
+// Apply embed layout NOW, before any DOM/chart construction below. Adding it at the end
+// of the script (as before) let mobile WebViews commit a layout pass with the watchlist/
+// right-rail still visible, so the chart canvas was created ~40px narrower than the
+// viewport and left a dead strip right of the price axis.
+if(IS_EMBED){ document.documentElement.classList.add("embed"); }
 // Restore the last-viewed symbol + timeframe so a reload lands where you left off.
 try{
   const sv=localStorage.getItem("fv_active_symbol"); if(sv) activeSymbol=sv;
@@ -4439,6 +4463,8 @@ const TOOLS = [
 
 // ── inline SVG icons ──
 function svg(p){ return `<svg viewBox="0 0 24 24">${p}</svg>`; }
+function icBell(){   return svg('<path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7z"/><path d="M10.5 20a1.5 1.5 0 0 0 3 0"/>'); }
+function icNote(){   return svg('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'); }
 function icCross(){  return svg('<line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>'); }
 function icTrend(){  return svg('<line x1="4" y1="20" x2="20" y2="4"/><circle cx="4" cy="20" r="1.6"/><circle cx="20" cy="4" r="1.6"/>'); }
 function icRay(){    return svg('<line x1="4" y1="20" x2="20" y2="4"/><circle cx="4" cy="20" r="1.6"/>'); }
@@ -5565,7 +5591,7 @@ function showShapeMenu(id,x,y){
 function showChartMenu(x,y,p){
   const price=yToPrice(p.y);
   showCtx(x,y,[
-    mi(`🔔 Add alert${price!=null?" at "+fmt(price):""}…`, ()=>openAlertDialog({price})),
+    mi(icBell()+`Add alert${price!=null?" at "+fmt(price):""}…`, ()=>openAlertDialog({price})),
     msep(),
     mi("⊞ Add indicator…", ()=>toggleIndicatorsMenu(true)),
     mi("Reset chart view", ()=>chart.timeScale().fitContent()),
@@ -5590,7 +5616,7 @@ function attachPaneContextMenu(el, spec){
     const items=[];
     if(spec.settings) items.push(mi("⚙ Settings…", spec.settings));
     if(spec.alertSource){ const lbl=(typeof spec.alertLabel==="function"?spec.alertLabel():spec.alertLabel)||spec.alertSource;
-      items.push(mi("🔔 Add alert on "+lbl+"…", ()=>openAlertDialog({source:spec.alertSource}))); }
+      items.push(mi(icBell()+"Add alert on "+lbl+"…", ()=>openAlertDialog({source:spec.alertSource}))); }
     if(items.length) items.push(msep());
     items.push(mi("Reset chart view", ()=>chart.timeScale().fitContent()));
     if(spec.remove){ items.push(msep()); items.push(mi("🗑 "+(spec.removeLabel||"Remove indicator"), spec.remove)); }
@@ -5919,10 +5945,12 @@ function openAlertDialog(opts={}){
   // target = "Value" + every series + line drawings (so price-vs-MA, price-vs-trendline, etc. all work)
   const tgtOpts = `<option value="value" ${a.target==="value"?"selected":""}>Value</option>`+
     srcList.map(s=>`<option value="${s.key}" ${s.key===a.target?"selected":""}>${s.label}</option>`).join("");
-  // Interval the indicator is computed on (TradingView parity). Empty = follow the
-  // chart's timeframe. Hidden for price/drawing sources — those are TF-independent.
-  const ivOpts = `<option value="">Same as chart</option>`+
-    Object.keys(TF).filter(k=>k[0]!=="c").map(k=>`<option value="${k}" ${k===a.interval?"selected":""}>${TF[k].menu||TF[k].label}</option>`).join("");
+  // Interval the indicator is computed on (TradingView parity). New alerts default to
+  // the CHART's current timeframe (not a vague "same as chart") so every indicator alert
+  // carries a concrete TF that shows in its label and doesn't silently drift when the
+  // chart TF changes. Hidden for price/drawing sources — those are TF-independent.
+  const ivSel = a.interval || activeTF;
+  const ivOpts = Object.keys(TF).filter(k=>k[0]!=="c").map(k=>`<option value="${k}" ${k===ivSel?"selected":""}>${TF[k].menu||TF[k].label}</option>`).join("");
   const expVal = a.expiry ? toLocalInput(a.expiry) : "";
 
   alertDlg.innerHTML=`
@@ -5966,10 +5994,14 @@ function openAlertDialog(opts={}){
       </div></div>
       <div class="arow" id="ad_sound_row"><div class="alabel">Alert sound</div><div class="actl">
         <div class="twocol">
-          <select id="ad_sound_kind">
-            <option value="sound" ${a.sound.kind!=="ringtone"?"selected":""}>🔔 Sound (short)</option>
-            <option value="ringtone" ${a.sound.kind==="ringtone"?"selected":""}>🎵 Ringtone (loops ≥10s)</option>
-          </select>
+          <div class="selkind">
+            <select id="ad_sound_kind" style="display:none">
+              <option value="sound" ${a.sound.kind!=="ringtone"?"selected":""}>Sound (short)</option>
+              <option value="ringtone" ${a.sound.kind==="ringtone"?"selected":""}>Ringtone (loops ≥10s)</option>
+            </select>
+            <button type="button" id="ad_sound_kind_btn"></button>
+            <div class="popmenu" id="ad_sound_kind_menu"></div>
+          </div>
           <select id="ad_sound_id"></select>
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:2px">
@@ -6011,6 +6043,19 @@ function openAlertDialog(opts={}){
   };
   fillSoundOptions();
   $("ad_sound_kind").onchange=fillSoundOptions;
+  // Custom kind dropdown with SVG icons; proxies the hidden <select> so .value/.onchange
+  // consumers stay unchanged.
+  const KIND_LBL={sound:icBell()+"Sound (short)", ringtone:icNote()+"Ringtone (loops ≥10s)"};
+  const kindSel=$("ad_sound_kind"), kindBtn=$("ad_sound_kind_btn"), kindMenu=$("ad_sound_kind_menu");
+  const syncKindBtn=()=>{ kindBtn.innerHTML=KIND_LBL[kindSel.value]+'<span class="car">▾</span>'; };
+  kindMenu.innerHTML=Object.keys(KIND_LBL).map(v=>`<div class="mi" data-v="${v}">${KIND_LBL[v]}</div>`).join("");
+  kindBtn.onclick=e=>{ e.stopPropagation(); kindMenu.style.display=kindMenu.style.display==="block"?"none":"block"; };
+  kindMenu.querySelectorAll(".mi").forEach(el=>{ el.onclick=e=>{ e.stopPropagation(); kindMenu.style.display="none";
+    if(kindSel.value!==el.dataset.v){ kindSel.value=el.dataset.v; syncKindBtn(); kindSel.onchange && kindSel.onchange(); } }; });
+  // onclick property (not addEventListener): the dialog is rebuilt each open, so a
+  // property assignment can't stack duplicate handlers on the persistent element.
+  alertDlg.onclick=e=>{ if(!e.target.closest(".selkind")) kindMenu.style.display="none"; };
+  syncKindBtn();
   $("ad_sound_prev").onclick=()=>playAlertSound({kind:$("ad_sound_kind").value, id:$("ad_sound_id").value});
   $("ad_sound_stop").onclick=()=>stopAlertSound();
   const syncSoundRow=()=>{ $("ad_sound_row").style.opacity=$("ad_n_sound").checked?"1":"0.45"; };
@@ -6024,7 +6069,7 @@ function openAlertDialog(opts={}){
     a.target=$("ad_target").value;
     a.value=a.target==="value" ? parseFloat($("ad_value").value) : null;
     if(a.target==="value" && isNaN(a.value)){ $("ad_value").focus(); return; }
-    a.interval=(a.source==="price"||a.source.indexOf("draw:")===0) ? null : ($("ad_interval").value||null);
+    a.interval=(a.source==="price"||a.source.indexOf("draw:")===0) ? null : ($("ad_interval").value||activeTF);
     a.trigger=$("ad_trigger").value;
     const ev=$("ad_expiry").value; a.expiry=ev ? new Date(ev).getTime() : null;
     a.message=$("ad_message").value.trim();
@@ -8403,7 +8448,7 @@ function alertsKey(){ return "fv_alerts_"+activeSymbol; }
 //   message: string
 //   notify : { popup, sound, browser, email }
 const ALERT_DEFAULT_NOTIFY = { popup:true, sound:true, browser:false, email:false };
-const ALERT_DEFAULT_SOUND = { kind:"sound", id:"beep" };
+const ALERT_DEFAULT_SOUND = { kind:"ringtone", id:"zelda" };
 function migrateAlert(a){
   if(a.source){ if(!a.sound) a.sound={...ALERT_DEFAULT_SOUND}; if(a.interval===undefined) a.interval=null; return a; }   // new-format (backfill sound/interval)
   // legacy {price,dir,active}
@@ -8428,7 +8473,7 @@ function updateRsiAlertLines(){
     try{ rsiAlertLines.push({ id:a.id, pl:rsiLine.createPriceLine({
       price:a.value, color:a.active?alertLineColor:"#888",
       lineWidth:1, lineStyle:LightweightCharts.LineStyle.Dashed,
-      axisLabelVisible:true, title:"🔔",
+      axisLabelVisible:false, title:"",   // no axis pill — hover info lives in the on-line pill
     }) }); }catch(e){}
   });
 }
@@ -8447,38 +8492,78 @@ function rsiAlertHit(p){
   }
   return null;
 }
-rsiEl.addEventListener("mousedown", e=>{
-  if(e.button!==0 || rsiAxisDrag) return;
-  const p=rsiEvtPt(e);
-  const id=rsiAlertHit(p);
+// Point from a mouse OR touch event (embed/mobile has no mouse — touches are the
+// only way to grab a line on a phone; the engine has no other touch drag anywhere).
+function rsiPointerPt(e){ const t=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e; const r=rsiEl.getBoundingClientRect(); return {x:t.clientX-r.left, y:t.clientY-r.top}; }
+function rsiAlertDragStart(e, isTouch){
+  if(rsiAxisDrag) return;
+  if(!isTouch && e.button!==0) return;
+  const id=rsiAlertHit(rsiPointerPt(e));
   if(!id) return;
   rsiAlertDrag={ id };
   document.documentElement.classList.add("rsi-axis-drag");   // hold ↕ for the whole drag
-  e.preventDefault();
-});
+  e.preventDefault();   // touch: also stops the pane from scrolling/panning mid-drag
+}
+function rsiAlertDragMove(e){
+  if(!rsiAlertDrag) return;
+  const p=rsiPointerPt(e);
+  const a=alerts.find(z=>z.id===rsiAlertDrag.id);
+  const v=rsiLine.coordinateToPrice(p.y);
+  if(a && v!=null && isFinite(v)){
+    a.value=Math.max(0, Math.min(100, v)); a._last=null;
+    const ent=rsiAlertLines.find(x=>x.id===a.id);
+    if(ent) try{ ent.pl.applyOptions({ price:a.value }); }catch(err){}
+    if(_rsiPillId===a.id) showRsiAlertPill(a.id);   // keep the pill on the moving line
+  }
+  if(e.cancelable) e.preventDefault();   // block touch-scroll while dragging the line
+}
+function rsiAlertDragEnd(){
+  if(!rsiAlertDrag) return;
+  rsiAlertDrag=null;
+  document.documentElement.classList.remove("rsi-axis-drag");
+  saveAlerts(); renderAlertsPanel();
+}
+// Hover pill on an RSI alert line (mirrors the main pane's on-line pill): shows the
+// alert's description + a clickable trash icon. `_rsiPillId` tracks which line it's on.
+const rsiAlertPill=document.getElementById("rsiAlertPill");
+let _rsiPillId=null;
+function showRsiAlertPill(id){
+  const a=alerts.find(z=>z.id===id); if(!a){ hideRsiAlertPill(); return; }
+  const y=rsiLine.priceToCoordinate(a.value); if(y==null){ hideRsiAlertPill(); return; }
+  _rsiPillId=id;
+  rsiAlertPill.querySelector(".txt").textContent=defaultAlertMessage(a);
+  rsiAlertPill.style.top=y+"px";
+  rsiAlertPill.style.left="70px";
+  rsiAlertPill.style.display="flex";
+  // (no axis pill — the on-line hover pill carries the alert info; axis stays clean)
+}
+function hideRsiAlertPill(){
+  _rsiPillId=null; rsiAlertPill.style.display="none";
+}
+rsiAlertPill.querySelector(".trash").onclick=e=>{ e.stopPropagation(); if(_rsiPillId){ const id=_rsiPillId; hideRsiAlertPill(); removeAlert(id); } };
+rsiEl.addEventListener("mousedown", e=>rsiAlertDragStart(e,false));
+rsiEl.addEventListener("touchstart", e=>rsiAlertDragStart(e,true), {passive:false});
+// Right-click an RSI alert line → the same Pause/Edit/Delete menu as the main pane.
+// Capture phase so this runs BEFORE attachPaneContextMenu's bubble handler (which
+// would otherwise show the generic "Add alert on RSI" pane menu and stop propagation).
+rsiEl.addEventListener("contextmenu", e=>{
+  const id=rsiAlertHit(rsiPointerPt(e));
+  if(!id) return;                       // not on a line → let the pane menu handle it
+  e.preventDefault(); e.stopPropagation();
+  showAlertMenu(id, e.clientX, e.clientY);
+}, true);
 document.addEventListener("mousemove", e=>{
-  if(rsiAlertDrag){
-    const p=rsiEvtPt(e);
-    const a=alerts.find(z=>z.id===rsiAlertDrag.id);
-    let v=rsiLine.coordinateToPrice(p.y);
-    if(a && v!=null && isFinite(v)){
-      a.value=Math.max(0, Math.min(100, v)); a._last=null;
-      const ent=rsiAlertLines.find(x=>x.id===a.id);
-      if(ent) try{ ent.pl.applyOptions({ price:a.value }); }catch(err){}
-    }
-    return;
-  }
-  // hover hint over a line (skip while axis-stretching; axis gutter excluded in hit)
+  if(rsiAlertDrag){ rsiAlertDragMove(e); return; }
+  // hover hint + pill over a line (skip while axis-stretching; axis gutter excluded)
   if(rsiAxisDrag) return;
-  rsiEl.classList.toggle("alert-hover", !!rsiAlertHit(rsiEvtPt(e)));
+  const id=rsiAlertHit(rsiPointerPt(e));
+  rsiEl.classList.toggle("alert-hover", !!id);
+  if(id) showRsiAlertPill(id); else if(_rsiPillId) hideRsiAlertPill();
 });
-document.addEventListener("mouseup", ()=>{
-  if(rsiAlertDrag){
-    rsiAlertDrag=null;
-    document.documentElement.classList.remove("rsi-axis-drag");
-    saveAlerts(); renderAlertsPanel();
-  }
-});
+document.addEventListener("touchmove", rsiAlertDragMove, {passive:false});
+document.addEventListener("mouseup", rsiAlertDragEnd);
+document.addEventListener("touchend", rsiAlertDragEnd);
+document.addEventListener("touchcancel", rsiAlertDragEnd);
 function saveAlerts(){
   try{ localStorage.setItem(alertsKey(), JSON.stringify(alerts.map(a=>({
     id:a.id, source:a.source, op:a.op, target:a.target, value:a.value, interval:a.interval||null,
@@ -8509,6 +8594,10 @@ function loadAlerts(){ alerts.length=0;
   // Heal ids already duplicated by the old behavior (non-destructive: reassign the dup).
   const seen=new Set(); let healed=false;
   alerts.forEach(a=>{ if(seen.has(a.id)){ a.id="a"+(alertUid++); healed=true; } seen.add(a.id); });
+  // Backfill: indicator alerts saved before the interval feature (or with an empty
+  // "same as chart") have interval:null and can't show a TF. Pin them to the current
+  // chart TF so every indicator alert carries a concrete, label-able timeframe.
+  alerts.forEach(a=>{ if(a.interval==null && a.source!=="price" && !(a.source||"").startsWith("draw:")){ a.interval=activeTF; healed=true; } });
   if(healed) saveAlerts();
   updateRsiAlertLines(); redraw(); renderAlertsPanel();
 }
@@ -8643,22 +8732,21 @@ function drawAlertLines(){
     const lineCol=a.active?alertLineColor:"#888";        // dotted line colour (default white)
     dctx.save(); dctx.strokeStyle=lineCol; dctx.setLineDash([6,4]); dctx.lineWidth=1;
     dctx.beginPath(); dctx.moveTo(0,y); dctx.lineTo(W,y); dctx.stroke(); dctx.setLineDash([]);
-    // Right-edge price tag (over the axis) — HOVER ONLY: keeps the axis gutter clean.
-    // The alert price shows via the hover pill + this tag only while pointing at the line.
-    if(draw.alertHover===a.id){
-      const txt="🔔 "+fmt(a.value);
-      if(_tagQueue) _tagQueue.push({text:txt,y,color:col,font:"10px sans-serif"});
-      else paintGutterTag(txt,y,col,W,"10px sans-serif");
-    }
+    // No right-edge axis tag — the hover pill on the line carries the alert info; the
+    // axis gutter stays clean even while hovering.
 
     let trash=null;
     if(draw.alertHover===a.id){
-      // TradingView-style hover pill on the line with a clickable trash icon.
-      const label=fmt(a.value); dctx.font="11px sans-serif";
+      // TradingView-style hover pill on the line: full condition text + clickable trash
+      // (matches the RSI-pane pill, which shows the whole "SYM Price Crossing …" label
+      // rather than just the bare number).
+      const label=defaultAlertMessage(a); dctx.font="11px sans-serif";
       const lw=dctx.measureText(label).width;
       const padL=10, gap=8, iconW=16, boxH=20;
       const boxW=padL+lw+gap+iconW+padL;
-      const bx=70, by=y-boxH/2;
+      // Keep the pill on-screen: start at x=70 but shift left if it would overflow the plot.
+      const maxX=(dcanvas.clientWidth-axisW())-boxW-4;
+      const bx=Math.max(6, Math.min(70, maxX)), by=y-boxH/2;
       dctx.fillStyle="#1e222d"; dctx.strokeStyle=col; dctx.lineWidth=1;
       if(dctx.roundRect){ dctx.beginPath(); dctx.roundRect(bx,by,boxW,boxH,4); dctx.fill(); dctx.stroke(); }
       else { dctx.fillRect(bx,by,boxW,boxH); dctx.strokeRect(bx,by,boxW,boxH); }
@@ -8752,20 +8840,34 @@ function fireAlert(a, lhs, rhs){
   const msg = `${base} — now ${fmt(lhs)}`;
   logAlert({ ts: Date.now(), symbol: activeSymbol, text: msg });   // history
   const n = a.notify || ALERT_DEFAULT_NOTIFY;
+  // Embed → host: the mobile app turns this into a phone notification (banner + sound +
+  // badge — see openviewapp ChartWebView/notifications). Same dual bridge as
+  // emitAlertsChanged. Always emitted; the host applies the alert's notify prefs.
+  if(IS_EMBED){
+    const fired={ fvx:"alertFired", symbol:activeSymbol, message:msg,
+      sound:a.sound||{kind:"sound",id:"beep"}, notify:n };
+    try{ parent.postMessage(fired, "*"); }catch(e){}
+    try{ if(window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(fired)); }catch(e){}
+  }
   if(n.browser && window.Notification && Notification.permission==="granted"){ try{ new Notification("OpenView Alert",{body:msg}); }catch(e){} }
   // Chosen alert tone (defaults to a short beep). Ringtones loop ≥10s and are
   // stopped when the popup is dismissed (click or timeout).
   const sound = a.sound || {kind:"sound", id:"beep"};
   let ring=null;
   if(n.sound){ try{ ring=playAlertSound(sound); }catch(e){} }
+  // `playFull` ringtones must finish on their own — the popup timeout closes the toast
+  // but must NOT cut the audio (only an explicit user click stops it early).
+  const playFull = !!(ring && ring.playFull);
   if(n.popup){
-    const t=document.createElement("div"); t.textContent="🔔 "+msg;
-    t.style.cssText="position:fixed;top:60px;right:320px;z-index:500;background:#f7525f;color:#fff;padding:10px 16px;border-radius:6px;box-shadow:0 4px 16px #0008;font-size:13px;max-width:320px;cursor:pointer;";
-    const dismiss=()=>{ t.remove(); if(ring) ring.stop(); };
+    const t=document.createElement("div"); t.innerHTML=icBell(); t.appendChild(document.createTextNode(msg));
+    t.querySelector("svg").style.cssText="width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;";
+    t.style.cssText="position:fixed;top:60px;right:320px;z-index:500;background:#f7525f;color:#fff;padding:10px 16px;border-radius:6px;box-shadow:0 4px 16px #0008;font-size:13px;max-width:320px;cursor:pointer;display:flex;align-items:center;gap:8px;";
+    const dismiss=()=>{ t.remove(); if(ring) ring.stop(); };   // click = stop audio too
     t.onclick=dismiss;
-    document.body.appendChild(t); setTimeout(dismiss,7000);
-  } else if(ring && sound.kind==="ringtone"){
-    // No popup to dismiss it → auto-stop the long ringtone after its first pass.
+    document.body.appendChild(t);
+    setTimeout(()=>{ t.remove(); if(ring && !playFull) ring.stop(); }, 7000);   // auto-close toast; keep playFull audio going
+  } else if(ring && sound.kind==="ringtone" && !playFull){
+    // No popup to dismiss it → auto-stop the long looping ringtone after its first pass.
     setTimeout(()=>ring.stop(), 12000);
   }
   // Webhook: POST the alert payload straight to a user-defined URL. No backend
@@ -8871,8 +8973,10 @@ const ALERT_RINGTONES=[
   {id:"rt_night",    label:"Night",         seq:[["A4",2],["C5",2],["E5",2],["A5",2],["E5",2],["C5",2]],bpm:100,type:"sine",vol:0.12},
   {id:"rt_carnival", label:"Carnival",      seq:[["G5",1],["E5",1],["G5",1],["E5",1],["C5",1],["E5",1],["G5",1],["C6",1],["B5",1],["G5",1],["D5",1],["G5",1]],bpm:240,type:"square",vol:0.1},
   // File-based ringtones (real audio, not synthesized). `src` triggers the <audio> path.
+  // `playFull:true` → play ONCE to the end (no loop, not force-stopped by the popup),
+  // for tunes that should be heard in full even if longer than the 10s minimum.
   {id:"route1",         label:"Route 1",        src:"assets/sounds/route1.mp3"},
-  {id:"flute_extended", label:"Flute Extended", src:"assets/sounds/flute_extended.wav"},
+  {id:"zelda",          label:"Zelda",          src:"assets/sounds/zelda.mp3", playFull:true},
 ];
 const RINGTONE_MIN_SEC=10;
 function _soundById(id){ return ALERT_SOUNDS.find(s=>s.id===id)||ALERT_SOUNDS[0]; }
@@ -8891,11 +8995,13 @@ function playAlertSound(sound, {loopSec}={}){
   if(s.kind==="ringtone"){
     stopAlertSound();
     const r=_ringById(s.id);
-    // File-based ringtone: loop a real audio file until dismissed.
+    // File-based ringtone: real audio file. Default loops until dismissed; `playFull`
+    // plays once through to the end (self-clears _activeRing when it finishes).
     if(r.src){
-      const el=new Audio(r.src); el.loop=true; el.volume=0.9;
+      const el=new Audio(r.src); el.loop=!r.playFull; el.volume=0.9;
       el.play().catch(()=>{});
-      const handle={ stop:()=>{ try{ el.pause(); el.currentTime=0; }catch(e){} } };
+      const handle={ stop:()=>{ try{ el.pause(); el.currentTime=0; }catch(e){} }, playFull:!!r.playFull };
+      if(r.playFull) el.onended=()=>{ if(_activeRing===handle) _activeRing=null; };
       _activeRing=handle;
       return handle;
     }
@@ -9941,7 +10047,7 @@ document.getElementById("wlNameBtn").onclick = (e)=>{
   let html="";
   // ── list-level actions (TradingView order) ──
   html+=act("↗ Share list…","share");
-  html+=act("🔔 Add alert on the list…","alert");
+  html+=act(icBell()+"Add alert on the list…","alert");
   html+=act("⧉ Make a copy…","copy");
   html+=act("✎ Rename…","rename");
   html+=act("＋ Add section…","section");
@@ -10171,7 +10277,7 @@ document.getElementById("wlBody").addEventListener("contextmenu", e=>{
   function nearestBarIndex(t){ let bi=0,bd=Infinity; for(let i=0;i<lastData.length;i++){ const d=Math.abs(lastData[i].time-t); if(d<bd){bd=d;bi=i;} } return bi; }
 })();
 
-if(IS_EMBED){ document.documentElement.classList.add("embed"); }   // grid panel: hide watchlist chrome
+// (embed class is applied at the top of the script, right after IS_EMBED — see there.)
 buildWatchlist();
 installHoverTracker();     // lets crosshair mode select/edit shapes while still panning
 loadPersisted();           // restore saved drawings for current symbol+tf

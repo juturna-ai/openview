@@ -56,11 +56,22 @@ until the engine is redeployed (awaiting explicit go-ahead per rules).
 # RSI alert: line drag + interval option (2026-07-09)
 
 ## Plan
-- [ ] Failing test first (`test/regression_rsi_alert_interval_drag.mjs`): interval select in dialog, interval persisted, interval-TF evaluation, drag-to-move RSI line
-- [ ] Dialog: Interval row (Same as chart + TF list), hidden for price/drawing sources; `a.interval` in adOk
-- [ ] Model: `interval` in saveAlerts/emitAlertsChanged/migrateAlert; in defaultAlertMessage + alerts panel
-- [ ] Eval: `sourceValue(key, data)` param; per-(sym|tf) bar cache via fetchTfBars w/ 30s stale-while-revalidate + live-tick tail patch; checkAlerts uses interval-aware values
-- [ ] Drag: mousedown on rsiEl (skip axis area), hit-test priceToCoordinate ±6px, drag re-values via coordinateToPrice (clamped 0–100), mouseup saveAlerts; hover ns-resize cursor
-- [ ] rsiAlertLines entries → {id,pl}; adjust regression_rsi_alert_line.mjs
-- [ ] App: add `interval?` to EngineAlert type (mirror passes it through untouched)
-- [ ] All alert regressions green; ARCHITECTURE.md; deploy on go-ahead
+- [x] Failing test first (`test/regression_rsi_alert_interval_drag.mjs`): interval select in dialog, interval persisted, interval-TF evaluation, drag-to-move RSI line
+- [x] Dialog: Interval row (Same as chart + TF list), hidden for price/drawing sources; `a.interval` in adOk
+- [x] Model: `interval` in saveAlerts/emitAlertsChanged/migrateAlert; in defaultAlertMessage + alerts panel
+- [x] Eval: `sourceValue(key, data)` param; per-(sym|tf) bar cache via fetchTfBars w/ 30s stale-while-revalidate + live-tick tail patch; checkAlerts uses interval-aware values
+- [x] Drag: mousedown on rsiEl (skip axis area), hit-test priceToCoordinate ±6px, drag re-values via coordinateToPrice (clamped 0–100), mouseup saveAlerts; hover ns-resize cursor
+- [x] rsiAlertLines entries → {id,pl}; adjust regression_rsi_alert_line.mjs
+- [x] App: add `interval?` to EngineAlert type (mirror passes it through untouched)
+- [x] All alert regressions green; ARCHITECTURE.md; deploy on go-ahead
+
+## Review
+All 4 new tests pass (interval UI/persist/eval, drag); full alert regression suite green
+(rsi_alert_line, alert_drag, live_tick_alert_wick, rsi_axis_drag, alert_sounds).
+Interval fetches only run while an interval-pinned alert is being evaluated (≤1 request
+per 30s per SYM|tf, LRU-capped cache). Drag is mouse-event based like the rest of the
+engine (desktop; no native touch handlers exist anywhere yet).
+CONCURRENCY NOTE: another Claude session was editing index.html simultaneously (mobile
+Alerts-tab bridge + RSI axis cursor classes); all edits merged cleanly, and
+regression_rsi_axis_drag.mjs t3c was updated to match that session's class-based cursor.
+NOT deployed — awaiting go-ahead.
