@@ -5687,8 +5687,6 @@ function showAlertMenu(id,x,y){
     mi((a&&a.active?"⏸ Pause":"▶ Resume"), ()=>{ if(a){ a.active=!a.active; saveAlerts(); redraw(); renderAlertsPanel(); } }),
     mi("⬡ Edit…", ()=>{ if(a) openAlertDialog({existing:a}); }),
     mi("🗑 Delete", ()=>removeAlert(id)),
-    msep(),
-    mi("Change alerts color…", ()=>{ const c=prompt("Alert line color (hex):", alertLineColor); if(c){ alertLineColor=c.trim(); localStorage.setItem("fv_alert_color", alertLineColor); updateRsiAlertLines(); redraw(); } }),
   ]);
 }
 function mi(label, fn, swatch){
@@ -6066,7 +6064,7 @@ function openAlertDialog(opts={}){
   const a = editing ? {...editing, notify:{...editing.notify}, sound:{...(editing.sound||ALERT_DEFAULT_SOUND)}} : {
     id:"a"+(alertUid++), source:src0, op:"crossing", target:"value",
     value: opts.price!=null ? opts.price : (srcVal!=null ? srcVal : cur),
-    trigger:"once", expiry:defaultExpiry(), message:"", notify:{...ALERT_DEFAULT_NOTIFY}, sound:{...ALERT_DEFAULT_SOUND}, active:true, _last:null,
+    trigger:"once", expiry:null, message:"", notify:{...ALERT_DEFAULT_NOTIFY}, sound:{...ALERT_DEFAULT_SOUND}, active:true, _last:null,
     interval:null,
   };
   const srcList = alertSourcesWithDrawings();
@@ -6218,8 +6216,6 @@ function openAlertDialog(opts={}){
     checkAlerts();
   };
 }
-// Default expiration = 30 days out, like TradingView's default.
-function defaultExpiry(){ return Date.now() + 30*24*3600*1000; }
 function toLocalInput(ms){ const d=new Date(ms - new Date(ms).getTimezoneOffset()*60000); return d.toISOString().slice(0,16); }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -8880,9 +8876,9 @@ function drawAlertLines(){
       const lw=dctx.measureText(label).width;
       const padL=7, gap=6, iconW=14, boxH=16;
       const boxW=padL+lw+gap+iconW+padL;
-      // Keep the pill on-screen: start at x=70 but shift left if it would overflow the plot.
-      const maxX=(dcanvas.clientWidth-axisW())-boxW-4;
-      const bx=Math.max(6, Math.min(70, maxX)), by=y-boxH/2;
+      // Right-align the pill against the plot edge, just LEFT of the price axis: the
+      // axis gutter (and its last-price badge) stays fully visible while hovering.
+      const bx=Math.max(6, (dcanvas.clientWidth-axisW())-boxW-4), by=y-boxH/2;
       dctx.fillStyle="#1e222d"; dctx.strokeStyle=col; dctx.lineWidth=1;
       if(dctx.roundRect){ dctx.beginPath(); dctx.roundRect(bx,by,boxW,boxH,4); dctx.fill(); dctx.stroke(); }
       else { dctx.fillRect(bx,by,boxW,boxH); dctx.strokeRect(bx,by,boxW,boxH); }
@@ -8971,7 +8967,7 @@ function drawCrossPlus(){
 function addQuickAlert(price){
   if(price==null) return;
   const a={ id:"a"+(alertUid++), source:"price", op:"crossing", target:"value", value:price,
-    trigger:"once", expiry:defaultExpiry(), message:"",
+    trigger:"once", expiry:null, message:"",
     notify:{...ALERT_DEFAULT_NOTIFY}, sound:{...ALERT_DEFAULT_SOUND}, active:true, _last:null, interval:null };
   alerts.push(a); saveAlerts(); renderAlertsPanel(); redraw(); checkAlerts();
   toast("Alert added at "+fmt(price));

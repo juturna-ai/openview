@@ -44,7 +44,8 @@ const t3 = await p.evaluate(() => {
   return newPrice !== before && Math.abs(reloaded.value - newPrice) < 1e-9;
 });
 
-// t4 — context menu on an alert line contains Pause / Edit / Delete.
+// t4 — context menu on an alert line contains Pause / Edit / Delete only (the
+// "Alert lines" toggle and "Change alerts color…" items were removed by design).
 const t4 = await p.evaluate(() => {
   const a = alerts.find(z=>z.id==='aT');
   drawAlertLines();
@@ -53,7 +54,7 @@ const t4 = await p.evaluate(() => {
   const txt = document.getElementById('ctxMenu').textContent;
   hideCtx();
   return /Pause|Resume/.test(txt) && /Edit/.test(txt) && /Delete/.test(txt)
-      && /Alert lines/.test(txt) && /Change alerts color/.test(txt);
+      && !/Alert lines/.test(txt) && !/Change alerts color/.test(txt);
 });
 
 // t5 — Edit opens the alert dialog pre-filled for the existing alert.

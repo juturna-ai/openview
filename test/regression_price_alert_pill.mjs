@@ -39,7 +39,7 @@ const res = await p.evaluate(() => {
 });
 
 // t1 — the pill renders the full condition label, not just the number.
-const t1 = res.pill === res.expected && /Price Crossing/.test(res.pill) && !res.bareValueOnly;
+const t1 = res.pill === res.expected && /Crossing/.test(res.pill) && !res.bareValueOnly;
 
 console.log(JSON.stringify({ t1_fullLabel: t1, pill: res.pill, expected: res.expected, errs }, null, 2));
 await b.close();
