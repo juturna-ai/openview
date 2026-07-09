@@ -34,3 +34,33 @@ Full Expo Router app built under `/openviewapp` (folder per user request; §14 h
 - Set the deployed chart URL (`EXPO_PUBLIC_CHART_ENGINE_URL`) so the WebView loads the real engine.
 
 **Not runtime-verified:** no device/simulator run and no live Supabase (offline-first path only) — typecheck + doctor are the proof at this stage.
+
+# RSI alert line on RSI pane (2026-07-09)
+
+## Plan
+- [x] Reproduce: Playwright test proving dialog-created RSI alert IS saved but draws no line (`test/regression_rsi_alert_line.mjs` — t1 pass, t2-t4 fail pre-fix)
+- [x] Fix: `updateRsiAlertLines()` — native LWC price lines on `rsiLine` for source:rsi/target:value alerts; hooked into `saveAlerts`, `loadAlerts`, "Alert lines" toggle, color change
+- [x] Confirm: new test 4/4; `regression_alert_drag`, `regression_live_tick_alert_wick`, `regression_alert_sounds` pass; screenshot shows dashed line + 🔔 axis tag on RSI pane
+- [x] ARCHITECTURE.md §8 Visual section updated
+
+## Review
+Root cause of "alert not created": creation always worked (persisted + evaluated + fires) — it was
+invisible because `drawAlertLines()` only renders source:price alerts on the main pane. Fix adds
+~20 lines. Also repaired `regression_alert_sounds.mjs`, broken by the earlier (pre-existing,
+uncommitted) file-based ringtones change: t2 now skips `src:` ringtones (no `seq` to synthesize),
+t5 counts relaxed to ≥20. Other sub-pane alert sources (macd/atr/cci/willr/volume) still draw no
+line — their panes are dynamic subCharts; out of scope here.
+NOT deployed: mobile app loads https://openview-opal.vercel.app, so the phone won't show the line
+until the engine is redeployed (awaiting explicit go-ahead per rules).
+
+# RSI alert: line drag + interval option (2026-07-09)
+
+## Plan
+- [ ] Failing test first (`test/regression_rsi_alert_interval_drag.mjs`): interval select in dialog, interval persisted, interval-TF evaluation, drag-to-move RSI line
+- [ ] Dialog: Interval row (Same as chart + TF list), hidden for price/drawing sources; `a.interval` in adOk
+- [ ] Model: `interval` in saveAlerts/emitAlertsChanged/migrateAlert; in defaultAlertMessage + alerts panel
+- [ ] Eval: `sourceValue(key, data)` param; per-(sym|tf) bar cache via fetchTfBars w/ 30s stale-while-revalidate + live-tick tail patch; checkAlerts uses interval-aware values
+- [ ] Drag: mousedown on rsiEl (skip axis area), hit-test priceToCoordinate ±6px, drag re-values via coordinateToPrice (clamped 0–100), mouseup saveAlerts; hover ns-resize cursor
+- [ ] rsiAlertLines entries → {id,pl}; adjust regression_rsi_alert_line.mjs
+- [ ] App: add `interval?` to EngineAlert type (mirror passes it through untouched)
+- [ ] All alert regressions green; ARCHITECTURE.md; deploy on go-ahead

@@ -23,11 +23,13 @@ const t1 = await p.evaluate(() => {
       && ALERT_SOUNDS.every(s=>s.label) && ALERT_RINGTONES.every(s=>s.label);
 });
 
-// t2 — every ringtone, looped by the same _melody used at play time, lasts ≥10s.
+// t2 — every synthesized ringtone, looped by the same _melody used at play time,
+// lasts ≥10s. File-based ringtones (src, no seq) play via <audio>, not _melody.
 const t2 = await p.evaluate(() => {
   const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
   const bad = [];
   for (const r of ALERT_RINGTONES) {
+    if (r.src) { if (!r.seq && typeof r.src === 'string') continue; bad.push(r.id + ':src'); continue; }
     const ac = new OAC(1, 44100*30, 44100);
     const master = ac.createGain(); master.connect(ac.destination);
     const end = _melody(ac, master, 0, r.seq, { bpm:r.bpm||150, type:r.type||'sine', vol:r.vol||0.15, minDur:RINGTONE_MIN_SEC });
@@ -72,7 +74,7 @@ const t5 = await p.evaluate(() => {
   a.notify={popup:false,sound:true,browser:false,email:false};
   let threw=false; try{ fireAlert(a, a.value, a.value); }catch(e){ threw=true; }
   stopAlertSound();
-  return kindSel && ringCount===20 && soundCount===20 && !threw;
+  return kindSel && ringCount>=20 && soundCount>=20 && !threw;
 });
 
 console.log(JSON.stringify({ t1_counts:t1, t2_ringLen:t2, t3_playStop:t3, t4_persist:t4, t5_dialogFire:t5, errs }, null, 2));

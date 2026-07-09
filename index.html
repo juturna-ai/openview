@@ -201,11 +201,10 @@
   #chartWrap{width:100%; flex:1 1 0; min-height:60px;}   /* the only growable pane */
   #chart{width:100%; height:100%;}
   #draw{cursor:crosshair;}
-  /* White horizontal double-arrow shown while hovering/dragging the date-axis strip
-     (the time-scale bar-spacing stretch). A dark outline keeps it visible on any bg. */
-  body.time-resize, body.time-resize *{
-    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='20' viewBox='0 0 32 20'%3E%3Cpath d='M9 3 L2 10 L9 17 M9 6 L9 14 M23 6 L23 14 M23 3 L30 10 L23 17' fill='none' stroke='%23000' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M9 3 L2 10 L9 17 M9 6 L9 14 M23 6 L23 14 M23 3 L30 10 L23 17' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") 16 10, ew-resize !important;
-  }
+  /* Standard horizontal-resize cursor while hovering/dragging the date-axis strip
+     (the time-scale bar-spacing stretch). Native ew-resize — smaller/cleaner than the
+     old custom SVG double-arrow, and matches the OS pointer the user expects. */
+  body.time-resize, body.time-resize *{ cursor: ew-resize !important; }
   #rsiWrap{flex:0 1 auto; height:26%; min-height:96px; border-top:1px solid var(--border); position:relative;}
   #subPanes{flex:0 1 auto; min-height:0;}
   #rsiLabel{position:absolute; top:6px; left:10px; font-size:11px; color:var(--muted); z-index:5;}
@@ -216,6 +215,12 @@
     padding:2px 6px; border-radius:3px; pointer-events:none; white-space:nowrap;}
   #rsiLabel b{font-weight:600;}
   #rsi{width:100%; height:100%;}
+  /* RSI axis stretch cursor: the LWC canvas inside #rsi sets its own inline cursor, so
+     a plain rsiEl.style.cursor never shows — force it down onto the children. The html-
+     level class holds the ↕ for the whole drag even when the pointer leaves the pane. */
+  #rsi.axis-hover, #rsi.axis-hover *{cursor:ns-resize !important;}
+  #rsi.alert-hover, #rsi.alert-hover *{cursor:ns-resize !important;}
+  html.rsi-axis-drag, html.rsi-axis-drag *{cursor:ns-resize !important;}
 
   #watchlist{width:var(--wl-w,300px); background:var(--bg); border-left:1px solid var(--border);
     display:flex; flex-direction:column; overflow:hidden; position:relative;}
@@ -2671,17 +2676,32 @@ window.addEventListener("message", e=>{
   // Host → embed: open the symbol/pair details card (mobile app "View details" action).
   // Falls back to the current chart symbol when the host doesn't pass one.
   if(d.fvx==="details" && IS_EMBED){ try{ openPairInfoCard(d.sym || activeSymbol); }catch(err){} }
-  // Host → embed: replace this symbol's alerts with the app's list so the alert LINE
-  // renders in-app. Only applied when the pushed symbol matches what's loaded. The
-  // _alertsFromHost guard stops saveAlerts() from echoing this straight back to the host.
-  if(d.fvx==="setalerts" && IS_EMBED && Array.isArray(d.alerts) && (!d.symbol || d.symbol===activeSymbol)){
-    try{
-      _alertsFromHost=true;
-      alerts.length=0;
-      d.alerts.slice(0,100).forEach(a=>alerts.push(Object.assign(migrateAlert(a),{_last:null})));
-      saveAlerts(); redraw(); renderAlertsPanel();
-    }catch(err){}
-    finally{ _alertsFromHost=false; }
+  // Host → embed: open the engine's alert dialog (mobile app bell → single alert editor).
+  if(d.fvx==="alertdialog" && IS_EMBED){ try{ openAlertDialog(d.existing?{existing:d.existing}:{}); }catch(err){} }
+  // Host → embed: replace a symbol's alerts (mobile Alerts tab edits). Active symbol →
+  // replace in-memory + persist + redraw + evaluate immediately. Other symbols → write
+  // straight to that symbol's localStorage key so the engine picks them up on next load.
+  // The _alertsFromHost guard stops saveAlerts() from echoing this straight back.
+  if(d.fvx==="setalerts" && IS_EMBED && Array.isArray(d.alerts)){
+    const sym = d.symbol || activeSymbol;
+    if(sym===activeSymbol){
+      try{
+        _alertsFromHost=true;
+        alerts.length=0;
+        d.alerts.slice(0,100).forEach(a=>alerts.push(Object.assign(migrateAlert(a),{_last:null})));
+        // Keep alertUid ahead of pushed ids so the next dialog-created alert is unique.
+        alerts.forEach(a=>{ const m=/^a(\d+)$/.exec(a.id||""); if(m) alertUid=Math.max(alertUid, +m[1]+1); });
+        saveAlerts(); redraw(); renderAlertsPanel();
+      }catch(err){}
+      finally{ _alertsFromHost=false; }
+      // Instant eval: an already-true gt/lt fires now, not on the next tick.
+      try{ checkAlerts(); }catch(err){}
+    } else if(typeof sym==="string" && sym){
+      try{ localStorage.setItem("fv_alerts_"+sym, JSON.stringify(d.alerts.slice(0,100).map(a=>migrateAlert(a)).map(a=>({
+        id:a.id, source:a.source, op:a.op, target:a.target, value:a.value,
+        trigger:a.trigger, expiry:a.expiry, message:a.message, notify:a.notify, sound:a.sound, webhook:a.webhook, active:a.active,
+      })))); }catch(err){}
+    }
   }
 });
 // Embed → host: emit visible-range changes for Time/Date-range sync.
@@ -4909,15 +4929,16 @@ rsiEl.addEventListener("mousedown", e=>{
   if(!inRsiPriceAxis(p)) return;
   const r=rsiBaseRange();
   rsiAxisDrag={ startY:p.y, center:(r.min+r.max)/2, span:r.max-r.min };
-  document.body.style.cursor="ns-resize";   // hold the cursor for the whole drag
+  document.documentElement.classList.add("rsi-axis-drag");   // hold ↕ for the whole drag
   e.preventDefault();
 });
 document.addEventListener("mousemove", e=>{
   if(!rsiAxisDrag){
-    // hover cursor hint over the RSI axis gutter
+    // hover cursor hint over the RSI axis gutter (class — the LWC canvas inside sets
+    // its own inline cursor, so a style on the container alone never shows)
     const p=rsiEvtPt(e);
     const over = p.x>=0 && p.y>=0 && p.x<=rsiEl.clientWidth && p.y<=rsiEl.clientHeight && inRsiPriceAxis(p);
-    rsiEl.style.cursor = over ? "ns-resize" : "";
+    rsiEl.classList.toggle("axis-hover", over);
     return;
   }
   const h=rsiEl.clientHeight||1;
@@ -4928,7 +4949,7 @@ document.addEventListener("mousemove", e=>{
   rsiLine.applyOptions({});                        // re-run rsiScale autoscaleInfoProvider
 });
 document.addEventListener("mouseup", ()=>{
-  if(rsiAxisDrag){ rsiAxisDrag=null; document.body.style.cursor=""; }
+  if(rsiAxisDrag){ rsiAxisDrag=null; document.documentElement.classList.remove("rsi-axis-drag"); }
 });
 rsiEl.addEventListener("dblclick", e=>{
   if(!inRsiPriceAxis(rsiEvtPt(e))) return;
@@ -5509,8 +5530,8 @@ function showAlertMenu(id,x,y){
     mi("⬡ Edit…", ()=>{ if(a) openAlertDialog({existing:a}); }),
     mi("🗑 Delete", ()=>removeAlert(id)),
     msep(),
-    mi((alertLinesVisible?"✓ ":"")+"Alert lines", ()=>{ alertLinesVisible=!alertLinesVisible; localStorage.setItem("fv_alert_lines", alertLinesVisible?"1":"0"); redraw(); }),
-    mi("Change alerts color…", ()=>{ const c=prompt("Alert line color (hex):", alertLineColor); if(c){ alertLineColor=c.trim(); localStorage.setItem("fv_alert_color", alertLineColor); redraw(); } }),
+    mi((alertLinesVisible?"✓ ":"")+"Alert lines", ()=>{ alertLinesVisible=!alertLinesVisible; localStorage.setItem("fv_alert_lines", alertLinesVisible?"1":"0"); updateRsiAlertLines(); redraw(); }),
+    mi("Change alerts color…", ()=>{ const c=prompt("Alert line color (hex):", alertLineColor); if(c){ alertLineColor=c.trim(); localStorage.setItem("fv_alert_color", alertLineColor); updateRsiAlertLines(); redraw(); } }),
   ]);
 }
 function mi(label, fn, swatch){
@@ -5889,6 +5910,7 @@ function openAlertDialog(opts={}){
     id:"a"+(alertUid++), source:src0, op:"crossing", target:"value",
     value: opts.price!=null ? opts.price : (srcVal!=null ? srcVal : cur),
     trigger:"once", expiry:defaultExpiry(), message:"", notify:{...ALERT_DEFAULT_NOTIFY}, sound:{...ALERT_DEFAULT_SOUND}, active:true, _last:null,
+    interval:null,
   };
   const srcList = alertSourcesWithDrawings();
   const srcOpts = srcList.map(s=>`<option value="${s.key}" ${s.key===a.source?"selected":""}>${s.label}</option>`).join("");
@@ -5897,6 +5919,10 @@ function openAlertDialog(opts={}){
   // target = "Value" + every series + line drawings (so price-vs-MA, price-vs-trendline, etc. all work)
   const tgtOpts = `<option value="value" ${a.target==="value"?"selected":""}>Value</option>`+
     srcList.map(s=>`<option value="${s.key}" ${s.key===a.target?"selected":""}>${s.label}</option>`).join("");
+  // Interval the indicator is computed on (TradingView parity). Empty = follow the
+  // chart's timeframe. Hidden for price/drawing sources — those are TF-independent.
+  const ivOpts = `<option value="">Same as chart</option>`+
+    Object.keys(TF).filter(k=>k[0]!=="c").map(k=>`<option value="${k}" ${k===a.interval?"selected":""}>${TF[k].menu||TF[k].label}</option>`).join("");
   const expVal = a.expiry ? toLocalInput(a.expiry) : "";
 
   alertDlg.innerHTML=`
@@ -5909,6 +5935,10 @@ function openAlertDialog(opts={}){
           <select id="ad_target">${tgtOpts}</select>
           <input type="number" id="ad_value" step="any" value="${a.value??""}" placeholder="Value">
         </div>
+      </div></div>
+      <div class="arow" id="ad_interval_row"><div class="alabel">Interval</div><div class="actl">
+        <select id="ad_interval">${ivOpts}</select>
+        <div class="hint">Timeframe the indicator is computed on.</div>
       </div></div>
       <div class="asep"></div>
       <div class="arow"><div class="alabel">Trigger</div><div class="actl">
@@ -5964,6 +5994,11 @@ function openAlertDialog(opts={}){
   const syncTargetUI=()=>{ const isVal=$("ad_target").value==="value"; $("ad_value").style.display=isVal?"":"none"; };
   syncTargetUI();
   $("ad_target").onchange=syncTargetUI;
+  // Interval only applies to indicator sources; price/drawing levels are TF-independent.
+  const syncIntervalUI=()=>{ const s=$("ad_source").value;
+    $("ad_interval_row").style.display=(s==="price"||s.indexOf("draw:")===0)?"none":""; };
+  syncIntervalUI();
+  $("ad_source").onchange=syncIntervalUI;
   $("ad_n_email").onchange=e=>{ $("ad_email_hint").style.display=e.target.checked?"block":"none"; };
 
   // ── Alert sound picker: populate options for the chosen kind, preview/stop. ──
@@ -5989,6 +6024,7 @@ function openAlertDialog(opts={}){
     a.target=$("ad_target").value;
     a.value=a.target==="value" ? parseFloat($("ad_value").value) : null;
     if(a.target==="value" && isNaN(a.value)){ $("ad_value").focus(); return; }
+    a.interval=(a.source==="price"||a.source.indexOf("draw:")===0) ? null : ($("ad_interval").value||null);
     a.trigger=$("ad_trigger").value;
     const ev=$("ad_expiry").value; a.expiry=ev ? new Date(ev).getTime() : null;
     a.message=$("ad_message").value.trim();
@@ -6000,6 +6036,10 @@ function openAlertDialog(opts={}){
     else { alerts.push(a); }
     if(a.notify.browser) requestNotifPermission();
     saveAlerts(); redraw(); renderAlertsPanel(); closeAlertDlg();
+    // Evaluate right away: a gt/lt condition that's ALREADY true fires instantly
+    // instead of waiting for the next trade tick. (Cross ops need a side flip, so
+    // this pass just seeds their _last side.)
+    checkAlerts();
   };
 }
 // Default expiration = 30 days out, like TradingView's default.
@@ -8365,21 +8405,86 @@ function alertsKey(){ return "fv_alerts_"+activeSymbol; }
 const ALERT_DEFAULT_NOTIFY = { popup:true, sound:true, browser:false, email:false };
 const ALERT_DEFAULT_SOUND = { kind:"sound", id:"beep" };
 function migrateAlert(a){
-  if(a.source){ if(!a.sound) a.sound={...ALERT_DEFAULT_SOUND}; return a; }   // new-format (add sound if missing)
+  if(a.source){ if(!a.sound) a.sound={...ALERT_DEFAULT_SOUND}; if(a.interval===undefined) a.interval=null; return a; }   // new-format (backfill sound/interval)
   // legacy {price,dir,active}
   return {
     id:a.id||("a"+(alertUid++)), source:"price", op:"crossing",
     target:"value", value:a.price,
-    trigger:"once", expiry:null,
+    trigger:"once", expiry:null, interval:null,
     message:"", notify:{...ALERT_DEFAULT_NOTIFY}, sound:{...ALERT_DEFAULT_SOUND},
     active:a.active!==false, _last:null,
   };
 }
+// RSI alerts get a native lightweight-charts price line on the RSI pane —
+// the canvas drawAlertLines() only covers the main pane, so without this an
+// RSI alert is created but invisible (reported as "alert not created").
+let rsiAlertLines=[];   // [{id, pl}] — pl = LWC IPriceLine handle, id = alert id (for drag hit-testing)
+function updateRsiAlertLines(){
+  rsiAlertLines.forEach(e=>{ try{ rsiLine.removePriceLine(e.pl); }catch(err){} });
+  rsiAlertLines=[];
+  if(!alertLinesVisible) return;
+  alerts.forEach(a=>{
+    if(a.source!=="rsi" || a.target!=="value" || a.value==null || !isFinite(a.value)) return;
+    try{ rsiAlertLines.push({ id:a.id, pl:rsiLine.createPriceLine({
+      price:a.value, color:a.active?alertLineColor:"#888",
+      lineWidth:1, lineStyle:LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible:true, title:"🔔",
+    }) }); }catch(e){}
+  });
+}
+// ── Drag-to-move for RSI-pane alert lines (mirrors the main pane's alert drag). ──
+// No overlay canvas on the RSI pane, so hit-test/drag in RSI-value space via the
+// series' priceToCoordinate/coordinateToPrice. Axis-gutter area is left to the
+// axis-stretch drag; cursor uses classes because the LWC canvas sets its own inline
+// cursor (same trick as #rsi.axis-hover).
+let rsiAlertDrag=null;   // {id} while dragging an RSI alert line
+function rsiAlertHit(p){
+  if(!alertLinesVisible || p.x<0 || p.y<0 || p.x>rsiEl.clientWidth-rsiAxisW()) return null;
+  for(const e of rsiAlertLines){
+    const a=alerts.find(z=>z.id===e.id); if(!a) continue;
+    const y=rsiLine.priceToCoordinate(a.value);
+    if(y!=null && Math.abs(p.y-y)<6) return a.id;
+  }
+  return null;
+}
+rsiEl.addEventListener("mousedown", e=>{
+  if(e.button!==0 || rsiAxisDrag) return;
+  const p=rsiEvtPt(e);
+  const id=rsiAlertHit(p);
+  if(!id) return;
+  rsiAlertDrag={ id };
+  document.documentElement.classList.add("rsi-axis-drag");   // hold ↕ for the whole drag
+  e.preventDefault();
+});
+document.addEventListener("mousemove", e=>{
+  if(rsiAlertDrag){
+    const p=rsiEvtPt(e);
+    const a=alerts.find(z=>z.id===rsiAlertDrag.id);
+    let v=rsiLine.coordinateToPrice(p.y);
+    if(a && v!=null && isFinite(v)){
+      a.value=Math.max(0, Math.min(100, v)); a._last=null;
+      const ent=rsiAlertLines.find(x=>x.id===a.id);
+      if(ent) try{ ent.pl.applyOptions({ price:a.value }); }catch(err){}
+    }
+    return;
+  }
+  // hover hint over a line (skip while axis-stretching; axis gutter excluded in hit)
+  if(rsiAxisDrag) return;
+  rsiEl.classList.toggle("alert-hover", !!rsiAlertHit(rsiEvtPt(e)));
+});
+document.addEventListener("mouseup", ()=>{
+  if(rsiAlertDrag){
+    rsiAlertDrag=null;
+    document.documentElement.classList.remove("rsi-axis-drag");
+    saveAlerts(); renderAlertsPanel();
+  }
+});
 function saveAlerts(){
   try{ localStorage.setItem(alertsKey(), JSON.stringify(alerts.map(a=>({
-    id:a.id, source:a.source, op:a.op, target:a.target, value:a.value,
+    id:a.id, source:a.source, op:a.op, target:a.target, value:a.value, interval:a.interval||null,
     trigger:a.trigger, expiry:a.expiry, message:a.message, notify:a.notify, sound:a.sound, webhook:a.webhook, active:a.active,
   })))); }catch(e){}
+  updateRsiAlertLines();
   emitAlertsChanged();
 }
 // Embed → host: notify the mobile app whenever alerts change (drag, delete, toggle,
@@ -8388,7 +8493,8 @@ function saveAlerts(){
 function emitAlertsChanged(){
   if(!IS_EMBED || _alertsFromHost) return;
   const payload={ fvx:"alertsChanged", symbol:activeSymbol,
-    alerts: alerts.map(a=>({ id:a.id, source:a.source, op:a.op, target:a.target, value:a.value, active:a.active })) };
+    alerts: alerts.map(a=>({ id:a.id, source:a.source, op:a.op, target:a.target, value:a.value, interval:a.interval||null,
+      trigger:a.trigger, expiry:a.expiry, message:a.message, notify:a.notify, sound:a.sound, active:a.active })) };
   // iframe host (web) listens on window 'message'…
   try{ parent.postMessage(payload, "*"); }catch(e){}
   // …React Native WebView host receives only via this bridge.
@@ -8397,7 +8503,14 @@ function emitAlertsChanged(){
 let _alertsFromHost=false;
 function loadAlerts(){ alerts.length=0;
   try{ const raw=localStorage.getItem(alertsKey()); if(raw) JSON.parse(raw).forEach(a=>alerts.push(Object.assign(migrateAlert(a),{_last:null}))); }catch(e){}
-  redraw(); renderAlertsPanel();
+  // alertUid resets to 1 on every page load — seed it PAST the highest saved "aN" id,
+  // otherwise the next new alert reuses "a1" and ids collide.
+  alerts.forEach(a=>{ const m=/^a(\d+)$/.exec(a.id||""); if(m) alertUid=Math.max(alertUid, +m[1]+1); });
+  // Heal ids already duplicated by the old behavior (non-destructive: reassign the dup).
+  const seen=new Set(); let healed=false;
+  alerts.forEach(a=>{ if(seen.has(a.id)){ a.id="a"+(alertUid++); healed=true; } seen.add(a.id); });
+  if(healed) saveAlerts();
+  updateRsiAlertLines(); redraw(); renderAlertsPanel();
 }
 
 // Series sources available as alert operands, computed from lastData.
@@ -8424,44 +8537,94 @@ function sourceLabel(k){
   if(k && k.indexOf("draw:")===0){ const f=alertSourcesWithDrawings().find(s=>s.key===k); return f?f.label:"Drawing"; }
   const s=ALERT_SOURCES.find(s=>s.key===k); return s?s.label:k;
 }
-// Latest value of a source (null if not enough data).
-function sourceValue(key){
-  if(!lastData.length) return null;
-  if(key==="price") return lastData[lastData.length-1].close;
-  if(key==="rsi"){ const r=rsiSeries(lastData,RSI_PARAMS.len,RSI_PARAMS.src); return r.length?r[r.length-1].value:null; }
+// Latest value of a source (null if not enough data). `data` defaults to the visible
+// chart's bars; interval-pinned alerts pass their own timeframe's bars instead.
+function sourceValue(key, data){
+  data = data || lastData;
+  if(!data.length) return null;
+  if(key==="price") return data[data.length-1].close;
+  if(key==="rsi"){ const r=rsiSeries(data,RSI_PARAMS.len,RSI_PARAMS.src); return r.length?r[r.length-1].value:null; }
   // Alert on a drawing: horizontal line = its level; trend/ray = value at the last bar.
   if(key && key.indexOf("draw:")===0){
     const s=draw.shapes.find(x=>x.id===key.slice(5)); if(!s||!s.pts||!s.pts.length) return null;
     if(s.type==="hline"||s.type==="hray") return s.pts[0].price;
     if((s.type==="trend"||s.type==="ray"||s.type==="ext") && s.pts.length>=2){
-      const [a,b]=s.pts, t=lastData[lastData.length-1].time;
+      const [a,b]=s.pts, t=data[data.length-1].time;
       if(b.time===a.time) return b.price;
       return a.price + (b.price-a.price)*((t-a.time)/(b.time-a.time));   // linear extrapolation
     }
     return s.pts[0].price;
   }
   const m=MAS.find(m=>("ma"+m.p)===key);
-  if(m){ const sd=smaSeries(lastData,m.p); return sd.length?sd[sd.length-1].value:null; }
+  if(m){ const sd=smaSeries(data,m.p); return sd.length?sd[sd.length-1].value:null; }
   const last=arr=>{ for(let i=arr.length-1;i>=0;i--){ if(arr[i]!=null&&isFinite(arr[i])) return arr[i]; } return null; };
   const lastP=pts=>pts&&pts.length?pts[pts.length-1].value:null;
   try{
-    if(key==="volume") return lastData[lastData.length-1].volume||0;
-    if(key==="atr"){ return last(rmaA(trA(lastData),14)); }
-    if(key==="vwap"){ return lastP(vwapCalc(lastData)); }
-    if(key==="cci"){ const src=lastData.map(d=>(d.high+d.low+d.close)/3); const sm=smaA(src,20); const arr=src.map((tp,i)=>{ if(sm[i]==null) return null; let md=0; for(let j=0;j<20;j++) md+=Math.abs(src[i-j]-sm[i]); md/=20; return md?(tp-sm[i])/(0.015*md):0; }); return last(arr); }
-    if(key==="willr"){ const hh=highestA(lastData.map(d=>d.high),14), ll=lowestA(lastData.map(d=>d.low),14); const arr=lastData.map((d,i)=>(hh[i]!=null&&ll[i]!=null&&hh[i]!==ll[i])?((hh[i]-d.close)/(hh[i]-ll[i]))*-100:null); return last(arr); }
-    if(key==="macd"||key==="macdsig"){ const c=lastData.map(d=>d.close); const ef=emaA(c,12), es=emaA(c,26); const macd=ef.map((v,i)=>(v!=null&&es[i]!=null)?v-es[i]:null); if(key==="macd") return last(macd); const sig=emaA(macd.map(x=>x==null?0:x),9); return last(sig); }
+    if(key==="volume") return data[data.length-1].volume||0;
+    if(key==="atr"){ return last(rmaA(trA(data),14)); }
+    if(key==="vwap"){ return lastP(vwapCalc(data)); }
+    if(key==="cci"){ const src=data.map(d=>(d.high+d.low+d.close)/3); const sm=smaA(src,20); const arr=src.map((tp,i)=>{ if(sm[i]==null) return null; let md=0; for(let j=0;j<20;j++) md+=Math.abs(src[i-j]-sm[i]); md/=20; return md?(tp-sm[i])/(0.015*md):0; }); return last(arr); }
+    if(key==="willr"){ const hh=highestA(data.map(d=>d.high),14), ll=lowestA(data.map(d=>d.low),14); const arr=data.map((d,i)=>(hh[i]!=null&&ll[i]!=null&&hh[i]!==ll[i])?((hh[i]-d.close)/(hh[i]-ll[i]))*-100:null); return last(arr); }
+    if(key==="macd"||key==="macdsig"){ const c=data.map(d=>d.close); const ef=emaA(c,12), es=emaA(c,26); const macd=ef.map((v,i)=>(v!=null&&es[i]!=null)?v-es[i]:null); if(key==="macd") return last(macd); const sig=emaA(macd.map(x=>x==null?0:x),9); return last(sig); }
   }catch(e){}
   return null;
 }
+// ── Per-alert interval evaluation ────────────────────────────────────
+// An alert pinned to e.g. '1h' evaluates its indicator on 1h candles even while the
+// chart shows another TF. Bars come from fetchTfBars, cached per SYM|tf, refreshed
+// stale-while-revalidate (≤ every 30s, and only while such an alert is being checked);
+// between refetches the forming bar is patched with the live tick so evaluation stays
+// tick-fresh. A completed refetch re-runs checkAlerts() once.
+const _alertTfBars=new Map();      // "SYM|tf" -> {bars, at}
+const _alertTfPending=new Set();
+const ALERT_TF_CACHE_MAX=12;
+function alertIntervalBars(tf){
+  const key=activeSymbol+"|"+tf;
+  const hit=_alertTfBars.get(key);
+  const bucket=(TF[tf]&&TF[tf].bucket)||3600;
+  const ttl=Math.min(bucket,30)*1000;
+  if(hit && Date.now()-hit.at<ttl) return hit.bars;
+  if(!_alertTfPending.has(key)){
+    _alertTfPending.add(key);
+    fetchTfBars(activeSymbol, tf, activeSymbol.includes("/"))
+      .then(bars=>{
+        if(bars && bars.length){
+          _alertTfBars.set(key,{bars,at:Date.now()});
+          while(_alertTfBars.size>ALERT_TF_CACHE_MAX) _alertTfBars.delete(_alertTfBars.keys().next().value);
+        }
+      })
+      .catch(()=>{})
+      .finally(()=>{ _alertTfPending.delete(key); try{ checkAlerts(); }catch(e){} });
+  }
+  return hit?hit.bars:null;   // stale-while-revalidate: keep using old bars while refetching
+}
+// Patch the cached series' forming bar with the live price so intra-bar RSI/MA etc.
+// move with the tape between refetches. Valid because chart alerts are always on the
+// active symbol, whose live price is lastData's forming bar.
+function withLiveTail(bars){
+  if(!bars||!bars.length||!lastData.length) return bars;
+  const px=lastData[lastData.length-1].close;
+  const lb=bars[bars.length-1];
+  if(px==null||!isFinite(px)) return bars;
+  return bars.slice(0,-1).concat([{...lb, close:px, high:Math.max(lb.high,px), low:Math.min(lb.low,px)}]);
+}
+// A source's value honoring the alert's pinned interval (null/current TF → chart bars).
+function alertSourceValue(a, key){
+  const tf=a&&a.interval;
+  if(!tf || tf===activeTF || !TF[tf] || key==="price" || (key&&key.indexOf("draw:")===0))
+    return sourceValue(key);
+  const bars=alertIntervalBars(tf);
+  return bars ? sourceValue(key, withLiveTail(bars)) : null;
+}
 // The RHS scalar an alert compares against right now.
-function alertTargetValue(a){ return a.target==="value" ? a.value : sourceValue(a.target); }
+function alertTargetValue(a){ return a.target==="value" ? a.value : alertSourceValue(a, a.target); }
 function opLabel(op){ return ({crossing:"Crossing", crossUp:"Crossing Up", crossDown:"Crossing Down", gt:"Greater Than", lt:"Less Than"})[op]||op; }
 
 function defaultAlertMessage(a){
   const lhs=sourceLabel(a.source);
   const rhs=a.target==="value" ? fmt(a.value) : sourceLabel(a.target);
-  return `${activeSymbol} ${lhs} ${opLabel(a.op)} ${rhs}`;
+  const iv=a.interval && TF[a.interval] ? ` [${TF[a.interval].label}]` : "";
+  return `${activeSymbol} ${lhs}${iv} ${opLabel(a.op)} ${rhs}`;
 }
 
 function removeAlert(id){ const i=alerts.findIndex(a=>a.id===id); if(i>=0){ alerts.splice(i,1); saveAlerts(); redraw(); renderAlertsPanel(); } }
@@ -8563,7 +8726,7 @@ function checkAlerts(){
   alerts.forEach(a=>{
     if(!a.active) return;
     if(a.expiry && now > a.expiry){ a.active=false; saveAlerts(); renderAlertsPanel(); redraw(); return; }
-    const lhs = sourceValue(a.source), rhs = alertTargetValue(a);
+    const lhs = alertSourceValue(a, a.source), rhs = alertTargetValue(a);
     if(alertTriggered(a, lhs, rhs)){
       // "once per bar": suppress additional fires within the same forming bar.
       const curBar = lastData[lastData.length-1].time;
@@ -8705,6 +8868,9 @@ const ALERT_RINGTONES=[
   {id:"rt_ascend",   label:"Ascend",        seq:[["C5",1],["D5",1],["E5",1],["F5",1],["G5",1],["A5",1],["B5",1],["C6",1],["B5",1],["A5",1],["G5",1],["F5",1]],bpm:230,type:"triangle"},
   {id:"rt_night",    label:"Night",         seq:[["A4",2],["C5",2],["E5",2],["A5",2],["E5",2],["C5",2]],bpm:100,type:"sine",vol:0.12},
   {id:"rt_carnival", label:"Carnival",      seq:[["G5",1],["E5",1],["G5",1],["E5",1],["C5",1],["E5",1],["G5",1],["C6",1],["B5",1],["G5",1],["D5",1],["G5",1]],bpm:240,type:"square",vol:0.1},
+  // File-based ringtones (real audio, not synthesized). `src` triggers the <audio> path.
+  {id:"route1",         label:"Route 1",        src:"assets/sounds/route1.mp3"},
+  {id:"flute_extended", label:"Flute Extended", src:"assets/sounds/flute_extended.wav"},
 ];
 const RINGTONE_MIN_SEC=10;
 function _soundById(id){ return ALERT_SOUNDS.find(s=>s.id===id)||ALERT_SOUNDS[0]; }
@@ -8723,6 +8889,14 @@ function playAlertSound(sound, {loopSec}={}){
   if(s.kind==="ringtone"){
     stopAlertSound();
     const r=_ringById(s.id);
+    // File-based ringtone: loop a real audio file until dismissed.
+    if(r.src){
+      const el=new Audio(r.src); el.loop=true; el.volume=0.9;
+      el.play().catch(()=>{});
+      const handle={ stop:()=>{ try{ el.pause(); el.currentTime=0; }catch(e){} } };
+      _activeRing=handle;
+      return handle;
+    }
     const dur=_melody(ac, master, t0, r.seq, {bpm:r.bpm||150, type:r.type||"sine", vol:r.vol||0.15, minDur:Math.max(RINGTONE_MIN_SEC, loopSec||RINGTONE_MIN_SEC)});
     const handle={ stop:()=>{ try{ master.gain.cancelScheduledValues(ac.currentTime); master.gain.setValueAtTime(master.gain.value, ac.currentTime); master.gain.linearRampToValueAtTime(0.0001, ac.currentTime+0.05); }catch(e){} } };
     _activeRing=handle;
@@ -10044,6 +10218,10 @@ function applyTick(prodPrice){
   const bar=lastData[lastData.length-1];
   const prevClose=bar.close;
   bar.close=price; if(price>bar.high)bar.high=price; if(price<bar.low)bar.low=price;
+  // Evaluate alerts FIRST — before the (heavy) full-series repaint below — so the
+  // tick→alert latency is effectively zero. The bar mutation above is all
+  // checkAlerts needs (sourceValue("price") reads lastData's final close).
+  if(typeof checkAlerts==="function") checkAlerts();
   try{
     // Re-route the live tick through applyChartType so the ~4-month future
     // whitespace tail is re-supplied every update. Calling candle.update()
@@ -10055,9 +10233,6 @@ function applyTick(prodPrice){
   }catch(e){}
   updateOhlcLegend(bar.time);
   flashLastPrice(price>=prevClose);   // last-price label flashes green/red on tick
-  // Evaluate alerts on the live tick too — otherwise a price that crosses an
-  // alert level between the 20s polls (via the WS feed) would never fire.
-  if(typeof checkAlerts==="function") checkAlerts();
 }
 // Brief flash on the last-price pill (the countdown badge sits there), colored by tick.
 function flashLastPrice(up){
@@ -10086,6 +10261,10 @@ let _wsSymSeen=null;
 setInterval(()=>{
   if(activeSymbol!==_wsSymSeen){ _wsSymSeen=activeSymbol; _wsLast={}; wsConnect(); }
 }, 1000);
+// Zero-delay alert requirement: don't sit out the exponential backoff when the tab
+// becomes visible again or the network returns — reconnect the tick feed immediately.
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && !_ws){ _wsRetry=0; wsConnect(); } });
+window.addEventListener("online", ()=>{ if(!_ws){ _wsRetry=0; wsConnect(); } });
 wsConnect();
 </script>
 </body>
