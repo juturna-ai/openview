@@ -490,12 +490,14 @@
   #scriptLegend{display:flex; flex-direction:column; gap:2px; margin-top:2px;}
   .alertdlg .dh .sym{display:inline-flex;align-items:center;gap:6px;font-weight:700;}
   .alertdlg .arow{display:flex;align-items:flex-start;gap:14px;padding:6px 0;}
-  .alertdlg .arow > .alabel{width:92px;flex:none;font-size:13px;color:var(--muted);padding-top:7px;}
+  .alertdlg .arow > .alabel{width:92px;flex:none;font-size:13px;color:#e8e9ed;padding-top:7px;}
   .alertdlg .actl{flex:1;display:flex;flex-direction:column;gap:8px;}
   .alertdlg select, .alertdlg input[type=number], .alertdlg input[type=text], .alertdlg input[type=url], .alertdlg input[type=datetime-local]{
     width:100%;padding:8px 10px;background:#131722;border:1px solid var(--border);border-radius:6px;
     color:#d1d4dc;font-size:13px;outline:none;}
   .alertdlg select:focus, .alertdlg input:focus{border-color:var(--accent);}
+  /* Native date-picker glyph is black by default → invisible on the dark input. */
+  .alertdlg input[type=datetime-local]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:0.85;}
   .alertdlg .twocol{display:flex;gap:8px;}
   .alertdlg .twocol > *{flex:1;}
   .alertdlg .addcond{color:var(--accent);font-size:13px;cursor:pointer;user-select:none;padding:2px 0;}
@@ -2668,6 +2670,18 @@ window.addEventListener("message", e=>{
   // Host → embed: open the symbol/pair details card (mobile app "View details" action).
   // Falls back to the current chart symbol when the host doesn't pass one.
   if(d.fvx==="details" && IS_EMBED){ try{ openPairInfoCard(d.sym || activeSymbol); }catch(err){} }
+  // Host → embed: replace this symbol's alerts with the app's list so the alert LINE
+  // renders in-app. Only applied when the pushed symbol matches what's loaded. The
+  // _alertsFromHost guard stops saveAlerts() from echoing this straight back to the host.
+  if(d.fvx==="setalerts" && IS_EMBED && Array.isArray(d.alerts) && (!d.symbol || d.symbol===activeSymbol)){
+    try{
+      _alertsFromHost=true;
+      alerts.length=0;
+      d.alerts.slice(0,100).forEach(a=>alerts.push(Object.assign(migrateAlert(a),{_last:null})));
+      saveAlerts(); redraw(); renderAlertsPanel();
+    }catch(err){}
+    finally{ _alertsFromHost=false; }
+  }
 });
 // Embed → host: emit visible-range changes for Time/Date-range sync.
 if(IS_EMBED){
@@ -8365,7 +8379,21 @@ function saveAlerts(){
     id:a.id, source:a.source, op:a.op, target:a.target, value:a.value,
     trigger:a.trigger, expiry:a.expiry, message:a.message, notify:a.notify, sound:a.sound, webhook:a.webhook, active:a.active,
   })))); }catch(e){}
+  emitAlertsChanged();
 }
+// Embed → host: notify the mobile app whenever alerts change (drag, delete, toggle,
+// edit) so it can persist the new target price. No-op outside embed. `_alertsFromHost`
+// suppresses the echo when the change was just pushed in by the host itself.
+function emitAlertsChanged(){
+  if(!IS_EMBED || _alertsFromHost) return;
+  const payload={ fvx:"alertsChanged", symbol:activeSymbol,
+    alerts: alerts.map(a=>({ id:a.id, source:a.source, op:a.op, target:a.target, value:a.value, active:a.active })) };
+  // iframe host (web) listens on window 'message'…
+  try{ parent.postMessage(payload, "*"); }catch(e){}
+  // …React Native WebView host receives only via this bridge.
+  try{ if(window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(payload)); }catch(e){}
+}
+let _alertsFromHost=false;
 function loadAlerts(){ alerts.length=0;
   try{ const raw=localStorage.getItem(alertsKey()); if(raw) JSON.parse(raw).forEach(a=>alerts.push(Object.assign(migrateAlert(a),{_last:null}))); }catch(e){}
   redraw(); renderAlertsPanel();
@@ -8447,7 +8475,7 @@ function drawAlertLines(){
     // Only price-vs-value alerts map to a fixed horizontal line.
     if(a.source!=="price" || a.target!=="value") return;
     const y=priceToY(a.value); if(y==null) return; const W=dcanvas.clientWidth;
-    const col=a.active?"#f7525f":"#555";                 // tag/hover colour
+    const col=a.active?"#9aa0aa":"#555";                 // tag/hover/border colour (gray)
     const lineCol=a.active?alertLineColor:"#888";        // dotted line colour (default white)
     dctx.save(); dctx.strokeStyle=lineCol; dctx.setLineDash([6,4]); dctx.lineWidth=1;
     dctx.beginPath(); dctx.moveTo(0,y); dctx.lineTo(W,y); dctx.stroke(); dctx.setLineDash([]);
@@ -8473,7 +8501,7 @@ function drawAlertLines(){
       // crisp vector trash icon inside a circular hit area
       const tcx=bx+padL+lw+gap+iconW/2;
       const onIcon = draw.mouse && Math.hypot(draw.mouse.x-tcx, draw.mouse.y-y)<=11;
-      drawTrashIcon(tcx, y, onIcon?"#ff6b6b":"#ef5350", onIcon);
+      drawTrashIcon(tcx, y, onIcon?"#c2c8d0":"#9aa0aa", onIcon);
       trash={ x:tcx, y:y, r:11 };
     }
     dctx.restore();
@@ -8484,7 +8512,7 @@ function drawAlertLines(){
 // emoji so it renders crisply and identically across platforms.
 function drawTrashIcon(cx, cy, color, highlight){
   dctx.save();
-  if(highlight){ dctx.fillStyle="rgba(239,83,80,0.18)"; dctx.beginPath(); dctx.arc(cx,cy,10,0,7); dctx.fill(); }
+  if(highlight){ dctx.fillStyle="rgba(154,160,170,0.18)"; dctx.beginPath(); dctx.arc(cx,cy,10,0,7); dctx.fill(); }
   dctx.strokeStyle=color; dctx.fillStyle=color; dctx.lineWidth=1.4;
   dctx.lineCap="round"; dctx.lineJoin="round";
   const w=8, h=9, top=cy-4;
