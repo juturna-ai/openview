@@ -73,7 +73,11 @@ const t3b = zoomedIn < 10;   // far below the pre-fix 30–70 floor
 // 3c) Hover the axis gutter (no button) → cursor becomes ns-resize.
 await p.mouse.move(target.x - 2, (target.yTop + target.yBot) / 2);
 await p.waitForTimeout(120);
-const cursor = await p.evaluate(() => document.getElementById('rsi').style.cursor);
+// Hover hint is now class-based (#rsi.axis-hover) — the LWC canvas overrides inline cursors.
+const cursor = await p.evaluate(() => {
+  const el = document.getElementById('rsi');
+  return el.classList.contains('axis-hover') ? 'ns-resize' : el.style.cursor;
+});
 const t3c = cursor === 'ns-resize';
 
 // Double-click the axis → reset to default 18–82.

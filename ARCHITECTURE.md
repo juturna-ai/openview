@@ -408,6 +408,7 @@ Client-side price-crossing alerts. Backed by `alerts[]` (per-symbol, in-memory);
 ```js
 {
   id, source, op, target, value,
+  interval,  // TF key ("1m"…"1Y") the indicator is computed on | null = chart TF
   trigger,   // "once" | "every"
   expiry,    // epoch ms | null
   message,
@@ -418,11 +419,11 @@ Client-side price-crossing alerts. Backed by `alerts[]` (per-symbol, in-memory);
 }
 ```
 
-`source` and `target` are keys from `ALERT_SOURCES`: `"price"`, `"ma7"` through `"ma300"`, `"rsi"`. `op` is one of `crossing | crossUp | crossDown | gt | lt`.
+`source` and `target` are keys from `ALERT_SOURCES`: `"price"`, `"ma7"` through `"ma300"`, `"rsi"`. `op` is one of `crossing | crossUp | crossDown | gt | lt`. The dialog's **Interval** row (`#ad_interval`, hidden for price/drawing sources) pins the indicator to a timeframe; empty = follow the chart.
 
 ### Evaluation — `checkAlerts` / `alertTriggered`
 
-Called from `renderData` on every paint. `sourceValue(key)` computes the current value of each source from `lastData`. `alertTargetValue(a)` resolves the RHS (either a fixed number or a source value). `alertTriggered` uses `a._last` (the previous LHS-minus-RHS difference) to detect sign changes for crossing ops; level ops (`gt`/`lt`) fire on current state. Expired alerts are deactivated; "once" alerts deactivate after firing.
+Called from `renderData` on every paint. `sourceValue(key, data=lastData)` computes the current value of each source. `alertSourceValue(a, key)` is the interval-aware wrapper: when `a.interval` is set (and isn't the active TF), it evaluates on that TF's candles from `alertIntervalBars(tf)` — a per-`SYM|tf` cache (`_alertTfBars`, LRU-capped at 12) filled by `fetchTfBars` and refreshed stale-while-revalidate at most every 30s, only while such an alert is being checked; `withLiveTail()` patches the cached forming bar with the live tick between refetches, and a completed refetch re-runs `checkAlerts()` once. `alertTargetValue(a)` resolves the RHS (a fixed number or a source value, same interval rules). `alertTriggered` uses `a._last` (the previous LHS-minus-RHS difference) to detect sign changes for crossing ops; level ops (`gt`/`lt`) fire on current state. Expired alerts are deactivated; "once" alerts deactivate after firing.
 
 ### Firing — `fireAlert`
 
@@ -436,7 +437,7 @@ Pure WebAudio synth (no external files, works offline). Two families: `ALERT_SOU
 
 For `price`-vs-`value` alerts, `redraw` calls `drawAlertLines()` (skipped entirely when `alertLinesVisible` is false) which draws a dashed horizontal line at `priceToY(a.value)` — colored `alertLineColor` (default white `#ffffff`) for active alerts — a right-edge red price pill, and (on hover) a pill with a vector trash icon. `alertHitboxes[]` stores `{id, y, trash}` for mouse hit-testing (`alertHit`, `alertTrashHit`). Grabbing a line (cross mode) starts `draw.alertDrag`; dragging re-prices the alert via `yToPrice` and persists on mouseup. The line's right-click menu (`showAlertMenu`) offers Pause/Resume, Edit…, Delete, an "Alert lines" visibility toggle (persisted `fv_alert_lines`), and "Change alerts color…" (persisted `fv_alert_color`).
 
-For `rsi`-vs-`value` alerts, `updateRsiAlertLines()` creates native lightweight-charts price lines (dashed, `alertLineColor`, 🔔 title + axis label) on the `rsiLine` series in the RSI pane — the canvas `drawAlertLines` only covers the main pane, so without this an RSI alert was created but invisible. Lines are tracked in `rsiAlertLines[]` and rebuilt by `saveAlerts()`, `loadAlerts()`, and the "Alert lines"/color menu items; inactive alerts render gray (`#888`). They honor `alertLinesVisible` but are not draggable (edit via the alerts panel/dialog). Other sub-pane sources (macd, atr, cci, willr, volume) still have no pane line — their panes are dynamic per-indicator subCharts. Regression: `test/regression_rsi_alert_line.mjs`.
+For `rsi`-vs-`value` alerts, `updateRsiAlertLines()` creates native lightweight-charts price lines (dashed, `alertLineColor`, 🔔 title + axis label) on the `rsiLine` series in the RSI pane — the canvas `drawAlertLines` only covers the main pane, so without this an RSI alert was created but invisible. Lines are tracked in `rsiAlertLines[]` as `{id, pl}` and rebuilt by `saveAlerts()`, `loadAlerts()`, and the "Alert lines"/color menu items; inactive alerts render gray (`#888`); they honor `alertLinesVisible`. **Drag-to-move**: `rsiAlertHit()` hit-tests ±6px around each line's `rsiLine.priceToCoordinate(a.value)` (axis gutter excluded so the axis-stretch drag keeps priority); `mousedown` on `rsiEl` starts `rsiAlertDrag`, document-level `mousemove` re-values via `rsiLine.coordinateToPrice` (clamped 0–100, live `pl.applyOptions({price})`), `mouseup` persists via `saveAlerts()`. Cursor uses the class-based trick (`#rsi.alert-hover` / `html.rsi-axis-drag`) because the LWC canvas sets its own inline cursor. Other sub-pane sources (macd, atr, cci, willr, volume) still have no pane line — their panes are dynamic per-indicator subCharts. Regressions: `test/regression_rsi_alert_line.mjs`, `test/regression_rsi_alert_interval_drag.mjs`.
 
 ---
 

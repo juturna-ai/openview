@@ -8643,11 +8643,13 @@ function drawAlertLines(){
     const lineCol=a.active?alertLineColor:"#888";        // dotted line colour (default white)
     dctx.save(); dctx.strokeStyle=lineCol; dctx.setLineDash([6,4]); dctx.lineWidth=1;
     dctx.beginPath(); dctx.moveTo(0,y); dctx.lineTo(W,y); dctx.stroke(); dctx.setLineDash([]);
-    // right-edge price tag (over the axis) — queued so it paints on the opaque gutter
-    // strip in redraw's PASS 2 instead of the clipped, see-through pass.
-    const txt="🔔 "+fmt(a.value);
-    if(_tagQueue) _tagQueue.push({text:txt,y,color:col,font:"10px sans-serif"});
-    else paintGutterTag(txt,y,col,W,"10px sans-serif");
+    // Right-edge price tag (over the axis) — HOVER ONLY: keeps the axis gutter clean.
+    // The alert price shows via the hover pill + this tag only while pointing at the line.
+    if(draw.alertHover===a.id){
+      const txt="🔔 "+fmt(a.value);
+      if(_tagQueue) _tagQueue.push({text:txt,y,color:col,font:"10px sans-serif"});
+      else paintGutterTag(txt,y,col,W,"10px sans-serif");
+    }
 
     let trash=null;
     if(draw.alertHover===a.id){
