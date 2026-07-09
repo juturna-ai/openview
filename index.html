@@ -32,8 +32,14 @@
   html.embed #toolbar{display:none !important;}
   html.embed #rightRail{display:none !important;}
   html.embed #topbar{left:0;}
-  /* App owns symbol search in embed mode → symbol name isn't a search trigger here. */
-  html.embed #symbolBox{cursor:default;pointer-events:none;}
+  /* Symbol/search block hidden in embed — the chart legend already shows sym·tf·venue
+     and search lives host-side. The divider right after it goes too. */
+  html.embed #symbolBox{display:none;}
+  html.embed #symbolBox + .tbdiv{display:none;}
+  /* Embed toolbar = tf + chart-type ONLY. Everything right of the chart-type selector
+     (Compare/Indicators/Alert/Script/Snap/Layout/Replay/Undo/…/status) is hidden — the
+     mobile app overlays its own ƒ/✎/ⓘ icons in that free space. */
+  html.embed #topbar #ctSel ~ *{display:none !important;}
   /* Narrow phone frame: let the SMA/indicator legend wrap instead of overflowing.
      Cap the legend so it stops BEFORE the right price-axis gutter (72px + margin) —
      otherwise the wrapped SMA line lands on top of the price scale. */
@@ -200,7 +206,10 @@
   #main{flex:1; position:relative; padding-top:38px; display:flex; flex-direction:column; overflow:hidden;}
   #chartWrap{width:100%; flex:1 1 0; min-height:60px;}   /* the only growable pane */
   #chart{width:100%; height:100%;}
-  #draw{cursor:crosshair;}
+  /* touch-action:none — the touch bridge (dcanvas touchstart handlers) owns all touch
+     gestures; without it mobile browsers claim the drag for page scrolling and the
+     chart never pans on a phone. */
+  #draw{cursor:crosshair; touch-action:none;}
   /* Standard horizontal-resize cursor while hovering/dragging the date-axis strip
      (the time-scale bar-spacing stretch). Native ew-resize — smaller/cleaner than the
      old custom SVG double-arrow, and matches the OS pointer the user expects. */
@@ -416,7 +425,9 @@
   #dlgBackdrop.open{display:block;}
   .dialog{position:fixed; display:none; z-index:401; top:50%; left:50%; transform:translate(-50%,-50%);
     width:360px; background:#1e222d; border:1px solid var(--border); border-radius:10px;
-    box-shadow:0 12px 48px #000c; flex-direction:column;}
+    box-shadow:0 12px 48px #000c; flex-direction:column;
+    /* Phone WebViews are narrower than the fixed dialog widths below — never overflow. */
+    max-width:calc(100vw - 12px);}
   /* Fib settings needs room for the 2-column level grid — widen it and never scroll sideways. */
   .dialog.fib-dialog{width:460px;}
   .dialog .db{scrollbar-width:thin; scrollbar-color:#3a3f4b #131722;}
@@ -513,8 +524,9 @@
   /* color-scheme:dark makes the browser render the native datetime picker (and its
      calendar glyph) in dark mode instead of the default white popup. */
   .alertdlg input[type=datetime-local]{color-scheme:dark;}
-  .alertdlg .twocol{display:flex;gap:8px;}
-  .alertdlg .twocol > *{flex:1;}
+  /* 140px basis: side-by-side at desktop width, stacked rows on phone-width WebViews. */
+  .alertdlg .twocol{display:flex;gap:8px;flex-wrap:wrap;}
+  .alertdlg .twocol > *{flex:1 1 140px;min-width:0;}
   .alertdlg .addcond{color:var(--accent);font-size:13px;cursor:pointer;user-select:none;padding:2px 0;}
   .alertdlg .addcond:hover{text-decoration:underline;}
   .alertdlg .asep{height:1px;background:var(--border);margin:8px 0;}
@@ -4983,6 +4995,34 @@ rsiEl.addEventListener("dblclick", e=>{
   rsiLine.applyOptions({});
 });
 
+// ── RSI pane touch bridge (phones) ──────────────────────────────────────────
+// The pane's built-in pan/zoom is disabled (`common`) and the axis stretch above is
+// mouse-only, so a finger on the RSI scale did nothing. One finger on the AXIS gutter
+// re-dispatches the same mouse events → the existing stretch logic runs. Alert-line
+// touch dragging (rsiAlertDragStart, registered later) still wins outside the axis:
+// this bridge only claims the gesture when the axis actually grabbed it.
+function _rsiTouchMouse(type, target, t){
+  target.dispatchEvent(new MouseEvent(type, {
+    clientX:t.clientX, clientY:t.clientY, button:0, buttons:type==="mouseup"?0:1,
+    bubbles:true, cancelable:true, view:window,
+  }));
+}
+rsiEl.addEventListener("touchstart", e=>{
+  if(rsiAlertDrag || e.touches.length!==1) return;
+  _rsiTouchMouse("mousedown", rsiEl, e.touches[0]);       // starts rsiAxisDrag iff in axis
+  if(rsiAxisDrag) e.preventDefault();                      // claim only when the axis took it
+}, {passive:false});
+rsiEl.addEventListener("touchmove", e=>{
+  if(!rsiAxisDrag || !e.touches.length) return;
+  _rsiTouchMouse("mousemove", document, e.touches[0]);
+  e.preventDefault();
+}, {passive:false});
+function _rsiTouchEnd(){
+  if(rsiAxisDrag) _rsiTouchMouse("mouseup", document, {clientX:0, clientY:0});
+}
+rsiEl.addEventListener("touchend", _rsiTouchEnd);
+rsiEl.addEventListener("touchcancel", _rsiTouchEnd);
+
 // ─────────────────────────────────────────────────────────────────────
 //  COORDINATE CONVERSION  (price/time ⇄ pixels)
 //
@@ -5141,11 +5181,33 @@ dcanvas.addEventListener("mousedown", e=>{
   const trashId=alertTrashHit(p);
   if(trashId){ removeAlert(trashId); draw.alertHover=null; downPt=null; return; }
 
-  // ── Alert line: grab it to drag to a new price level (cross mode only). ──
+  // ── Crosshair ⊕: tap → add the alert right there (defaults; edit later via the
+  // pill's long-press menu). ──
+  if(draw.tool==="cross" && crossPlusHit &&
+     Math.hypot(p.x-crossPlusHit.x, p.y-crossPlusHit.y)<=crossPlusHit.r+5){
+    addQuickAlert(crossPlusHit.price);
+    downPt=null; return;
+  }
+
+  // ── Alert line (or its hover pill, which is taller than the line's 6px hit band):
+  // grab it to drag to a new price level (cross mode only). HOLDING on the pill
+  // without moving opens the Pause/Edit/Delete menu instead. ──
   if(draw.tool==="cross"){
-    const dragId=alertHit(p);
+    const dragId=alertHit(p) || alertPillHit(p);
     if(dragId){ const da=alerts.find(z=>z.id===dragId);
-      if(da){ draw.alertDrag={ id:dragId }; draw.alertHover=dragId; redraw(); return; } }
+      if(da){
+        draw.alertDrag={ id:dragId }; draw.alertHover=dragId; redraw();
+        if(alertPillHit(p)===dragId){
+          const mx=e.clientX, my=e.clientY;
+          _pillPressTimer=setTimeout(()=>{ _pillPressTimer=null;
+            if(draw.alertDrag && draw.alertDrag.id===dragId && !downMoved){
+              draw.alertDrag=null; downPt=null; redraw();
+              showAlertMenu(dragId, mx, my);
+            }
+          }, 450);
+        }
+        return;
+      } }
   }
 
   // ── CROSSHAIR mode: click a shape → select/drag it; click empty → pan the chart ──
@@ -5296,7 +5358,7 @@ dcanvas.addEventListener("mousemove", e=>{
   // (and the price/time axis tags) never move. Forward the cursor position so the
   // crosshair + axis labels track it like TradingView.
   updateCrosshair(p);
-  if(downPt && Math.hypot(p.x-downPt.x, p.y-downPt.y)>3) downMoved=true;
+  if(downPt && !downMoved && Math.hypot(p.x-downPt.x, p.y-downPt.y)>3){ downMoved=true; clearPillPress(); }
 
   if(panState){ doPan(p); return; }                       // panning the chart (cross mode)
   // Dragging an alert line to a new price level.
@@ -5319,7 +5381,9 @@ dcanvas.addEventListener("mousemove", e=>{
   let changed=false;
   if(nh!==draw.hover){ draw.hover=nh; changed=true; }
   if(na!==draw.alertHover){ draw.alertHover=na; changed=true; }
-  if(changed) redraw();
+  // Cross mode always repaints so the crosshair ⊕ tracks the cursor (the crosshair-move
+  // subscription only redraws when shapes/alerts exist).
+  if(changed || draw.tool==="cross") redraw();
   const overTrash=alertTrashHit(p);
   dcanvas.style.cursor = overTrash ? "pointer"
                        : na ? "ns-resize"
@@ -5339,8 +5403,71 @@ dcanvas.addEventListener("mouseleave", ()=>{
   if(draw.hover||draw.alertHover){ draw.hover=null; draw.alertHover=null; redraw(); }
 });
 
+// ── Touch bridge (phones / the mobile app's WebView) ────────────────────────
+// The draw canvas replaced the chart's built-in gestures with MOUSE handlers
+// (mousedown/mousemove/wheel above), which left touch completely dead on phones.
+// One finger re-dispatches the same mouse events (pan / draw / drag / select all
+// reuse the desktop code paths); two fingers pinch-zoom the time scale anchored
+// at the pinch midpoint. touch-action:none in CSS keeps the browser from
+// hijacking the gesture for page scroll.
+let _pinch=null;
+function _touchMouse(type, target, t){
+  target.dispatchEvent(new MouseEvent(type, {
+    clientX:t.clientX, clientY:t.clientY, button:0, buttons:type==="mouseup"?0:1,
+    bubbles:true, cancelable:true, view:window,
+  }));
+}
+dcanvas.addEventListener("touchstart", e=>{
+  e.preventDefault();
+  if(e.touches.length===1 && !_pinch){
+    _touchMouse("mousedown", dcanvas, e.touches[0]);
+  } else if(e.touches.length===2){
+    // second finger down: abort any 1-finger pan/draw-in-progress, start pinch
+    _touchMouse("mouseup", dcanvas, e.touches[0]);
+    const [a,b]=e.touches;
+    _pinch={ d:Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY)||1,
+             range:chart.timeScale().getVisibleLogicalRange(),
+             midX:(a.clientX+b.clientX)/2 };
+    stopAutoSnap();
+  }
+}, {passive:false});
+dcanvas.addEventListener("touchmove", e=>{
+  e.preventDefault();
+  if(_pinch && e.touches.length>=2){
+    const [a,b]=e.touches;
+    const d=Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+    if(!_pinch.range || !d) return;
+    const {from,to}=_pinch.range, span=to-from;
+    const rect=dcanvas.getBoundingClientRect();
+    const frac=Math.min(1, Math.max(0, (_pinch.midX-rect.left)/(rect.width||1)));
+    const anchor=from+span*frac;
+    const newSpan=span/(d/_pinch.d);
+    chart.timeScale().setVisibleLogicalRange({ from:anchor-newSpan*frac, to:anchor+newSpan*(1-frac) });
+    redraw();
+  } else if(e.touches.length===1 && !_pinch){
+    _touchMouse("mousemove", dcanvas, e.touches[0]);
+  }
+}, {passive:false});
+function _touchEnd(e){
+  if(e.touches.length===0){
+    _pinch=null;
+    // Dispatch on the canvas so the event BUBBLES through document up to window —
+    // mouseup listeners live on both. changedTouches carries the lift-off point.
+    const t=e.changedTouches && e.changedTouches[0];
+    _touchMouse("mouseup", dcanvas, t || {clientX:0, clientY:0});
+  } else if(_pinch && e.touches.length<2){
+    _pinch=null;
+  }
+}
+dcanvas.addEventListener("touchend", _touchEnd, {passive:false});
+dcanvas.addEventListener("touchcancel", _touchEnd, {passive:false});
+
 window.addEventListener("mouseup", e=>{
-  if(draw.alertDrag){ saveAlerts(); renderAlertsPanel(); draw.alertDrag=null; downPt=null; downMoved=false; redraw(); return; }  // end alert drag
+  clearPillPress();                                     // release before the hold fires
+  if(draw.alertDrag){                                   // end alert drag
+    saveAlerts(); renderAlertsPanel(); draw.alertDrag=null; downPt=null; downMoved=false; redraw();
+    return;
+  }
   if(axisDrag){ axisDrag=null; downPt=null; downMoved=false; dcanvas.style.cursor="default"; return; }  // end axis stretch
   if(panState){ panState=null; downPt=null; downMoved=false; redraw(); return; }   // end chart pan
   // finishing a drag-edit of an existing shape. If nothing actually moved (a plain
@@ -5556,7 +5683,6 @@ function showAlertMenu(id,x,y){
     mi("⬡ Edit…", ()=>{ if(a) openAlertDialog({existing:a}); }),
     mi("🗑 Delete", ()=>removeAlert(id)),
     msep(),
-    mi((alertLinesVisible?"✓ ":"")+"Alert lines", ()=>{ alertLinesVisible=!alertLinesVisible; localStorage.setItem("fv_alert_lines", alertLinesVisible?"1":"0"); updateRsiAlertLines(); redraw(); }),
     mi("Change alerts color…", ()=>{ const c=prompt("Alert line color (hex):", alertLineColor); if(c){ alertLineColor=c.trim(); localStorage.setItem("fv_alert_color", alertLineColor); updateRsiAlertLines(); redraw(); } }),
   ]);
 }
@@ -6213,6 +6339,7 @@ function redraw(){
     if(window.volProfileOn) drawVolumeProfile(W,H);   // horizontal volume-by-price histogram
     if(draw.sessions!==false) drawSessionBreaks(W,H); // day-boundary lines (intraday only)
     drawAlertLines();
+    drawCrossPlus();                                  // ⊕ add-alert button on the crosshair
     if(!draw.hidden){
       for(const s of draw.shapes){ if(s.hidden) continue; drawShape(s, s.id===draw.sel, s.id===draw.hover); }
     }
@@ -8433,7 +8560,10 @@ function closeScriptDlg(){ scriptDlg.classList.remove("open"); backdrop.classLis
 const alerts=[];
 let alertUid=1;
 // Global display prefs for alert lines (TradingView "Alert lines" / "Change alerts color").
-let alertLinesVisible = (localStorage.getItem("fv_alert_lines")!=="0");
+// Always on — the menu toggle was removed as redundant (an alert without its line is
+// invisible). Kept as a variable because the draw/hit-test paths still gate on it;
+// stale "0" in localStorage from the old toggle is deliberately ignored.
+let alertLinesVisible = true;
 let alertLineColor = localStorage.getItem("fv_alert_color") || "#ffffff";
 function alertsKey(){ return "fv_alerts_"+activeSymbol; }
 
@@ -8735,7 +8865,7 @@ function drawAlertLines(){
     // No right-edge axis tag — the hover pill on the line carries the alert info; the
     // axis gutter stays clean even while hovering.
 
-    let trash=null;
+    let trash=null, pill=null;
     if(draw.alertHover===a.id){
       // TradingView-style hover pill on the line: full condition text + clickable trash
       // (matches the RSI-pane pill, which shows the whole "SYM Price Crossing …" label
@@ -8757,9 +8887,10 @@ function drawAlertLines(){
       const onIcon = draw.mouse && Math.hypot(draw.mouse.x-tcx, draw.mouse.y-y)<=11;
       drawTrashIcon(tcx, y, onIcon?"#c2c8d0":"#9aa0aa", onIcon);
       trash={ x:tcx, y:y, r:11 };
+      pill={ x:bx, y:by, w:boxW, h:boxH };   // stationary click on the pill → alert menu
     }
     dctx.restore();
-    alertHitboxes.push({ id:a.id, y, trash });
+    alertHitboxes.push({ id:a.id, y, trash, pill });
   });
 }
 // A small vector trash-can glyph centered at (cx,cy). Drawn instead of the 🗑
@@ -8793,6 +8924,51 @@ function alertHit(p){
 function alertTrashHit(p){
   for(const h of alertHitboxes){ if(h.trash && Math.hypot(p.x-h.trash.x,p.y-h.trash.y)<=h.trash.r) return h.id; }
   return null;
+}
+// Is point p inside a (currently shown) alert hover pill? Returns id or null.
+// A stationary click there opens the Pause/Edit/Delete menu (drag still repositions).
+function alertPillHit(p){
+  for(const h of alertHitboxes){
+    if(h.pill && p.x>=h.pill.x && p.x<=h.pill.x+h.pill.w && p.y>=h.pill.y && p.y<=h.pill.y+h.pill.h) return h.id;
+  }
+  return null;
+}
+
+// ── Crosshair ⊕ (TradingView-style): while the crosshair is on the plot, a small
+// ⊕ button rides its horizontal line at the right edge; tapping it offers
+// "Add alert on <SYM> at <price>". Rebuilt every redraw; null = hidden.
+let crossPlusHit=null;   // {x, y, r, price}
+// Long-press timer for the alert pill: hold (no movement) → Pause/Edit/Delete menu.
+let _pillPressTimer=null;
+function clearPillPress(){ if(_pillPressTimer){ clearTimeout(_pillPressTimer); _pillPressTimer=null; } }
+function drawCrossPlus(){
+  crossPlusHit=null;
+  if(draw.tool!=="cross" || !draw.mouse) return;
+  // Hide while any gesture/UI owns the pointer (drag, pan, pending shape, hover pill).
+  if(draw.alertDrag || draw.drag || draw.pending || panState || axisDrag) return;
+  if(draw.alertHover!=null || draw.hover!=null) return;
+  const p=draw.mouse;
+  if(inPriceAxis(p)) return;
+  const price=yToPrice(p.y); if(price==null) return;
+  // Small dark button, same palette as the alert hover pill (#1e222d / gray border).
+  const r=8, cx=dcanvas.clientWidth-axisW()-r-5, cy=p.y;
+  dctx.save();
+  dctx.fillStyle="#1e222d"; dctx.strokeStyle="#9aa0aa"; dctx.lineWidth=1;
+  dctx.beginPath(); dctx.arc(cx,cy,r,0,7); dctx.fill(); dctx.stroke();
+  dctx.strokeStyle="#d1d4dc"; dctx.lineWidth=1.4; dctx.lineCap="round";
+  dctx.beginPath(); dctx.moveTo(cx-3.5,cy); dctx.lineTo(cx+3.5,cy);
+  dctx.moveTo(cx,cy-3.5); dctx.lineTo(cx,cy+3.5); dctx.stroke();
+  dctx.restore();
+  crossPlusHit={ x:cx, y:cy, r, price };
+}
+// One-tap alert from the ⊕ menu: price crossing the given level, all defaults.
+function addQuickAlert(price){
+  if(price==null) return;
+  const a={ id:"a"+(alertUid++), source:"price", op:"crossing", target:"value", value:price,
+    trigger:"once", expiry:defaultExpiry(), message:"",
+    notify:{...ALERT_DEFAULT_NOTIFY}, sound:{...ALERT_DEFAULT_SOUND}, active:true, _last:null, interval:null };
+  alerts.push(a); saveAlerts(); renderAlertsPanel(); redraw(); checkAlerts();
+  toast("Alert added at "+fmt(price));
 }
 
 // Evaluate one alert against the latest tick. Uses the previous LHS-vs-RHS
@@ -8861,7 +9037,10 @@ function fireAlert(a, lhs, rhs){
   if(n.popup){
     const t=document.createElement("div"); t.innerHTML=icBell(); t.appendChild(document.createTextNode(msg));
     t.querySelector("svg").style.cssText="width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;";
-    t.style.cssText="position:fixed;top:60px;right:320px;z-index:500;background:#f7525f;color:#fff;padding:10px 16px;border-radius:6px;box-shadow:0 4px 16px #0008;font-size:13px;max-width:320px;cursor:pointer;display:flex;align-items:center;gap:8px;";
+    // Desktop: sit left of the watchlist panel (right:320px). Phone-width viewports
+    // (mobile WebView) have no panel and no room for that offset — span the screen.
+    const _pos = window.innerWidth < 700 ? "left:10px;right:10px;" : "right:320px;max-width:320px;";
+    t.style.cssText="position:fixed;top:60px;"+_pos+"z-index:500;background:#f7525f;color:#fff;padding:10px 16px;border-radius:6px;box-shadow:0 4px 16px #0008;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;";
     const dismiss=()=>{ t.remove(); if(ring) ring.stop(); };   // click = stop audio too
     t.onclick=dismiss;
     document.body.appendChild(t);
