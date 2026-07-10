@@ -74,7 +74,7 @@ TF[key] = { label, menu, sec, base, bucket, pages }
 
 **Timezone selector.** Bottom-bar dropdown `#tzSel` (relocated from the topbar by `initBottomBar`) built from the full TradingView `TIMEZONES` list (~87 entries: UTC/Exchange/Local plus cities grouped by `(UTC±N)` label, incl. fractional offsets like Kolkata +5:30, Tehran +3:30). Because the selector sits at the very bottom edge of the screen, the menu opens **upward**. A CSS-only flip wasn't enough: the menu opens up into the chart area, where (a) the ancestor `#main` has `overflow:hidden` (clips it) and (b) the drawing canvas `#draw` (z-index:100, in a sibling stacking context) covers the chart — so a plain z-index couldn't escape `#main`'s context and `#draw` swallowed clicks on the upper options (the lower ones, over the bottom bar, worked). Fix: `openTzMenu()` re-parents `#tzMenu` to `<body>` as a `position:fixed` popover (`.tz-fixed`, z-index:130), measures it, and anchors it above + right-aligned to the button (clamped into the viewport); `closeTzMenu()` returns it to `#tzSel`. Selection is tracked by **index** (`tzIdx`), not offset, since many cities share one offset (so the checkmark lands on the exact city picked); `tzOffsetMin` (minutes east of UTC) is derived from the entry and applied by `tzShift(ms)`, which nudges the UNIX time so downstream `getUTC*` reads yield the selected zone's wall clock. Both `tickLabel` (axis) and `crosshairTimeFmt` (crosshair bottom tag, via `localization.timeFormatter`) route through it. `applyTz(idx)` re-applies the formatters to the main chart(s) **plus** `rsiChart` and every indicator `panes[]` sub-chart, and persists the index to `localStorage["fv_tz"]` (with back-compat: an old raw-offset value maps to the first entry with that offset). The bottom-bar chip shows the compact `UTC±N` (or UTC/Exchange/Local). Offsets are fixed (no DST math) — matching how TV labels read on a 24/7 crypto chart. Opening the menu auto-scrolls to the active entry.
 
-**Bar-close countdown.** `#barCountdown` is a pill on the right price axis showing time until the current bar closes, TradingView-style. `updateCountdown()` (1s interval) computes the next epoch-aligned bucket boundary `(floor(now/step)+1)*step`, formats via `fmtCountdown` (d/h, h:mm:ss, or m:ss), and positions the pill at `candle.priceToCoordinate(lastClose)`. Hidden when there's no data or the price is off-screen.
+**Bar-close countdown.** `#barCountdown` is a pill on the right price axis showing time until the current bar closes, TradingView-style. `updateCountdown()` (1s interval) computes the next bucket boundary via `bucketClose(now, step)` (calendar-aware: next Monday for 1W/2W, first of next month for 1M, Jan 1 for 1Y; epoch-aligned otherwise), formats via `fmtCountdown` (d/h, h:mm:ss, or m:ss), and positions the pill at `candle.priceToCoordinate(lastClose)`. Hidden when there's no data or the price is off-screen.
 
 | Key | `base` (sec fetched) | `bucket` (sec per bar) | `pages` |
 |---|---|---|---|
@@ -95,7 +95,7 @@ TF[key] = { label, menu, sec, base, bucket, pages }
 
 The `pages` field is legacy — the progressive loader no longer uses it for depth. Depth is now driven by a global `MAX_BARS = 50000` ceiling (see below); `pages` is only kept as a default on custom-TF entries.
 
-`base` is the native granularity actually fetched from the exchange. When `bucket > base` (2h, 4h, 12h, 1w, 2w, 1M, 1Y, 30m), `aggregate()` rolls up the base bars into fixed epoch-aligned buckets. `1M` (month, 30d) and `1Y` (year, 365d) are epoch-aligned like `1w` — not calendar-month/year boundaries. `1M` (month) is a distinct key from `1m` (minute); the map is case-sensitive.
+`base` is the native granularity actually fetched from the exchange. When `bucket > base` (2h, 4h, 12h, 1w, 2w, 1M, 1Y, 30m), `aggregate()` rolls the base bars up via `bucketStart(time, bucket)`: intraday buckets are epoch-aligned, but **calendar TFs match TradingView/Binance** — any multiple of 7d (1w, 2w, custom weeks) anchors to **Monday 00:00 UTC** (`WEEK_ANCHOR` = 1970-01-05; a plain epoch floor would produce Thu→Wed weeks since 1970-01-01 was a Thursday), `1M` (bucket 2592000) snaps to **true calendar months**, and `1Y` (31536000) to **calendar years**. `bucketClose(time, bucket)` gives the matching bar-close boundary (used by the countdown pill). `1M` (month) is a distinct key from `1m` (minute); the map is case-sensitive. Verified: `test/regression_calendar_buckets.mjs`.
 
 ### Per-exchange page fetchers
 
@@ -127,7 +127,7 @@ After each page and at completion:
 1. **Dedupe** — drop bars with duplicate `time` values.
 2. **Sort** oldest-first.
 3. **`sanitize`** (Hampel bad-print wick clamp) — for each bar, compute the local-median wick of its ±10 neighbors; clamp any wick exceeding 4× that median (with a 15% floor). Removes exchange bad-prints (e.g. INJ's bogus 14.75 high on 2025-11-08) that would otherwise create fake spikes in ratio charts.
-4. **`aggregate`** — group bars into `bucket`-second epoch-aligned buckets; OHLC and volume are accumulated correctly per bucket.
+4. **`aggregate`** — group bars into `bucket`-second buckets via `bucketStart` (Monday-anchored weeks, calendar months/years, epoch-aligned intraday); OHLC and volume are accumulated correctly per bucket.
 
 ### Ratio/spread — `makeRatio`
 

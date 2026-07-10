@@ -2003,10 +2003,10 @@ const TF = {
   "6h":  { label:"6H",  menu:"6 hours",    sec:"HOURS",   base:21600, bucket:21600,  pages:20 },  // ~5.5k bars (to 2022)
   "12h": { label:"12H", menu:"12 hours",   sec:"HOURS",   base:21600, bucket:43200,  pages:20 },  // 2×6h, to 2022
   "1d":  { label:"1D",  menu:"1 day",      sec:"DAYS",    base:86400, bucket:86400,   pages:9 },  // ~1.4k bars (to 2022)
-  "1w":  { label:"1W",  menu:"1 week",     sec:"DAYS",    base:86400, bucket:604800,  pages:9 },  // 7×1d
-  "2w":  { label:"2W",  menu:"2 weeks",    sec:"DAYS",    base:86400, bucket:1209600, pages:9 },  // 14×1d
-  "1M":  { label:"1M",  menu:"1 month",    sec:"DAYS",    base:86400, bucket:2592000, pages:9 },  // 30×1d (epoch-aligned, like 1w)
-  "1Y":  { label:"1Y",  menu:"1 year",     sec:"DAYS",    base:86400, bucket:31536000,pages:9 },  // 365×1d
+  "1w":  { label:"1W",  menu:"1 week",     sec:"DAYS",    base:86400, bucket:604800,  pages:9 },  // 7×1d, Monday-anchored (bucketStart)
+  "2w":  { label:"2W",  menu:"2 weeks",    sec:"DAYS",    base:86400, bucket:1209600, pages:9 },  // 14×1d, Monday-anchored
+  "1M":  { label:"1M",  menu:"1 month",    sec:"DAYS",    base:86400, bucket:2592000, pages:9 },  // calendar months (bucketStart special-cases this width)
+  "1Y":  { label:"1Y",  menu:"1 year",     sec:"DAYS",    base:86400, bucket:31536000,pages:9 },  // calendar years
 };
 // A restored activeTF may be a custom bucket ("c<sec>") not yet in TF{}. Rebuild its
 // entry from the encoded seconds; if it's neither built-in nor a valid custom key,
@@ -2031,12 +2031,31 @@ function parseCandlesAgg(raw){
   return raw.map(k=>({ time:k[0], low:+k[1], high:+k[2], open:+k[3], close:+k[4], volume:+k[5]||0 }));
 }
 
-// Roll base bars up into fixed-size buckets aligned to epoch.
+// Bucket-start boundary for a timestamp. Intraday buckets stay epoch-aligned, but
+// calendar TFs must match TradingView/Binance: weeks (any multiple of 7d) open
+// Monday 00:00 UTC — epoch day (1970-01-01) was a THURSDAY, so a plain floor makes
+// Thu→Wed weeks with different OHLC than every charting platform — months are true
+// calendar months (not fixed 30-day blocks), years true calendar years.
+const WEEK_ANCHOR = 4*86400;   // Monday 1970-01-05 00:00 UTC
+function bucketStart(time, bucket){
+  if(bucket % 604800 === 0) return Math.floor((time - WEEK_ANCHOR)/bucket)*bucket + WEEK_ANCHOR;
+  if(bucket === 2592000){ const d=new Date(time*1000); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)/1000; }
+  if(bucket === 31536000){ return Date.UTC(new Date(time*1000).getUTCFullYear(), 0, 1)/1000; }
+  return Math.floor(time/bucket)*bucket;
+}
+// When the bucket containing `time` closes (start of the NEXT bucket) — calendar
+// months/years advance by calendar, everything else by fixed width.
+function bucketClose(time, bucket){
+  if(bucket === 2592000){ const d=new Date(time*1000); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth()+1, 1)/1000; }
+  if(bucket === 31536000){ return Date.UTC(new Date(time*1000).getUTCFullYear()+1, 0, 1)/1000; }
+  return bucketStart(time, bucket) + bucket;
+}
+// Roll base bars up into target buckets (calendar-aware via bucketStart).
 function aggregate(bars, base, bucket){
   if(bucket === base) return bars;
   const groups = {};
   for(const b of bars){
-    const t = Math.floor(b.time / bucket) * bucket;   // bucket start
+    const t = bucketStart(b.time, bucket);            // bucket start
     const g = groups[t] || (groups[t] = { time:t, open:b.open, high:b.high, low:b.low, close:b.close, volume:0, _first:b.time, _last:b.time });
     if(b.time <= g._first){ g.open = b.open; g._first = b.time; }
     if(b.time >= g._last ){ g.close = b.close; g._last = b.time; }
@@ -2352,7 +2371,7 @@ function updateCountdown(){
   if(!lastData || !lastData.length){ el.style.display="none"; return; }
   const step=tfStepSec();
   const now=Date.now()/1000;
-  const closeAt=(Math.floor(now/step)+1)*step;   // next bucket boundary
+  const closeAt=bucketClose(now, step);          // next bucket boundary (calendar-aware for 1W/1M/1Y)
   el.textContent=fmtCountdown(closeAt-now);
   // Pin to the top of the price axis; in embed (phone) sit below the topmost axis
   // label so the pill doesn't cover it on the narrow frame.
