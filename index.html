@@ -211,7 +211,16 @@
      (the time-scale bar-spacing stretch). Native ew-resize — smaller/cleaner than the
      old custom SVG double-arrow, and matches the OS pointer the user expects. */
   body.time-resize, body.time-resize *{ cursor: ew-resize !important; }
-  #rsiWrap{flex:0 1 auto; height:26%; min-height:96px; border-top:1px solid var(--border); position:relative;}
+  /* Sized with a viewport unit (not %) because the pane is hosted INSIDE #subPanes
+     (auto-height flex column) so it can be reordered among the indicator panes. */
+  #rsiWrap{flex:0 0 24vh; min-height:96px; border-top:1px solid var(--border); position:relative;}
+  /* RSI pane chrome: same controls + top-border resize grip as indicator sub-panes. */
+  #rsiWrap.pane-collapsed{min-height:22px;}
+  #rsiWrap.pane-collapsed #rsi{opacity:0; pointer-events:none;}
+  #rsiLabel .subClose{cursor:pointer; margin-left:8px; color:var(--muted);}
+  #rsiLabel .subClose:hover{color:var(--text);}
+  #rsiWrap .paneResize{position:absolute; top:-3px; left:0; right:0; height:7px; z-index:8; cursor:ns-resize;}
+  #rsiWrap .paneResize:hover{background:rgba(41,98,255,0.25);}
   #subPanes{flex:0 1 auto; min-height:0;}
   #rsiLabel{position:absolute; top:6px; left:10px; font-size:11px; color:var(--muted); z-index:5;}
   /* Countdown-to-bar-close pill, pinned to the right price axis at the last price. */
@@ -347,6 +356,16 @@
   .row .ic{width:20px; height:20px; border-radius:50%; flex-shrink:0; object-fit:contain;
     background:#2a2e39; color:#fff; font-size:9px; display:flex; align-items:center;
     justify-content:center; font-weight:700;}
+  /* Spread icons: two diagonal halves (leg A top-left, leg B bottom-right) inside the
+     circle. Each half is the full icon, clipped to a triangle; the polygons stop just
+     short of the diagonal so the container background reads as a thin seam. */
+  .split{overflow:hidden; padding:0; position:relative;}
+  .split .half{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; color:#fff;
+    display:flex; align-items:center; justify-content:center; font-weight:700;}
+  .split .half.l{clip-path:polygon(0 0, 94% 0, 0 94%);}
+  .split .half.r{clip-path:polygon(100% 6%, 100% 100%, 6% 100%);}
+  .split span.half.l{align-items:flex-start; justify-content:flex-start; padding:9% 0 0 18%;}
+  .split span.half.r{align-items:flex-end; justify-content:flex-end; padding:0 18% 9% 0;}
   /* padding-right matches the header cells (#wlCols .c2/.c3/.c4) so values sit exactly
      under their column labels and clear of the header divider positions. */
   .row .last{width:var(--wl-c2,72px); text-align:right; font-size:12px; font-variant-numeric:tabular-nums; color:#d1d4dc; padding-right:6px;}
@@ -1256,6 +1275,20 @@ function logoUrl(sym){
   const base = legBase(sym).toLowerCase();
   return `https://assets.coincap.io/assets/icons/${base}@2x.png`;
 }
+// Spread icon: one circle split diagonally — leg A's coin in the top-left triangle,
+// leg B's in the bottom-right. A leg whose icon is missing (NO_LOGO) or 404s falls
+// back to a letter half. Same escaping discipline as the single-coin <img> paths.
+function splitIconHtml(sym, cls="ic"){
+  const legs = String(sym).split("/");
+  const half = (leg, side)=>{
+    const base = legBase(leg||"").toUpperCase();
+    const initial = escHtml(base[0]||"?");
+    if(!base || NO_LOGO.has(base))
+      return `<span class="half ${side}" style="background:#2962ff">${initial}</span>`;
+    return `<img class="half ${side}" src="${logoForBase(base)}" alt="${escHtml(base)}" onerror="this.outerHTML='<span class=\\'half ${side}\\' style=\\'background:#2962ff\\'>${initial}</span>'">`;
+  };
+  return `<span class="${cls} split">${half(legs[0],"l")}${half(legs[1],"r")}</span>`;
+}
 
 let activeSymbol = "NEAR-USD/INJ-USD";
 let activeTF = "1d";  // timeframe key into TF{}
@@ -1679,7 +1712,10 @@ try{ const s=localStorage.getItem("fv_chart_settings"); if(s) Object.assign(CHAR
 function applyChartSettings(){
   const c=CHART_SETTINGS;
   try{ candle.applyOptions({ upColor:c.up, downColor:c.down, wickUpColor:c.up, wickDownColor:c.down, borderUpColor:c.up, borderDownColor:c.down }); }catch(e){}
-  try{ chart.applyOptions({ layout:{ background:{color:c.bg} }, grid:{ vertLines:{color:c.grid, visible:c.gridVisible}, horzLines:{color:c.grid, visible:c.gridVisible} } }); }catch(e){}
+  // vertLines stay OFF permanently: the sparse round-interval vertical grid is drawn by
+  // drawTimeGrid on the overlay. Re-enabling LWC's per-bar vertical grid here (the old
+  // `visible:c.gridVisible`) stacked BOTH grids — doubled, unevenly spaced lines.
+  try{ chart.applyOptions({ layout:{ background:{color:c.bg} }, grid:{ vertLines:{visible:false}, horzLines:{color:c.grid, visible:c.gridVisible} } }); }catch(e){}
   try{ localStorage.setItem("fv_chart_settings", JSON.stringify(c)); }catch(e){}
 }
 function openChartSettings(){
@@ -1880,9 +1916,24 @@ function resize(){
 // is only a floor, so a pane with wider labels (RSI "98.51" vs price "0.42") would
 // still grow past it; here we measure the widest actual gutter and pin them all to it.
 function allPaneCharts(){
-  const list=[chart, rsiChart];
-  try{ indicators.forEach(i=>{ if(i.subChart) list.push(i.subChart); }); }catch(e){}
-  try{ scripts.forEach(s=>{ if(s.subChart) list.push(s.subChart); }); }catch(e){}
+  // Top-to-bottom VISUAL order. Panes (built-in RSI + indicator/script sub-panes) all
+  // live in #subPanes and can be reordered with the ↑/↓ pane buttons, so the order is
+  // read from the DOM — the date axis must follow the bottom-most VISIBLE pane.
+  const list=[chart];
+  try{
+    const byEl=new Map();
+    byEl.set(document.getElementById("rsiWrap"), rsiChart);
+    indicators.forEach(i=>{ if(i.subChart&&i.paneEl) byEl.set(i.paneEl, i.subChart); });
+    scripts.forEach(s=>{ if(s.subChart&&s.paneEl) byEl.set(s.paneEl, s.subChart); });
+    const wrap=document.getElementById("subPanes");
+    if(wrap) [...wrap.children].forEach(el=>{
+      const c=byEl.get(el); if(c && el.style.display!=="none") list.push(c);
+    });
+    // Anything not hosted in #subPanes (defensive) keeps the legacy order.
+    byEl.forEach((c,el)=>{ if(!list.includes(c) && el && el.parentElement!==document.getElementById("subPanes") && el.style.display!=="none") list.push(c); });
+  }catch(e){ return [chart, rsiChart,
+    ...indicators.filter(i=>i.subChart).map(i=>i.subChart),
+    ...scripts.filter(s=>s.subChart).map(s=>s.subChart)]; }
   return list;
 }
 function alignPriceAxes(){
@@ -2843,7 +2894,7 @@ function buildWatchlist(){
       // logo: real coin icon, or a letter circle for ratios / coins with no icon
       let icon;
       if(isRatio){
-        icon = `<span class="ic" style="background:#8e44ad">÷</span>`;
+        icon = splitIconHtml(sym);
       } else if(NO_LOGO.has(base)){
         icon = `<span class="ic" style="background:#2962ff">${escHtml(base[0]||"")}</span>`;
       } else {
@@ -3679,9 +3730,11 @@ function openPairInfoCard(sym){
   const venue = [...new Set(String(sym).split("/").map(s=>resolveLeg(s).exchange.label))].join(" / ");
   const legR = isSpread ? null : resolveLeg(sym);
   const typeStr = isSpread ? "Spread / Ratio" : (legR.isPerp ? "Perpetual" : "Spot");
-  const icon = (isSpread || NO_LOGO.has(base))
-    ? `<span class="pc-ic" style="background:#2962ff">${escHtml((base[0]||label[0]||"?").toUpperCase())}</span>`
-    : `<img class="pc-ic" src="${logoForBase(base)}" alt="" onerror="this.outerHTML='<span class=\\'pc-ic\\' style=\\'background:#2962ff\\'>${escHtml((base[0]||"?").toUpperCase())}</span>'">`;
+  const icon = isSpread
+    ? splitIconHtml(sym, "pc-ic")
+    : NO_LOGO.has(base)
+      ? `<span class="pc-ic" style="background:#2962ff">${escHtml((base[0]||label[0]||"?").toUpperCase())}</span>`
+      : `<img class="pc-ic" src="${logoForBase(base)}" alt="" onerror="this.outerHTML='<span class=\\'pc-ic\\' style=\\'background:#2962ff\\'>${escHtml((base[0]||"?").toUpperCase())}</span>'">`;
 
   // Loading skeleton first; fills in as async data lands. Two carousel pages:
   // page 0 = details, page 1 = multi-timeframe RSI (lazy-loaded on first nav).
@@ -5770,6 +5823,7 @@ function showChartMenu(x,y,p){
     mi(icBell()+`Add alert${price!=null?" at "+fmt(price):""}…`, ()=>openAlertDialog({price})),
     msep(),
     mi("⊞ Add indicator…", ()=>toggleIndicatorsMenu(true)),
+    ...(document.getElementById("rsiWrap").style.display==="none" ? [mi("Show RSI pane", ()=>showRsiPane())] : []),
     mi("Reset chart view", ()=>chart.timeScale().fitContent()),
     msep(),
     mi((scaleMode===0?"✓ ":"")+"Auto scale", ()=>setScaleMode(0)),
@@ -5799,12 +5853,69 @@ function attachPaneContextMenu(el, spec){
     showCtx(e.clientX, e.clientY, items);
   });
 }
-// Built-in RSI pane (not in indicators[], permanent) — Settings edits RSI_PARAMS,
+// Built-in RSI pane (not in indicators[]) — Settings edits RSI_PARAMS,
 // alert source is the fixed "rsi" key.
 attachPaneContextMenu(rsiEl, {
   settings:()=>openRsiSettings(),
   alertSource:"rsi", alertLabel:()=>"RSI ("+RSI_PARAMS.len+")",
 });
+// ── Built-in RSI pane controls: ▁ collapse · ⚙ settings · × close, plus a draggable
+// top border to resize the pane — same affordances as indicator sub-panes.
+// Close persists (fv_rsi_on) and the chart's right-click menu offers "Show RSI pane".
+const rsiWrapEl = document.getElementById("rsiWrap");
+let _rsiPrevH = "";                                   // height to restore after collapse
+function rsiSetH(flexPx){                             // apply height + resize the LWC chart
+  rsiWrapEl.style.flex = flexPx ? "0 0 "+flexPx : "";
+  rsiWrapEl.style.height = flexPx || "";
+  setTimeout(()=>{ try{ resize(); sizeCanvas(); }catch(e){} }, 0);
+}
+function rsiCollapse(){
+  const on = rsiWrapEl.classList.toggle("pane-collapsed");
+  if(on){ _rsiPrevH = rsiWrapEl.style.height || ""; rsiSetH("22px"); }
+  else rsiSetH(_rsiPrevH);
+}
+function hideRsiPane(){ rsiWrapEl.style.display="none"; try{ localStorage.setItem("fv_rsi_on","0"); }catch(e){} setTimeout(()=>{ try{ layoutPanes(); resize(); sizeCanvas(); alignPriceAxes(); }catch(e){} },0); }
+function showRsiPane(){ rsiWrapEl.style.display="";    try{ localStorage.setItem("fv_rsi_on","1"); }catch(e){} setTimeout(()=>{ try{ layoutPanes(); resize(); sizeCanvas(); alignPriceAxes(); }catch(e){} },0); }
+// Swap a pane with its neighbor above (dir −1) or below (dir +1) inside #subPanes —
+// TradingView's "Move pane up/down". The date axis re-derives from DOM order via
+// allPaneCharts()/updateTimeAxisVisibility.
+function movePane(el, dir){
+  const wrap=document.getElementById("subPanes"); if(!wrap || el.parentElement!==wrap) return;
+  const sib = dir<0 ? el.previousElementSibling : el.nextElementSibling;
+  if(!sib) return;
+  if(dir<0) wrap.insertBefore(el, sib); else wrap.insertBefore(sib, el);
+  setTimeout(()=>{ try{ resize(); sizeCanvas(); alignPriceAxes(); }catch(e){} },0);
+}
+(function wireRsiPaneControls(){
+  const label=document.getElementById("rsiLabel"); if(!label) return;
+  // Host the RSI pane inside #subPanes so it participates in pane reordering.
+  try{ const wrap=document.getElementById("subPanes");
+    wrap.insertBefore(rsiWrapEl, wrap.firstChild); wrap.style.display="flex"; }catch(e){}
+  const mk=(txt,title,fn)=>{ const s=document.createElement("span"); s.className="subClose"; s.textContent=txt; s.title=title; s.onclick=fn; label.appendChild(s); return s; };
+  mk("↑","Move pane up",   ()=>movePane(rsiWrapEl,-1));
+  mk("↓","Move pane down", ()=>movePane(rsiWrapEl, 1));
+  mk("▁","Collapse / restore", rsiCollapse);
+  mk("⚙","RSI settings", ()=>openRsiSettings());
+  mk("×","Close RSI pane", hideRsiPane);
+  // Top-border drag: resize the pane like TradingView (min 70px, max 60% of the window).
+  const grip=document.createElement("div"); grip.className="paneResize"; grip.title="Drag to resize pane";
+  grip.addEventListener("mousedown", e=>{
+    e.preventDefault(); e.stopPropagation();
+    const startY=e.clientY, startH=rsiWrapEl.getBoundingClientRect().height;
+    const onMove=ev=>{
+      // dragging the TOP border UP grows the pane, DOWN shrinks it
+      const h=Math.max(70, Math.min(window.innerHeight*0.6, startH-(ev.clientY-startY)));
+      rsiWrapEl.classList.remove("pane-collapsed");
+      rsiWrapEl.style.flex="0 0 "+h+"px"; rsiWrapEl.style.height=h+"px";
+      try{ resize(); sizeCanvas(); }catch(err){}
+    };
+    const onUp=()=>{ document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp); try{ resize(); sizeCanvas(); }catch(err){} };
+    document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
+  });
+  rsiWrapEl.appendChild(grip);
+  // Honor a previously-closed pane on boot.
+  try{ if(localStorage.getItem("fv_rsi_on")==="0") rsiWrapEl.style.display="none"; }catch(e){}
+})();
 document.addEventListener("mousedown", e=>{ if(!ctxMenu.contains(e.target)) hideCtx(); });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -7672,11 +7783,13 @@ function buildIndicatorSeries(ind){
   const el=document.createElement("div"); el.className="subpane";
   const label=document.createElement("div"); label.className="subLabel"; label.textContent=ind.name;
   const eye=document.createElement("span"); eye.className="subEye"; eye.textContent=ind.hidden?"🚫":"👁"; eye.title="Hide / show"; eye.onclick=()=>toggleIndicatorHidden(ind.id);
+  const up=document.createElement("span"); up.className="subClose"; up.textContent="↑"; up.title="Move pane up"; up.onclick=()=>movePane(el,-1);
+  const dn=document.createElement("span"); dn.className="subClose"; dn.textContent="↓"; dn.title="Move pane down"; dn.onclick=()=>movePane(el,1);
   const collapse=document.createElement("span"); collapse.className="subClose"; collapse.textContent="▁"; collapse.title="Collapse / restore"; collapse.onclick=()=>togglePaneCollapse(el);
   const maxi=document.createElement("span"); maxi.className="subClose"; maxi.textContent="⤢"; maxi.title="Maximize / restore"; maxi.onclick=()=>togglePaneMaximize(el);
   const gear=document.createElement("span"); gear.className="subClose"; gear.textContent="⚙"; gear.title="Settings"; gear.onclick=()=>openIndicatorSettings(ind.id);
   const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeIndicator(ind.id);
-  label.appendChild(eye); label.appendChild(collapse); label.appendChild(maxi); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
+  label.appendChild(eye); label.appendChild(up); label.appendChild(dn); label.appendChild(collapse); label.appendChild(maxi); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
   const grip=document.createElement("div"); grip.className="paneResize"; grip.title="Drag to resize pane"; wirePaneResize(grip,el); el.appendChild(grip);
   wrap.appendChild(el); ind.paneEl=el;
   // Right-click the sub-pane → app menu (Settings / Add alert / Remove), same as
@@ -7818,7 +7931,11 @@ function layoutPanes(){
   // last indicator while a script pane is still open would collapse #subPanes.
   const subs=indicators.filter(i=>i.pane==="sub").length + scripts.filter(s=>s.subChart).length;
   const wrap=document.getElementById("subPanes");
-  wrap.style.display = subs?"flex":"none";
+  // The built-in RSI pane is hosted inside #subPanes (so it can be reordered with the
+  // ↑/↓ pane buttons) — keep the container open while it's visible.
+  let rsiIn=false;
+  try{ const r=document.getElementById("rsiWrap"); rsiIn = wrap.contains(r) && r.style.display!=="none"; }catch(e){}
+  wrap.style.display = (subs||rsiIn)?"flex":"none";
   // resize after the browser has applied the new flex layout, then re-derive the
   // overlay canvas size and redraw so drawings stay pinned to the candles.
   const apply=()=>{
@@ -8513,7 +8630,9 @@ function renderScript(sc){
     const label=document.createElement("div"); label.className="subLabel"; label.textContent="ƒ "+sc.name;
     const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeScript(sc.id);
     const edit=document.createElement("span"); edit.className="subClose"; edit.textContent="✎"; edit.title="Edit script"; edit.onclick=()=>openScriptEditor(sc.id);
-    label.appendChild(edit); label.appendChild(close); el.appendChild(label); wrap.appendChild(el); sc.paneEl=el;
+    const sup=document.createElement("span"); sup.className="subClose"; sup.textContent="↑"; sup.title="Move pane up"; sup.onclick=()=>movePane(el,-1);
+    const sdn=document.createElement("span"); sdn.className="subClose"; sdn.textContent="↓"; sdn.title="Move pane down"; sdn.onclick=()=>movePane(el,1);
+    label.appendChild(sup); label.appendChild(sdn); label.appendChild(edit); label.appendChild(close); el.appendChild(label); wrap.appendChild(el); sc.paneEl=el;
     // Right-click the script pane → Edit script / Reset view / Remove (no built-in
     // alert source for custom scripts).
     attachPaneContextMenu(el, {
@@ -8933,7 +9052,9 @@ function defaultAlertMessage(a){
   const lhs=a.source==="price" ? "" : ` ${sourceLabel(a.source)}`;
   const rhs=a.target==="value" ? fmt(a.value) : sourceLabel(a.target);
   const iv=a.interval && TF[a.interval] ? ` [${TF[a.interval].label}]` : "";
-  return `${activeSymbol}${lhs}${iv} ${opLabel(a.op)} ${rhs}`;
+  // symLabel drops venue prefixes per leg (BINANCE:NEARUSDT/BINANCE:INJUSDT →
+  // NEARUSDT/INJUSDT) — the pill/notification names the asset, not the exchange.
+  return `${symLabel(activeSymbol)}${lhs}${iv} ${opLabel(a.op)} ${rhs}`;
 }
 
 function removeAlert(id){ const i=alerts.findIndex(a=>a.id===id); if(i>=0){ alerts.splice(i,1); saveAlerts(); redraw(); renderAlertsPanel(); } }
@@ -9794,8 +9915,40 @@ function openHelpPanel(){
   const rows=KEY_SHORTCUTS.map(([k,d])=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid var(--border);font-size:11px">'
     +'<span style="color:var(--text);white-space:nowrap"><b>'+escHtml(k)+'</b></span>'
     +'<span style="color:var(--muted);text-align:right">'+escHtml(d)+'</span></div>').join("");
+  // AI assistant (MCP + API) section — live status + quick-start for the LLM bridge (mcp/README.md).
+  const agentStatus = agentHelpStatus();
+  const hstep=(k,d)=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid var(--border);font-size:11px">'
+    +'<span style="color:var(--text);white-space:nowrap"><b>'+k+'</b></span>'
+    +'<span style="color:var(--muted);text-align:right">'+d+'</span></div>';
+  const code=(s)=>'<code style="background:var(--panel);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;color:var(--text);word-break:break-all">'+escHtml(s)+'</code>';
+  const ai=
+    '<div style="margin-top:16px;padding:6px 0;font-size:11px;color:var(--text);font-weight:600">AI assistant — MCP + API'
+      +'<span id="helpAgentStatus" style="float:right;font-weight:400;color:'+agentStatus[0]+'">● '+agentStatus[1]+'</span></div>'
+    +'<div style="font-size:10px;color:var(--muted);line-height:1.5;padding-bottom:4px">Connect an LLM (e.g. Claude) to this chart: it can read the candles, indicators, alerts and drawings, and draw its own support/resistance lines, fibs and notes — ask “where is the resistance?” and it marks it on the chart. It can NOT change the app, your settings, alerts or indicators, and can only delete drawings it created itself (Ctrl+Z undoes them too).</div>'
+    +hstep('1. Start server', code('node mcp/server.mjs')+' (Node ≥18, nothing to install)')
+    +hstep('2. Open the app', 'via '+code('http://127.0.0.1:8787/')+' — any localhost origin auto-connects')
+    +hstep('3. Add to Claude', code('claude mcp add openview -- node <repo>/mcp/server.mjs --mcp'))
+    +hstep('MCP tools', 'get_chart · get_bars · get_indicators · get_alerts · list/add/remove_drawings')
+    +hstep('REST API', code('http://127.0.0.1:8787/api/')+' chart · bars · indicators · alerts · drawings')
+    +'<div style="margin-top:6px;font-size:10px;color:var(--muted)">Local-only: binds 127.0.0.1, hostile origins rejected. Full docs in mcp/README.md.</div>';
   railPanelShell("Help — Keyboard shortcuts", rows
-    +'<div style="margin-top:10px;font-size:10px;color:var(--muted)">Right-click the chart, a drawing, a pane or the watchlist for context actions.</div>', "help");
+    +'<div style="margin-top:10px;font-size:10px;color:var(--muted)">Right-click the chart, a drawing, a pane or the watchlist for context actions.</div>'
+    +ai, "help");
+  // Keep the status line live while the panel is open (bridge connects/drops
+  // asynchronously); the interval self-clears when the panel is gone.
+  if(window._helpAgentTimer) clearInterval(window._helpAgentTimer);
+  window._helpAgentTimer=setInterval(()=>{
+    const el=document.getElementById("helpAgentStatus");
+    if(!el){ clearInterval(window._helpAgentTimer); window._helpAgentTimer=null; return; }
+    const s=agentHelpStatus(); el.style.color=s[0]; el.textContent="● "+s[1];
+  }, 2000);
+}
+// AGENT_ON / _agentLinked live in the agent-bridge block at the end of the script
+// (function is only called on click, long after both exist).
+function agentHelpStatus(){
+  return !AGENT_ON
+    ? ['#787b86','Off (open on localhost or add ?agent=1)']
+    : (window._agentLinked ? ['#26a69a','Connected'] : ['#ff9800','Waiting for bridge server']);
 }
 // Far-right vertical icon rail: quick access to panels (Watchlist/Alerts/Object tree/News/Screener/Paper).
 (function buildRightRail(){
@@ -10641,6 +10794,168 @@ setInterval(()=>{
 document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && !_ws){ _wsRetry=0; wsConnect(); } });
 window.addEventListener("online", ()=>{ if(!_ws){ _wsRetry=0; wsConnect(); } });
 wsConnect();
+
+// ─────────────────────────────────────────────────────────────────────
+//  LLM AGENT BRIDGE — see mcp/README.md
+// ─────────────────────────────────────────────────────────────────────
+// Long-polls the local mcp/server.mjs so an LLM (Claude over MCP, or the REST
+// API) can READ chart data and manage ITS OWN drawings. Deliberately narrow:
+// a fixed command map, no eval/code surface, alerts+indicators are read-only,
+// and the LLM may only delete drawings it created (s.agent). LLM drawings go
+// through snapshotDraw/persist/redraw like user ones — visible instantly, in
+// the object tree, undoable with Ctrl+Z. Enabled when the page runs on
+// localhost / file:// or with ?agent=1 / localStorage fv_agent="1"; never in
+// embeds (grid iframes + mobile WebView — the host page owns the bridge).
+const AGENT_PORT = (()=>{ try{ return +(localStorage.getItem("fv_agent_port")||"") || 8787; }catch(e){ return 8787; } })();
+const AGENT_ON = !IS_EMBED && (
+  ["localhost","127.0.0.1","[::1]"].includes(location.hostname) ||
+  location.protocol==="file:" ||
+  _params.get("agent")==="1" ||
+  (()=>{ try{ return localStorage.getItem("fv_agent")==="1"; }catch(e){ return false; } })()
+);
+const AGENT_MAX_SHAPES_PER_CALL = 40, AGENT_MAX_SHAPES = 400, AGENT_MAX_PTS = 200;
+const agentClean = (v,max)=> String(v).replace(/[<>]/g,"").slice(0,max);
+const AGENT_SYM_RE = /^[A-Za-z0-9:.\-=^]{1,32}(\/[A-Za-z0-9:.\-=^]{1,32})?$/;
+
+async function agentExec(cmd, params){
+  params = params || {};
+  switch(cmd){
+
+    case "chart.info": {
+      const last = lastData[lastData.length-1] || null;
+      let vr=null; try{ vr = chart.timeScale().getVisibleRange(); }catch(e){}
+      return {
+        symbol: activeSymbol, displaySymbol: symLabel(activeSymbol),
+        timeframe: activeTF, timeframeLabel: (TF[activeTF]||{}).label || activeTF,
+        chartType, barCount: lastData.length,
+        firstBarTime: lastData.length ? lastData[0].time : null,
+        lastBar: last ? { time:last.time, open:last.open, high:last.high, low:last.low, close:last.close, volume:last.volume } : null,
+        visibleRange: vr ? { from:vr.from, to:vr.to } : null,
+        drawingCount: draw.shapes.length,
+        llmDrawingCount: draw.shapes.filter(s=>s.agent).length,
+      };
+    }
+
+    case "chart.bars": {
+      const sym = params.symbol || activeSymbol;
+      const tf  = params.timeframe || activeTF;
+      if(!AGENT_SYM_RE.test(sym)) throw new Error("invalid symbol");
+      if(!TF[tf]) throw new Error("unknown timeframe '"+tf+"' — valid: "+Object.keys(TF).join(", "));
+      const limit = Math.max(1, Math.min(Math.floor(+params.limit)||300, 1500));
+      let bars = (sym===activeSymbol && tf===activeTF && lastData.length)
+        ? lastData
+        : await fetchTfBars(sym, tf, sym.includes("/"));
+      bars = (bars||[]).slice(-limit);
+      return { symbol:sym, timeframe:tf, count:bars.length,
+        bars: bars.map(b=>({ time:b.time, open:b.open, high:b.high, low:b.low, close:b.close, volume:b.volume })) };
+    }
+
+    case "chart.indicators": {
+      const mas = MAS.filter(m=>m.on!==false).map(m=>{
+        let v=null; try{ const l=maLine(lastData,m); if(l.length) v=l[l.length-1].value; }catch(e){}
+        return { kind:(m.type||"sma").toUpperCase(), period:m.p, source:m.src||"close", value:v };
+      });
+      let rsiV=null; const rl=(RSI_PARAMS&&RSI_PARAMS.len)||14;
+      try{ const r=rsiSeries(lastData, rl, (RSI_PARAMS&&RSI_PARAMS.src)||"close"); if(r.length) rsiV=r[r.length-1].value; }catch(e){}
+      return { movingAverages:mas, rsi:{ period:rl, value:rsiV },
+        indicators: indicators.map(i=>({ type:i.type, params:i.params, hidden:!!i.hidden })) };
+    }
+
+    case "alerts.list":
+      return { symbol:activeSymbol, alerts: alerts.map(a=>({
+        id:a.id, source:a.source, op:a.op, target:a.target, value:a.value,
+        interval:a.interval||null, trigger:a.trigger, message:a.message||"", active:!!a.active })) };
+
+    case "draw.list":
+      return { symbol:activeSymbol, drawings: draw.shapes.map(s=>({
+        id:s.id, type:s.type, name:s.name||null, points:s.pts,
+        color:s.style&&s.style.color, width:s.style&&s.style.width, dash:(s.style&&s.style.dash)||0,
+        text:s.text||null, locked:!!s.locked, hidden:!!s.hidden, llm:!!s.agent })) };
+
+    case "draw.add": {
+      const list = Array.isArray(params.drawings) ? params.drawings : [];
+      if(!list.length) throw new Error("drawings[] is empty");
+      if(list.length > AGENT_MAX_SHAPES_PER_CALL) throw new Error("max "+AGENT_MAX_SHAPES_PER_CALL+" drawings per call");
+      if(draw.shapes.filter(s=>s.agent).length + list.length > AGENT_MAX_SHAPES)
+        throw new Error("LLM drawing cap ("+AGENT_MAX_SHAPES+") reached — remove_drawings first");
+      // validate everything BEFORE mutating: all-or-nothing
+      for(const d of list){
+        if(!d || !(d.type in CLICKS)) throw new Error("unknown drawing type '"+(d&&d.type)+"' — valid: "+Object.keys(CLICKS).join(", "));
+        const need = CLICKS[d.type]===0 ? 2 : CLICKS[d.type];
+        const pts = Array.isArray(d.points) ? d.points : [];
+        if(pts.length < need || pts.length > AGENT_MAX_PTS)
+          throw new Error(d.type+" needs "+need+(CLICKS[d.type]===0?"+":"")+" points (got "+pts.length+")");
+        if(pts.some(p=>!p || !isFinite(+p.time) || !isFinite(+p.price)))
+          throw new Error("each point must be {time: unix seconds, price: number}");
+      }
+      snapshotDraw();
+      const added=[];
+      for(const d of list){
+        const s = { id:newId(), type:d.type, agent:true,
+          pts: d.points.map(p=>({ time:+p.time, price:+p.price })),
+          style: { ...DEFAULT_STYLE,
+            ...(d.color ? { color:agentClean(d.color,32) } : {}),
+            ...(isFinite(+d.width) && +d.width>0 ? { width:Math.min(+d.width,6) } : {}),
+            ...(d.dash!=null ? { dash:[0,1,2].includes(+d.dash)?+d.dash:0 } : {}) } };
+        if(d.text) s.text = agentClean(d.text,300);
+        if(d.name) s.name = agentClean(d.name,80);
+        draw.shapes.push(s); added.push(s.id);
+      }
+      persist(); redraw();
+      return { added };
+    }
+
+    case "draw.remove": {
+      const ids = new Set(Array.isArray(params.ids) ? params.ids : []);
+      if(!ids.size && !params.llmOnly) throw new Error("pass ids[] or llmOnly:true");
+      // only LLM-created shapes are removable — never the user's own drawings
+      const keep = draw.shapes.filter(s=> !(s.agent && (params.llmOnly || ids.has(s.id))));
+      const removed = draw.shapes.length - keep.length;
+      if(removed){
+        snapshotDraw();
+        draw.shapes = keep;
+        if(draw.sel && !draw.shapes.find(s=>s.id===draw.sel)) draw.sel=null;
+        persist(); redraw();
+      }
+      return { removed };
+    }
+
+    default: throw new Error("unknown command: "+cmd);
+  }
+}
+
+async function agentLoop(){
+  // hello=1 on the first poll after (re)connect: the server answers it
+  // immediately instead of parking 25s, so _agentLinked flips right away.
+  let results=[], backoff=3000, hello=true;
+  for(;;){
+    let resp;
+    try{
+      const r = await fetch("http://127.0.0.1:"+AGENT_PORT+"/bridge/poll", {
+        method:"POST", headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(hello ? { results, hello:1 } : { results }),
+      });
+      if(!r.ok) throw new Error("bridge "+r.status);
+      resp = await r.json();
+      backoff = 3000; hello = false;
+      window._agentLinked = true;   // shown in the Help panel's AI-assistant status
+    }catch(e){
+      window._agentLinked = false;
+      hello = true;   // ack fast again when the server comes back
+      results=[];   // server gone — those results have no waiter anymore
+      await new Promise(res=>setTimeout(res, backoff));
+      backoff = Math.min(backoff*1.5, 30000);
+      continue;
+    }
+    results=[];
+    for(const c of (Array.isArray(resp.commands)?resp.commands:[])){
+      if(!c || typeof c.id!=="string" || typeof c.cmd!=="string") continue;
+      try{ results.push({ id:c.id, ok:true, result: await agentExec(c.cmd, c.params) }); }
+      catch(err){ results.push({ id:c.id, ok:false, error: String(err && err.message || err) }); }
+    }
+  }
+}
+if(AGENT_ON) agentLoop();
 </script>
 </body>
 </html>
