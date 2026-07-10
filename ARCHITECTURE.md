@@ -254,6 +254,8 @@ Each shape is stored as:
 
 `pts` always stores **chart coordinates** (time in UNIX seconds, price in asset units) — never pixel coordinates. This means shapes survive panning, zooming, and resizing without any remapping.
 
+Ids come from `newId()` (`"s"+uid`). The `uid` counter is session-scoped but shapes persist with their saved ids, so `newId()` **skips any id an existing shape already holds** — without that, the first drawing of a fresh session got `s1`, colliding with a persisted `s1` and making id-based ops (object-tree selection, per-id delete via the LLM bridge) ambiguous. See `test/regression_shape_id_collision.mjs`.
+
 ### Pointer state machine
 
 | Event | Action |
@@ -347,7 +349,7 @@ Calc helpers return shorter arrays (they start at `i = period - 1`). A sub-pane 
 
 ### Hardwired indicators
 
-MAs (default: seven EMAs 7/25/99/150/200/300/400) are held in the mutable `MAS` array (`{p, color, w, on, type, src, ls}`) and rendered directly in `renderData` via `renderMaLegend` → `maLine`. `maLine(data, m)` picks the source column (`src`: close/open/high/low/hl2/hlc3/ohlc4) and MA kind (`type`: sma/ema/wma/rma via `smaA`/`emaA`/`wmaA`/`rmaA`). They are **editable**: the `#maLegend` row ends with a ⚙ gear (`#maGear`) opening `openMaSettings` — a dialog to change each MA's type, period, source, color, width, line style, toggle visibility, add/remove, and Reset to defaults (`DEFAULT_MAS`). Add/remove rebuilds the line series via `rebuildMaSeries` (`maSeriesOpts` shares the option shape); edits persist to `localStorage["fv_mas"]` (`saveMas`). The legend label reflects the type (e.g. `EMA25`, `SMMA99`) via `maTag`. RSI(14) is rendered via `rsiSeries` / `maOfSeries` into the always-visible `#rsiWrap` pane (not part of `indicators[]`).
+MAs (default: seven EMAs 7/25/99/150/200/300/400) are held in the mutable `MAS` array (`{p, color, w, on, type, src, ls}`) and rendered directly in `renderData` via `renderMaLegend` → `maLine`. `maLine(data, m)` picks the source column (`src`: close/open/high/low/hl2/hlc3/ohlc4) and MA kind (`type`: sma/ema/wma/rma via `smaA`/`emaA`/`wmaA`/`rmaA`). They are **editable**: the `#maLegend` row ends with a ⚙ gear (`#maGear`) opening `openMaSettings` — a dialog to change each MA's type, period, source, color, width, line style, toggle visibility, add/remove, and Reset to defaults (`DEFAULT_MAS`). Add/remove rebuilds the line series via `rebuildMaSeries` (`maSeriesOpts` shares the option shape); edits persist to `localStorage["fv_mas"]` (`saveMas`). The legend label reflects the type (e.g. `EMA25`, `SMMA99`) via `maTag`. RSI(14) is rendered via `rsiSeries` / `maOfSeries` into the built-in `#rsiWrap` pane (not part of `indicators[]`). The pane is HOSTED inside `#subPanes` so it can be reordered; its label carries ↑/↓ move-pane, ▁ collapse, ⚙ settings, × close (no maximize) (persisted `fv_rsi_on`; the chart's right-click menu gains "Show RSI pane" while closed) — and a `.paneResize` grip on its top border drags the pane taller/shorter (70px … 60% of window), resizing the LWC chart live.
 
 ### Indicators dialog — `toggleIndicatorsMenu`
 
@@ -464,6 +466,7 @@ For `rsi`-vs-`value` alerts, `updateRsiAlertLines()` creates native lightweight-
 | `fv_notif_seen` | timestamp of last Notifications-panel open (drives the unread bell badge) | `openNotificationsPanel()` | `notifUnreadCount()` |
 | `fv_wl_width` | watchlist panel width in px (`--wl-w`) | `#wlResize` drag | boot |
 | `fv_flags` | `SYMBOL_FLAGS` — symbol → hex flag color | `setSymbolFlag()` | boot |
+| `fv_rsi_on` | built-in RSI pane visibility ("0" = closed via the pane's ×; restored via chart right-click → "Show RSI pane") | `hideRsiPane()` / `showRsiPane()` | boot |
 | `fv_mas` / `fv_rsi_params` | editable MA set / RSI params + style | `saveMas()` / RSI settings | boot |
 | `fv_layout` / `fv_layouts_named` / `fv_grid_sync` | active grid layout + per-panel symbols / named layouts / SYNC-IN-LAYOUT toggles | `persistLayout()` / `saveNamedLayout()` / grid-sync toggles | boot |
 | `fv_watchlists` / `fv_active_wl` | all named watchlists / active name | `saveWatchlists()` | boot (legacy `fv_watchlist` migrated) |
@@ -502,7 +505,7 @@ For `rsi`-vs-`value` alerts, `updateRsiAlertLines()` creates native lightweight-
 
 **Docked right-sidebar panel** — every rail icon opens its panel DOCKED in `#rightPanel` (a flex sibling of `#watchlist` inside `#app`), never floating: `openDock(kind, title, render)` hides the watchlist (`html.dock-open`), renders into `#rpBody` (with an optional `#rpHead` title + ×), and highlights the icon; `closeDock()` restores the watchlist; `railToggle(kind, openFn)` gives one-panel-at-a-time semantics — clicking another icon switches panels, clicking the active icon closes. The Watchlist icon simply closes the dock. **Alerts** docks by re-parenting the existing `#alertsPanel` element into the dock (`openAlertsDock`, `.docked` CSS overrides); `undockAlertsPanel()` returns it to `#app` on switch/close, so the floating `toggleAlertsPanel` path (topbar right-click, backdrop) still works.
 
-Rail panels: `railPanelShell(title, html, kind)` renders into the docked `#rightPanel` (one panel open at a time; the floating `#stubPanel` is gone). **Technicals** (`openTechnicalsPanel`) computes real votes from `lastData` via `technicalsVotes()` — SMA/EMA 10/20/30/50/100/200 vs close plus RSI(14)/MACD(12,26,9)/Stoch %K/CCI(20)/Momentum(10)/Williams %R(14) with classic thresholds — and `technicalsVerdict()` maps net score to Strong Sell…Strong Buy, rendered as an SVG semicircle gauge + counts + per-check rows. **Notifications** (`openNotificationsPanel`) lists `ALERT_LOG`; unread = entries newer than `fv_notif_seen`, shown as a red `.rr-badge` count on the bell (`updateNotifBadge`, called from `logAlert` and at boot; opening the panel stamps `fv_notif_seen` = now and clears the badge). A **Clear all** button (shown only when the log is non-empty) calls `clearNotifications()` — empties `ALERT_LOG`, clears `fv_alert_log`, re-renders the panel to its empty state, and refreshes the badge. **Help** (`openHelpPanel`) shows the `KEY_SHORTCUTS` keyboard-shortcuts list. Ideas/News/Screener/Calendar/Apps/Paper open `openStubPanel(kind)` — placeholder shells (no backend in this single-file build). **Resizable watchlist**: `#wlResize` grip drags the panel width (200px–50%, `--wl-w` CSS var, persisted `fv_wl_width`); the topbar/grid use `right:0` inside `#main` so they follow the resize.
+Rail panels: `railPanelShell(title, html, kind)` renders into the docked `#rightPanel` (one panel open at a time; the floating `#stubPanel` is gone). **Technicals** (`openTechnicalsPanel`) computes real votes from `lastData` via `technicalsVotes()` — SMA/EMA 10/20/30/50/100/200 vs close plus RSI(14)/MACD(12,26,9)/Stoch %K/CCI(20)/Momentum(10)/Williams %R(14) with classic thresholds — and `technicalsVerdict()` maps net score to Strong Sell…Strong Buy, rendered as an SVG semicircle gauge + counts + per-check rows. **Notifications** (`openNotificationsPanel`) lists `ALERT_LOG`; unread = entries newer than `fv_notif_seen`, shown as a red `.rr-badge` count on the bell (`updateNotifBadge`, called from `logAlert` and at boot; opening the panel stamps `fv_notif_seen` = now and clears the badge). A **Clear all** button (shown only when the log is non-empty) calls `clearNotifications()` — empties `ALERT_LOG`, clears `fv_alert_log`, re-renders the panel to its empty state, and refreshes the badge. **Help** (`openHelpPanel`) shows the `KEY_SHORTCUTS` keyboard-shortcuts list plus an **AI assistant — MCP + API** section: live bridge status (Off / Waiting for bridge server / Connected, from `AGENT_ON` + `window._agentLinked` via `agentHelpStatus()`, refreshed every 2s by a self-clearing interval while the panel is open) and the quick-start steps + tool/endpoint summary for the LLM bridge (§14). Ideas/News/Screener/Calendar/Apps/Paper open `openStubPanel(kind)` — placeholder shells (no backend in this single-file build). **Resizable watchlist**: `#wlResize` grip drags the panel width (200px–50%, `--wl-w` CSS var, persisted `fv_wl_width`); the topbar/grid use `right:0` inside `#main` so they follow the resize.
 
 **Pattern tools / tool favorites** — `elliott` (6-click 0-1-2-3-4-5), `xabcd` (5-click X-A-B-C-D), and `headshoulders` (7-click LS/T1/H/T2/RS + 2 neckline points) are labeled multi-point tools rendered by `drawLabeledPath` (connected segments + a label bubble at each vertex); all three share the polyline-style multi-point hit-test and persistence. `TOOL_FAVS` (persisted `fv_tool_favs`) pins favorited drawing tools to a cluster at the top of the left rail; the flyout rows have a ☆/★ star (`toggleToolFav`).
 
@@ -558,7 +561,7 @@ The watchlist panel (`#watchlist`, default 300px, resizable via `#wlResize` — 
 
 ### Groups and rows
 
-`buildWatchlist()` clears `#wlBody` and iterates `GROUPS`. Each group gets a `.section` header with collapse toggle and a trash icon (visible on hover). Each symbol gets a `.row` with a coin logo (`logoForBase` via CoinCap CDN), exchange badge, last price, absolute change, and percent change columns plus a per-row trash icon and an eye (view) toggle beside it. The eye (`.eye`, `icEyeWl(sym)` — slashed when hidden) masks **that one symbol's** price cells (Last/Chg/Chg%) as `••••••` via `toggleWlPrice(sym)`; the masked legs live in the `WL_HIDDEN` set (persisted in `localStorage["fv_wl_hidden"]`), the row carries `.masked` (dimmed muted cells), and `refreshPrices` early-returns for a hidden symbol so live ticks don't overwrite the mask (`PRICE_CACHE` still updates so sorting works). Toggling off calls `refreshPrices()` to repaint real values. Masking is per-asset, never list-wide.
+`buildWatchlist()` clears `#wlBody` and iterates `GROUPS`. Each group gets a `.section` header with collapse toggle and a trash icon (visible on hover). Each symbol gets a `.row` with a coin logo (`logoForBase` via CoinCap CDN; spreads get a diagonally-split circle via `splitIconHtml` — leg A's icon in the top-left triangle, leg B's in the bottom-right (`clip-path` polygons with a thin seam), letter-half fallback on 404/NO_LOGO; also used for the pair-info card's `pc-ic`), exchange badge, last price, absolute change, and percent change columns plus a per-row trash icon and an eye (view) toggle beside it. The eye (`.eye`, `icEyeWl(sym)` — slashed when hidden) masks **that one symbol's** price cells (Last/Chg/Chg%) as `••••••` via `toggleWlPrice(sym)`; the masked legs live in the `WL_HIDDEN` set (persisted in `localStorage["fv_wl_hidden"]`), the row carries `.masked` (dimmed muted cells), and `refreshPrices` early-returns for a hidden symbol so live ticks don't overwrite the mask (`PRICE_CACHE` still updates so sorting works). Toggling off calls `refreshPrices()` to repaint real values. Masking is per-asset, never list-wide.
 
 Row click: sets `activeSymbol`, calls `loadPersisted` / `loadAlerts` / `loadScripts`, then `loadChart`.
 
@@ -677,3 +680,37 @@ Root `.mcp.json` registers the Supabase MCP server (`@supabase/mcp-server-supaba
 
 ### Theme — `src/theme.ts`
 Exact TradingView palette mirrored from the web CSS vars: bg `#131722`, panel `#1E222D`, border `#2A2E39`, accent `#2962FF`, up `#26A69A`, down `#EF5350`; `userInterfaceStyle: dark`.
+
+## 14. LLM Bridge — API + MCP (`mcp/`)
+
+Lets an LLM (Claude via MCP, or anything speaking HTTP) connect to a **running** chart, read its data, and add/remove its own drawings ("where is the resistance? → draws the lines"). Surface is deliberately chart-only: **no** code/settings mutation, alerts+indicators are **read-only**, and the LLM can only delete drawings it created. See `mcp/README.md` for setup.
+
+### Server — `mcp/server.mjs` (zero dependencies, Node ≥18)
+
+One file, three roles, bound to **127.0.0.1** (default port 8787, `OPENVIEW_PORT`):
+
+1. **Page bridge** — the app long-polls `POST /bridge/poll` (each request carries the previous batch's results and is held ≤25s until commands arrive). The page's **first poll after (re)connecting sends `hello:1`**, which the server answers immediately instead of parking — otherwise the page's `_agentLinked` flag (the Help panel's "Connected" status) lagged the real connection by up to the 25s hold (`test/regression_agent_help_status.mjs`). Server keeps a command queue + per-command waiters (20s timeout); API callers get 503 when no page has polled recently, 502 when the page reports a command error.
+2. **REST API** — `GET /api/health|chart|bars|indicators|alerts|drawings`, `POST /api/drawings`, `DELETE /api/drawings/<id>` / `?llm=1` — each is a thin proxy to a bridge command.
+3. **MCP stdio** (`--mcp` flag) — hand-rolled newline-delimited JSON-RPC (initialize / tools/list / tools/call); 7 tools (`get_chart`, `get_bars`, `get_indicators`, `get_alerts`, `list_drawings`, `add_drawings`, `remove_drawings`) that call the REST API over HTTP, so `--mcp` **attaches to an already-running server** on EADDRINUSE (standalone server + several MCP clients coexist). stdout is reserved for MCP; logs go to stderr.
+
+It also static-serves the repo (so `http://127.0.0.1:8787/` opens the app same-origin), with a path-traversal jail and a refusal to serve dotfiles/`.env*`.
+
+**Hardening:** Host-header allowlist (`localhost|127.0.0.1|[::1]` — blocks DNS-rebinding), Origin allowlist (only localhost/`file://` pages may call from a browser; hostile origins get 403 and no CORS headers), fixed command allowlist on both ends (no eval/code path), 512KB body cap, bounded queue, optional shared secret (`OPENVIEW_TOKEN` env ↔ `X-OpenView-Token` header).
+
+### Page side — agent bridge (end of `index.html` script)
+
+`agentLoop()` long-polls the server and executes commands via `agentExec(cmd, params)` — a fixed switch, everything else rejected:
+
+| Command | Uses | Returns |
+|---|---|---|
+| `chart.info` | `activeSymbol/activeTF/chartType/lastData`, `getVisibleRange()` | symbol, tf, bar count, last bar, visible range, drawing counts |
+| `chart.bars` | active `lastData` when symbol+tf match, else `fetchTfBars` | OHLCV rows (times in UNIX sec, oldest first, limit ≤1500); validates symbol regex + TF key |
+| `chart.indicators` | `MAS`/`maLine`, `rsiSeries`/`RSI_PARAMS`, `indicators[]` | MA kinds/periods/current values, RSI, indicator params (read-only) |
+| `alerts.list` | `alerts[]` | sanitized alert list (read-only) |
+| `draw.list` | `draw.shapes` | all drawings; `llm:true` marks bridge-created ones |
+| `draw.add` | `CLICKS` (type+point-count validation), `newId`, `snapshotDraw`, `persist`, `redraw` | validate-first/all-or-nothing; shapes tagged `agent:true`; text/name `<>`-stripped + capped; ≤40/call, ≤400 total |
+| `draw.remove` | same | removes **only `agent:true` shapes** (by ids or `llmOnly`); user drawings untouchable |
+
+LLM drawings are ordinary shapes: they persist per symbol (`fv_draw_<sym>`), appear in the object tree, and undo with Ctrl+Z (a `snapshotDraw()` precedes every mutation). Gating: bridge runs only when `!IS_EMBED` **and** (localhost/`file://` origin, `?agent=1`, or `localStorage fv_agent="1"`); port override via `localStorage fv_agent_port`. On fetch failure it backs off 3s→30s silently, so running without the server costs nothing.
+
+Regressions: `test/regression_agent_mcp.mjs` (MCP handshake, REST, hardening, fake-page long-poll) and `test/regression_agent_bridge.mjs` (real page end-to-end: reads, add/validate/remove, user-drawing protection).

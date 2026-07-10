@@ -1,77 +1,75 @@
-# §14 Mobile App — OpenView (Expo/React Native, /openviewapp)
+# LLM API + MCP for OpenView charts (read data + manage drawings only)
+
+Goal: let Claude (or any MCP client) connect to a RUNNING OpenView chart, read
+its data (symbol/tf/bars/indicators/alerts/drawings) and add/remove drawings
+(lines, fibs, notes) so it can answer "where is support/resistance" and mark it
+on the chart. Explicitly NOT allowed: anything beyond chart data + chart
+objects — no code execution, no app/settings mutation, no file access.
+
+Design (no build step, zero npm deps):
+- `mcp/server.mjs` — single-file Node server, bound to 127.0.0.1 only:
+  - long-poll bridge the page connects to (`POST /bridge/poll`)
+  - REST API: `/api/health`, `/api/chart`, `/api/bars`, `/api/indicators`,
+    `/api/alerts`, `/api/drawings` (GET/POST/DELETE)
+  - MCP stdio server (`--mcp`) — hand-rolled newline-delimited JSON-RPC; tools
+    call the REST API so `--mcp` attaches to an already-running server
+  - static-serves the repo so `http://127.0.0.1:8787/` opens the app same-origin
+- `index.html` — agent bridge (~150 lines at end of script): long-poll loop +
+  fixed command map (`chart.info`, `chart.bars`, `chart.indicators`,
+  `alerts.list`, `draw.list`, `draw.add`, `draw.remove`). LLM drawings get
+  `agent:true` and go through snapshotDraw/persist/redraw (undoable, object
+  tree, persisted). Bridge runs only on localhost / `?agent=1` / `fv_agent=1`,
+  never in embeds.
+
+Security hardening (user requirement: nothing malicious possible):
+- server binds 127.0.0.1; Host-header check (anti DNS-rebinding) + Origin
+  check (only localhost/file origins may call the API from a browser)
+- fixed command allowlist on BOTH sides; no eval / code-exec / fs / settings
+  surface; alerts+indicators are READ-only; only drawings are writable
+- drawing input validated: type ∈ CLICKS allowlist, numeric points, text/name
+  length-capped + <> stripped, ≤40 shapes/call, ≤400 agent shapes total
+- 512KB body cap, JSON-only, bounded command queue; static server has
+  path-traversal guard and never serves dotfiles/.env*
+- optional shared secret via OPENVIEW_TOKEN (X-OpenView-Token header)
 
 ## Plan
-- [x] 1. `.mcp.json` — Supabase MCP server (env-based `SUPABASE_PROJECT_REF`/`SUPABASE_ACCESS_TOKEN`, read-only, no secrets)
-- [x] 2. Expo scaffold in `/openviewapp` (package.json, app.json, tsconfig, babel, metro, .gitignore, .env.example)
-- [x] 3. Config (offline-first gating) + Supabase client + anonymous device-ID auth
-- [x] 4. Shared AppState (symbol/tf/chartType/indicators) + `supabase/schema.sql` + `alert-watcher` Edge Function
-- [x] 5. Bottom tab nav (Watchlist/Chart/Alerts/Menu) + exact-TV dark theme
-- [x] 6. Chart screen: `ChartWebView` of deployed engine (`?embed=1&sym=&tf=`), touch-optimized + live postMessage bridge
-- [x] 7. Symbol search modal (Coinbase products, TV mobile styling)
-- [x] 8. Watchlist screen: live Coinbase prices, tick flash, local store + `sync_state` sync
-- [x] 9. Timeframe + chart-type bottom-sheet switcher
-- [x] 10. Indicators modal: add/remove/configure period, pushed to WebView
-- [x] 11. Drawings per-symbol store + sync; WebView `drawingsChanged` round-trip
-- [x] 12. Alerts screen (CRUD/pause) + `priceWatcher` (in-app fire) + notifications (sound/badge) + Expo Push scaffold + tap→chart
-- [x] 13. Install deps (1217 pkgs, expo-doctor 17/17) + typecheck CLEAN
-- [x] 14. features.md §14 → all [x], ARCHITECTURE.md §13 added
+- [x] Read ARCHITECTURE.md + index.html internals (draw model, CLICKS, fetchTfBars, persist/redraw/snapshotDraw)
+- [x] `mcp/server.mjs`: bridge + REST + MCP stdio + static serving + hardening
+- [x] `index.html`: agent bridge (gated, embed-excluded, validated)
+- [x] `mcp/README.md`: setup (claude mcp add …), tools, REST examples, security notes
+- [x] Tests: `test/regression_agent_bridge.mjs` (playwright round-trip) + `test/regression_agent_mcp.mjs` (stdio handshake + hardening checks)
+- [x] ARCHITECTURE.md: new §14 "LLM Bridge — API + MCP"
+- [x] Self-review; no commit (awaiting go-ahead)
 
 ## Review
-Full Expo Router app built under `/openviewapp` (folder per user request; §14 header updated from `/mobile`). All 18 §14 rows implemented and marked complete.
+- `test/regression_agent_mcp.mjs`: 14/14 — MCP initialize/tools/list/call, clean
+  "not connected" error, spoofed-Host 403, hostile-Origin 403, .env*/dotfile 403,
+  path-traversal 403, fake-page long-poll round trip, page error → 502.
+- `test/regression_agent_bridge.mjs`: 11/11 — real page (BTC-USD 1d) served by
+  the bridge server itself; REST reads live chart/bars/indicators/alerts;
+  add_drawings lands in draw.shapes agent-tagged + undoable; invalid batch is
+  all-or-nothing; DELETE cannot touch user drawings (removed:0); ?llm=1 clears
+  only LLM shapes.
+- Malicious-use review: server binds 127.0.0.1; Host+Origin allowlists; fixed
+  command map both ends (no eval/fs/settings surface); alerts+indicators
+  read-only; LLM can only delete its own drawings; drawing input validated and
+  capped (type ∈ CLICKS, numeric points, text/name sanitized, ≤40/call, ≤400
+  total); 512KB body cap; optional OPENVIEW_TOKEN shared secret.
+- NOT committed, NOT deployed — awaiting go-ahead. index.html + ARCHITECTURE.md
+  already carried unrelated uncommitted edits from a previous session; untouched.
 
-**Verification:** `npm install` OK; `npx tsc --noEmit` → exit 0 / no errors; `npx expo-doctor` → 17/17.
+## Follow-up fix (user report): Help panel said "Waiting for bridge server" while connected
+- Cause: `_agentLinked` only flips after the first long-poll RESPONSE, which the
+  server parks for 25s; panel also never refreshed after opening.
+- Fix: first poll after (re)connect sends `hello:1` → server answers immediately;
+  Help status span (`#helpAgentStatus`) live-refreshes every 2s while open.
+- Proof: `test/regression_agent_help_status.mjs` — failed pre-fix (t2 "Waiting"),
+  now 3/3 incl. live flip to "Waiting" when the server is killed. Other two agent
+  suites re-run green. Lesson added to tasks/lessons.md.
 
-**Bugs caught in self-review (fixed before verify):**
-- `config.ts` read env via dynamic `process.env[key]` — Expo only inlines **static** `process.env.EXPO_PUBLIC_*` member expressions. Rewrote to static reads.
-- Missing `babel-plugin-module-resolver` for the `@/*` alias — added to devDeps + installed.
-- `watchlist.tsx` passed a `fontSize`-bearing style to a `<View>` — removed the Text-only style from the View.
-- Excluded `supabase/functions` (Deno runtime) from the RN tsconfig.
-
-**Requires the user (blocked in a non-interactive session):**
-- Provide Supabase URL + anon key in `openviewapp/.env` (offline until then; app fully usable meanwhile).
-- Set `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN`, then authorize the Supabase MCP server interactively (`/mcp`).
-- Run `supabase/schema.sql`, enable Anonymous sign-ins, deploy + cron the `alert-watcher` Edge Function.
-- Set the deployed chart URL (`EXPO_PUBLIC_CHART_ENGINE_URL`) so the WebView loads the real engine.
-
-**Not runtime-verified:** no device/simulator run and no live Supabase (offline-first path only) — typecheck + doctor are the proof at this stage.
-
-# RSI alert line on RSI pane (2026-07-09)
-
-## Plan
-- [x] Reproduce: Playwright test proving dialog-created RSI alert IS saved but draws no line (`test/regression_rsi_alert_line.mjs` — t1 pass, t2-t4 fail pre-fix)
-- [x] Fix: `updateRsiAlertLines()` — native LWC price lines on `rsiLine` for source:rsi/target:value alerts; hooked into `saveAlerts`, `loadAlerts`, "Alert lines" toggle, color change
-- [x] Confirm: new test 4/4; `regression_alert_drag`, `regression_live_tick_alert_wick`, `regression_alert_sounds` pass; screenshot shows dashed line + 🔔 axis tag on RSI pane
-- [x] ARCHITECTURE.md §8 Visual section updated
-
-## Review
-Root cause of "alert not created": creation always worked (persisted + evaluated + fires) — it was
-invisible because `drawAlertLines()` only renders source:price alerts on the main pane. Fix adds
-~20 lines. Also repaired `regression_alert_sounds.mjs`, broken by the earlier (pre-existing,
-uncommitted) file-based ringtones change: t2 now skips `src:` ringtones (no `seq` to synthesize),
-t5 counts relaxed to ≥20. Other sub-pane alert sources (macd/atr/cci/willr/volume) still draw no
-line — their panes are dynamic subCharts; out of scope here.
-NOT deployed: mobile app loads https://openview-opal.vercel.app, so the phone won't show the line
-until the engine is redeployed (awaiting explicit go-ahead per rules).
-
-# RSI alert: line drag + interval option (2026-07-09)
-
-## Plan
-- [x] Failing test first (`test/regression_rsi_alert_interval_drag.mjs`): interval select in dialog, interval persisted, interval-TF evaluation, drag-to-move RSI line
-- [x] Dialog: Interval row (Same as chart + TF list), hidden for price/drawing sources; `a.interval` in adOk
-- [x] Model: `interval` in saveAlerts/emitAlertsChanged/migrateAlert; in defaultAlertMessage + alerts panel
-- [x] Eval: `sourceValue(key, data)` param; per-(sym|tf) bar cache via fetchTfBars w/ 30s stale-while-revalidate + live-tick tail patch; checkAlerts uses interval-aware values
-- [x] Drag: mousedown on rsiEl (skip axis area), hit-test priceToCoordinate ±6px, drag re-values via coordinateToPrice (clamped 0–100), mouseup saveAlerts; hover ns-resize cursor
-- [x] rsiAlertLines entries → {id,pl}; adjust regression_rsi_alert_line.mjs
-- [x] App: add `interval?` to EngineAlert type (mirror passes it through untouched)
-- [x] All alert regressions green; ARCHITECTURE.md; deploy on go-ahead
-
-## Review
-All 4 new tests pass (interval UI/persist/eval, drag); full alert regression suite green
-(rsi_alert_line, alert_drag, live_tick_alert_wick, rsi_axis_drag, alert_sounds).
-Interval fetches only run while an interval-pinned alert is being evaluated (≤1 request
-per 30s per SYM|tf, LRU-capped cache). Drag is mouse-event based like the rest of the
-engine (desktop; no native touch handlers exist anywhere yet).
-CONCURRENCY NOTE: another Claude session was editing index.html simultaneously (mobile
-Alerts-tab bridge + RSI axis cursor classes); all edits merged cleanly, and
-regression_rsi_axis_drag.mjs t3c was updated to match that session's class-based cursor.
-NOT deployed — awaiting go-ahead.
+## Follow-up fix: duplicate shape ids across sessions
+- `uid` restarts at 1 per load while persisted shapes keep saved ids → first new
+  drawing of a session collided with persisted "s1" (seen live during MCP demo).
+- Fix: `newId()` skips ids already held by a shape in `draw.shapes`.
+- Proof: `test/regression_shape_id_collision.mjs` (failed pre-fix: dup "s1" and
+  a 5-shape list with two duplicate pairs; now 2/2). Bridge suite re-run 12/12.

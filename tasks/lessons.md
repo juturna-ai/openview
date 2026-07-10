@@ -296,3 +296,21 @@ Lesson: when the same object is serialized in more than one place (saveAlerts / 
 
 ## Weekly/monthly candles were epoch-aligned, not calendar-aligned — epoch day is a THURSDAY
 User: "weekly candles are showing different than TradingView" (also 2W and 1M). Root cause: `aggregate()` bucketed with `Math.floor(time/bucket)*bucket`. 1970-01-01 is a Thursday, so 604800-floored weeks ran Thu→Wed while TV/Binance weeks run Mon→Sun — every weekly OHLC differed. "1M" was a fixed 30-day block drifting across months, "1Y" a 365-day block. The bar-close countdown used the same floor, showing wrong time-to-close on those TFs. Fix: `bucketStart(time,bucket)` — multiples of 7d anchor to WEEK_ANCHOR (Mon 1970-01-05), bucket 2592000 → Date.UTC(y,m,1), 31536000 → Date.UTC(y,0,1); `bucketClose()` mirrors it for the countdown. Verified live: every 1W bar opens Monday and the current NEARUSDT weekly OHLC matches TV to the tick. Lesson: never floor timestamps into week/month/year buckets by epoch arithmetic — epoch's weekday makes weeks Thursday-anchored, and 30/365-day blocks drift; use a Monday anchor and real calendar math. When a user says "candles differ from TradingView on TF X", first suspect the bucket ANCHOR, not the data.
+
+## When mimicking a TradingView visual, match TV's exact geometry — spread icons split DIAGONALLY
+Built the spread split-icon as a vertical left/right split; user corrected to diagonal (TradingView
+splits pair icons corner-to-corner: leg A top-left triangle, leg B bottom-right). Implementation
+note: a diagonal split wants two FULL-SIZE stacked layers clipped with `clip-path` polygons (stop
+the polygons a few % short of the diagonal for a seam), not two 50%-width flex halves with
+`object-position`. Lesson: for any "like TradingView" visual, check TV's actual rendering (split
+direction, seam, orientation) before picking the simplest CSS shape — geometry is part of the spec.
+
+## A status flag driven by long-poll COMPLETION lags by the hold time — ack the first poll
+The Help panel's "Connected" indicator read `_agentLinked`, which only flips after the first
+/bridge/poll RESPONSE — but the server parks every poll for 25s, so for the first ~25s the UI said
+"Waiting for bridge server" while the bridge demonstrably worked (user saw the mismatch instantly).
+Two-part pattern: (1) protocol — the first poll after (re)connect carries `hello:1` and the server
+answers it immediately, so liveness is known within ms; (2) UI — any status line that can change
+while visible needs a live refresher (self-clearing interval keyed on the element's existence),
+not a value snapshotted at render. Generally: never derive "connected" from a channel whose normal
+idle behavior is silence.

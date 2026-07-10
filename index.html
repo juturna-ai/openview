@@ -5258,7 +5258,11 @@ function ptToCoord(p){ return snap(xToTime(p.x), yToPrice(p.y)); }
 // ─────────────────────────────────────────────────────────────────────
 //  POINTER STATE MACHINE  (the part that was broken — rewritten cleanly)
 // ─────────────────────────────────────────────────────────────────────
-let uid=1; function newId(){ return "s"+(uid++); }
+// uid restarts at 1 each load while persisted shapes keep their saved ids, so
+// skip past any id an existing shape already holds — otherwise the session's
+// first new drawing collides with a persisted "s1" and id-based ops (object
+// tree selection, per-id delete) become ambiguous.
+let uid=1; function newId(){ let id; do{ id="s"+(uid++); }while(draw.shapes.some(s=>s.id===id)); return id; }
 
 // Tracks the press location so mouseup can tell a CLICK from a DRAG.
 let downPt=null, downMoved=false;
@@ -5898,18 +5902,37 @@ function movePane(el, dir){
   mk("⚙","RSI settings", ()=>openRsiSettings());
   mk("×","Close RSI pane", hideRsiPane);
   // Top-border drag: resize the pane like TradingView (min 70px, max 60% of the window).
+  // Updates are coalesced to ONE per animation frame, and within that frame the chart,
+  // RSI chart, and drawings overlay are all resized together so nothing repaints out of
+  // step (per-mousemove updates made the drawings visibly bounce during the drag).
+  // The axis-width recompute (alignPriceAxes, inside resize()) is deferred to mouseup —
+  // re-running it mid-drag jitters the plot width.
   const grip=document.createElement("div"); grip.className="paneResize"; grip.title="Drag to resize pane";
   grip.addEventListener("mousedown", e=>{
     e.preventDefault(); e.stopPropagation();
     const startY=e.clientY, startH=rsiWrapEl.getBoundingClientRect().height;
-    const onMove=ev=>{
-      // dragging the TOP border UP grows the pane, DOWN shrinks it
-      const h=Math.max(70, Math.min(window.innerHeight*0.6, startH-(ev.clientY-startY)));
+    let raf=0, lastY=e.clientY;
+    const apply=()=>{
+      raf=0;
+      const h=Math.max(70, Math.min(window.innerHeight*0.6, startH-(lastY-startY)));
       rsiWrapEl.classList.remove("pane-collapsed");
       rsiWrapEl.style.flex="0 0 "+h+"px"; rsiWrapEl.style.height=h+"px";
+      try{
+        chart.applyOptions({ width:chartEl.clientWidth, height:chartEl.clientHeight });
+        rsiChart.applyOptions({ width:rsiEl.clientWidth, height:rsiEl.clientHeight });
+        sizeCanvas();
+        // LWC applies its coordinate remap a beat after applyOptions — reproject the
+        // overlay once more next frame so drawings can't sit on a stale mapping while
+        // the mouse is held still mid-drag.
+        requestAnimationFrame(()=>{ try{ redraw(); }catch(e){} });
+      }catch(err){}
+    };
+    const onMove=ev=>{ lastY=ev.clientY; if(!raf) raf=requestAnimationFrame(apply); };
+    const onUp=()=>{
+      document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp);
+      if(raf){ cancelAnimationFrame(raf); raf=0; }
       try{ resize(); sizeCanvas(); }catch(err){}
     };
-    const onUp=()=>{ document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp); try{ resize(); sizeCanvas(); }catch(err){} };
     document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
   });
   rsiWrapEl.appendChild(grip);
@@ -7694,16 +7717,33 @@ function togglePaneMaximize(el){
   setTimeout(()=>{ resizeSubChart(el); if(typeof alignPriceAxes==="function") alignPriceAxes(); },0);
 }
 function wirePaneResize(grip, el){
+  // rAF-coalesced: one update per frame, resizing the sub-chart AND the main chart +
+  // drawings overlay together (growing a sub-pane shrinks #chartWrap, so without the
+  // main-chart/overlay resize the drawings bounced during the drag). alignPriceAxes
+  // (axis-width recompute) waits for mouseup — mid-drag it jitters the plot width.
   grip.addEventListener("mousedown", e=>{
     e.preventDefault(); e.stopPropagation();
     const startY=e.clientY, startH=el.getBoundingClientRect().height;
-    const onMove=ev=>{
-      const h=Math.max(70, Math.min(500, startH+(ev.clientY-startY)));
+    let raf=0, lastY=e.clientY;
+    const apply=()=>{
+      raf=0;
+      const h=Math.max(70, Math.min(500, startH+(lastY-startY)));
       el.style.flex="0 0 "+h+"px"; el.style.height=h+"px";
       const ind=indicators.find(i=>i.paneEl===el);
       if(ind&&ind.subChart){ try{ ind.subChart.applyOptions({ width:el.clientWidth, height:el.clientHeight }); }catch(e){} }
+      try{
+        chart.applyOptions({ width:chartEl.clientWidth, height:chartEl.clientHeight });
+        rsiChart.applyOptions({ width:rsiEl.clientWidth, height:rsiEl.clientHeight });
+        sizeCanvas();
+        requestAnimationFrame(()=>{ try{ redraw(); }catch(e){} });   // settle overlay vs LWC remap
+      }catch(e){}
     };
-    const onUp=()=>{ document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp); if(typeof alignPriceAxes==="function") alignPriceAxes(); };
+    const onMove=ev=>{ lastY=ev.clientY; if(!raf) raf=requestAnimationFrame(apply); };
+    const onUp=()=>{
+      document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp);
+      if(raf){ cancelAnimationFrame(raf); raf=0; }
+      try{ resize(); sizeCanvas(); }catch(e){}
+    };
     document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
   });
 }
