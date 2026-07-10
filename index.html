@@ -26,12 +26,10 @@
   /* Embed mode (grid panel): hide the watchlist so the panel is pure chart */
   html.embed #watchlist{display:none;}
   html.embed #rightPanel{display:none !important;}   /* docked rail panels stay host-only */
-  html.embed #topbar{right:0;}
   /* Mobile app frames this page and provides its own toolbar → hide the engine's
      floating drawing toolbar (left) and right rail so they don't overlap the chart. */
   html.embed #toolbar{display:none !important;}
   html.embed #rightRail{display:none !important;}
-  html.embed #topbar{left:0;}
   /* Symbol/search block hidden in embed — the chart legend already shows sym·tf·venue
      and search lives host-side. The divider right after it goes too. */
   html.embed #symbolBox{display:none;}
@@ -51,7 +49,7 @@
      background to transparent, letting the axis label bleed through it. */
   html.embed #barCountdown.flash-up, html.embed #barCountdown.flash-down{animation:none;}
   /* ── Multi-chart grid (iframe panels) ── */
-  #chartGrid{display:none; position:absolute; top:38px; left:52px; right:0; bottom:0; z-index:35;
+  #chartGrid{display:none; position:absolute; top:38px; left:0; right:0; bottom:0; z-index:35;
     background:var(--bg); gap:2px; grid-auto-rows:1fr;}
   html.grid-on #chartGrid{display:grid;}
   html.grid-on #chartWrap, html.grid-on #rsiWrap, html.grid-on #subPanes, html.grid-on #bottomBar{display:none;}
@@ -128,7 +126,9 @@
      so toolbar dropdowns (timeframe menu etc.) that drop over the chart stay
      clickable instead of being swallowed by the overlay. The bar is only the top
      46px strip, so this never blocks chart pan/zoom gestures below it. */
-  #topbar{position:absolute; top:0; left:52px; right:0; height:38px; background:var(--bg);
+  /* left:0, not 52px — the bar is absolute inside #main, which already sits to the
+     right of the 52px drawing toolbar; a 52px left here doubles the offset. */
+  #topbar{position:absolute; top:0; left:0; right:0; height:38px; background:var(--bg);
     border-bottom:1px solid var(--border); display:flex; align-items:center; gap:2px; padding:0 8px; z-index:120;}
   #topbar .tbdiv{width:1px; height:20px; background:var(--border); margin:0 6px; flex:none;}
   #topbar .tbspacer{flex:1;}
@@ -267,13 +267,26 @@
   .wlActions span{cursor:pointer; color:var(--muted); line-height:1; padding:4px 6px; border-radius:4px;
     display:inline-flex; align-items:center;}
   .wlActions span:hover{color:#fff; background:var(--hover);}
-  #wlCols{display:flex; padding:6px 12px 6px 14px; font-size:11px; color:var(--muted);
+  /* right padding matches .row (10px) so header column boundaries sit exactly over the
+     data columns below. */
+  #wlCols{display:flex; padding:6px 10px 6px 14px; font-size:11px; color:var(--muted);
     border-bottom:1px solid var(--border);}
   #wlCols{position:relative;}
-  #wlCols .c1{flex:1;} #wlCols .c2{width:var(--wl-c2,72px); text-align:right;}
-  #wlCols .colgrip{position:absolute; top:0; bottom:0; width:5px; cursor:col-resize; z-index:2;}
-  #wlCols .colgrip:hover{background:rgba(41,98,255,.3);}
-  #wlCols .c3{width:var(--wl-c3,60px); text-align:right;} #wlCols .c4{width:var(--wl-c4,52px); text-align:right;}
+  #wlCols .c1{flex:1;}
+  /* Column dividers: labels centered between them; each cell is position:relative so its
+     .colgrip (the draggable resize handle) anchors ON its own column boundary. The line
+     itself is drawn by .colgrip::before spanning the FULL header height (the grip's
+     -6px top/bottom covers #wlCols's vertical padding), so it meets the horizontal
+     borders above and below, in the same faded --border color as those lines. */
+  #wlCols .c2{width:var(--wl-c2,72px);}
+  #wlCols .c3{width:var(--wl-c3,60px);}
+  #wlCols .c4{width:var(--wl-c4,52px);}
+  #wlCols .c2, #wlCols .c3, #wlCols .c4{position:relative; text-align:center; padding:0 4px;}
+  /* 9px-wide grab zone straddling the divider; hover paints the line accent-blue. */
+  #wlCols .colgrip{position:absolute; top:-6px; bottom:-6px; left:-5px; width:9px; cursor:col-resize; z-index:2;}
+  #wlCols .colgrip::before{content:""; position:absolute; left:4px; top:0; bottom:0; width:1px;
+    background:var(--border); transition:background .12s, width .12s;}
+  #wlCols .colgrip:hover::before{left:3.5px; width:2px; background:var(--accent);}
   #wlCols span{cursor:pointer; user-select:none;} #wlCols span:hover{color:var(--text);}
   #wlCols span.sorted{color:var(--accent);}
   #wlBody{flex:1; overflow-y:auto;}
@@ -324,8 +337,8 @@
     stroke-linecap:round; stroke-linejoin:round;}
   /* a masked row shows "••••••" in the price columns, dimmed and colorless */
   .row.masked .last, .row.masked .chgabs, .row.masked .chg{color:var(--muted); letter-spacing:1px;}
-  .row .flag{flex:none; font-size:8px; line-height:1; text-align:center; width:0; overflow:visible;}
-  .row .flag:not(:empty){width:9px; margin-right:1px;}
+  /* flag sits flush against the panel's left edge, TradingView-style */
+  .row .flag{position:absolute; left:0; top:50%; transform:translateY(-50%); display:flex; pointer-events:none;}
   .row .sym{flex:1; display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;}
   /* Ticker holds its space; the exchange badge is the first thing to give when the
      watchlist is narrowed (min-width:0 lets it shrink to nothing before the nm). */
@@ -336,9 +349,11 @@
   .row .ic{width:20px; height:20px; border-radius:50%; flex-shrink:0; object-fit:contain;
     background:#2a2e39; color:#fff; font-size:9px; display:flex; align-items:center;
     justify-content:center; font-weight:700;}
-  .row .last{width:var(--wl-c2,72px); text-align:right; font-size:12px; font-variant-numeric:tabular-nums; color:#d1d4dc;}
-  .row .chgabs{width:var(--wl-c3,60px); text-align:right; font-size:11px; font-variant-numeric:tabular-nums;}
-  .row .chg{width:var(--wl-c4,52px); text-align:right; font-size:11px; font-variant-numeric:tabular-nums;}
+  /* padding-right matches the header cells (#wlCols .c2/.c3/.c4) so values sit exactly
+     under their column labels and clear of the header divider positions. */
+  .row .last{width:var(--wl-c2,72px); text-align:right; font-size:12px; font-variant-numeric:tabular-nums; color:#d1d4dc; padding-right:6px;}
+  .row .chgabs{width:var(--wl-c3,60px); text-align:right; font-size:11px; font-variant-numeric:tabular-nums; padding-right:6px;}
+  .row .chg{width:var(--wl-c4,52px); text-align:right; font-size:11px; font-variant-numeric:tabular-nums; padding-right:6px;}
   .up{color:#26a69a;} .down{color:#ef5350;}
   #wlBody::-webkit-scrollbar{width:8px;}
   #wlBody::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
@@ -2826,7 +2841,7 @@ function buildWatchlist(){
       const exBadge = (exMeta && exMeta.id!=="COINBASE")
         ? `<span class="exbadge">${exMeta.label}</span>` : "";
       const flagCol = SYMBOL_FLAGS[sym];
-      const flag = `<span class="flag" title="Flag color"${flagCol?` style="color:${flagCol}"`:""}>${flagCol?"⬤":""}</span>`;
+      const flag = `<span class="flag" title="Flag color">${flagCol?`<svg width="11" height="12" viewBox="0 0 11 12" fill="${flagCol}"><path d="M0 1h11L7.5 6 11 11H0z"/></svg>`:""}</span>`;
       const masked = isPriceHidden(sym);
       const cell = masked ? WL_MASK : "—";
       if(masked) row.classList.add("masked");
