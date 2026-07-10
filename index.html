@@ -45,9 +45,6 @@
   html.embed #maLegend{white-space:normal; width:auto; max-width:100%;}
   /* App shows OHLC in its own UI → hide the engine's OHLC legend row in embed mode. */
   html.embed #ohlcRow{display:none;}
-  /* Keep the countdown pill solid on the phone — the tick-flash animation fades its
-     background to transparent, letting the axis label bleed through it. */
-  html.embed #barCountdown.flash-up, html.embed #barCountdown.flash-down{animation:none;}
   /* ── Multi-chart grid (iframe panels) ── */
   #chartGrid{display:none; position:absolute; top:38px; left:0; right:0; bottom:0; z-index:35;
     background:var(--bg); gap:2px; grid-auto-rows:1fr;}
@@ -339,6 +336,7 @@
   .row.masked .last, .row.masked .chgabs, .row.masked .chg{color:var(--muted); letter-spacing:1px;}
   /* flag sits flush against the panel's left edge, TradingView-style */
   .row .flag{position:absolute; left:0; top:50%; transform:translateY(-50%); display:flex; pointer-events:none;}
+  .row.flagged{padding-left:16px;}
   .row .sym{flex:1; display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;}
   /* Ticker holds its space; the exchange badge is the first thing to give when the
      watchlist is narrowed (min-width:0 lets it shrink to nothing before the nm). */
@@ -2749,7 +2747,7 @@ window.addEventListener("message", e=>{
       try{ checkAlerts(); }catch(err){}
     } else if(typeof sym==="string" && sym){
       try{ localStorage.setItem("fv_alerts_"+sym, JSON.stringify(d.alerts.slice(0,100).map(a=>migrateAlert(a)).map(a=>({
-        id:a.id, source:a.source, op:a.op, target:a.target, value:a.value,
+        id:a.id, source:a.source, op:a.op, target:a.target, value:a.value, interval:a.interval||null,
         trigger:a.trigger, expiry:a.expiry, message:a.message, notify:a.notify, sound:a.sound, webhook:a.webhook, active:a.active,
       })))); }catch(err){}
     }
@@ -2845,6 +2843,7 @@ function buildWatchlist(){
       const masked = isPriceHidden(sym);
       const cell = masked ? WL_MASK : "—";
       if(masked) row.classList.add("masked");
+      if(flagCol) row.classList.add("flagged");
       row.innerHTML = `${flag}<span class="sym">${icon}<span class="nm">${escHtml(nmLabel)}</span>${exBadge}</span>
         <span class="last" data-last>${cell}</span><span class="chgabs" data-chgabs>${cell}</span><span class="chg" data-chg>${cell}</span>
         <span class="eye" title="Hide / show this asset's price">${icEyeWl(sym)}</span>
@@ -6094,7 +6093,12 @@ function openAlertDialog(opts={}){
   // carries a concrete TF that shows in its label and doesn't silently drift when the
   // chart TF changes. Hidden for price/drawing sources — those are TF-independent.
   const ivSel = a.interval || activeTF;
-  const ivOpts = Object.keys(TF).filter(k=>k[0]!=="c").map(k=>`<option value="${k}" ${k===ivSel?"selected":""}>${TF[k].menu||TF[k].label}</option>`).join("");
+  // Standard TFs + the alert's own pinned interval even if it's a custom TF (key "c…"),
+  // so reopening a custom-TF alert keeps its interval instead of silently defaulting to
+  // the first option and overwriting a.interval on Save.
+  const ivKeys = Object.keys(TF).filter(k=>k[0]!=="c");
+  if(ivSel && TF[ivSel] && !ivKeys.includes(ivSel)) ivKeys.push(ivSel);
+  const ivOpts = ivKeys.map(k=>`<option value="${k}" ${k===ivSel?"selected":""}>${TF[k].menu||TF[k].label}</option>`).join("");
   const expVal = a.expiry ? toLocalInput(a.expiry) : "";
 
   alertDlg.innerHTML=`
@@ -10536,13 +10540,6 @@ function applyTick(prodPrice){
     applyChartType(lastData);
   }catch(e){}
   updateOhlcLegend(bar.time);
-  flashLastPrice(price>=prevClose);   // last-price label flashes green/red on tick
-}
-// Brief flash on the last-price pill (the countdown badge sits there), colored by tick.
-function flashLastPrice(up){
-  const el=document.getElementById("barCountdown"); if(!el) return;
-  el.classList.remove("flash-up","flash-down"); void el.offsetWidth;
-  el.classList.add(up?"flash-up":"flash-down");
 }
 function wsConnect(){
   const prods=wsProductsForActive();
