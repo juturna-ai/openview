@@ -166,7 +166,7 @@ All chart instances share `common` options (dark background, grid, `PRICE_AXIS_W
 ### Main chart series
 
 - `candle` — `CandlestickSeries`; the canonical OHLC and coordinate anchor. `autoscaleInfoProvider` pins the scale to `manualPriceRange` when set.
-- `maSeries[0..5]` — six `LineSeries` for MA 7/25/99/150/200/300 (orange/red/green/cyan/magenta/white).
+- `maSeries` — one `LineSeries` per `MAS` entry; default set is seven EMAs 7/25/99/150/200/300/400 (orange/blue/green/cyan/magenta/white/purple). The legend wraps to a new row every 4 MAs; each entry carries its own 👁 toggling that MA's `on` flag (persisted in `fv_mas`, same flag as the dialog checkbox — hidden MAs stay dimmed in the legend with 🚫 so they can be re-shown).
 - `aux{}` — lazily created auxiliary series keyed by chart type (`line`, `linemark`, `step`, `area`, `baseline`, `bars`, `hlcbars`, `columns`, `highlow`, `renko`, `kagi`, `pnf`, `linebreak`) for non-candle chart styles.
 
 ### `renderData(data, keepView)`
@@ -347,7 +347,7 @@ Calc helpers return shorter arrays (they start at `i = period - 1`). A sub-pane 
 
 ### Hardwired indicators
 
-MAs (default 7/25/99/150/200/300) are held in the mutable `MAS` array (`{p, color, w, on, type, src, ls}`) and rendered directly in `renderData` via `renderMaLegend` → `maLine`. `maLine(data, m)` picks the source column (`src`: close/open/high/low/hl2/hlc3/ohlc4) and MA kind (`type`: sma/ema/wma/rma via `smaA`/`emaA`/`wmaA`/`rmaA`). They are **editable**: the `#maLegend` row ends with a ⚙ gear (`#maGear`) opening `openMaSettings` — a dialog to change each MA's type, period, source, color, width, line style, toggle visibility, add/remove, and Reset to defaults (`DEFAULT_MAS`). Add/remove rebuilds the line series via `rebuildMaSeries` (`maSeriesOpts` shares the option shape); edits persist to `localStorage["fv_mas"]` (`saveMas`). The legend label reflects the type (e.g. `EMA25`, `SMMA99`) via `maTag`. RSI(14) is rendered via `rsiSeries` / `maOfSeries` into the always-visible `#rsiWrap` pane (not part of `indicators[]`).
+MAs (default: seven EMAs 7/25/99/150/200/300/400) are held in the mutable `MAS` array (`{p, color, w, on, type, src, ls}`) and rendered directly in `renderData` via `renderMaLegend` → `maLine`. `maLine(data, m)` picks the source column (`src`: close/open/high/low/hl2/hlc3/ohlc4) and MA kind (`type`: sma/ema/wma/rma via `smaA`/`emaA`/`wmaA`/`rmaA`). They are **editable**: the `#maLegend` row ends with a ⚙ gear (`#maGear`) opening `openMaSettings` — a dialog to change each MA's type, period, source, color, width, line style, toggle visibility, add/remove, and Reset to defaults (`DEFAULT_MAS`). Add/remove rebuilds the line series via `rebuildMaSeries` (`maSeriesOpts` shares the option shape); edits persist to `localStorage["fv_mas"]` (`saveMas`). The legend label reflects the type (e.g. `EMA25`, `SMMA99`) via `maTag`. RSI(14) is rendered via `rsiSeries` / `maOfSeries` into the always-visible `#rsiWrap` pane (not part of `indicators[]`).
 
 ### Indicators dialog — `toggleIndicatorsMenu`
 

@@ -1702,19 +1702,20 @@ function openChartSettings(){
   dlg.querySelector("#cs_reset").onclick=()=>{ Object.assign(CHART_SETTINGS,{up:"#26a69a",down:"#ef5350",bg:"#131722",grid:"#1e222d",gridVisible:true}); applyChartSettings(); openChartSettings(); };
 }
 
-// TradingView shows 7/25/99 MAs + SMA 150/200/300 — recreate all six.
-// MA colors matched to the TradingView screenshot:
-// MA7 orange · MA25 red · MA99 green · MA150 cyan · MA200 magenta · MA300 white
+// Default set: seven EMAs — 7/25/99/150/200/300/400 (user's preferred layout).
+// EMA7 orange · EMA25 blue · EMA99 green · EMA150 cyan · EMA200 magenta · EMA300 white
+// · EMA400 purple
 // Editable via the MA legend's gear button (period / color / width / visibility,
 // add + remove). Persisted so edits survive reload.
 // type: sma | ema | wma | rma(smma) · src: close | open | high | low | hl2 | hlc3 | ohlc4
 let MAS = [
-  { p:7,   color:"#ff9800", w:1, on:true, type:"sma", src:"close" },   // orange
-  { p:25,  color:"#e53935", w:1, on:true, type:"sma", src:"close" },   // red
-  { p:99,  color:"#43a047", w:1, on:true, type:"sma", src:"close" },   // green
-  { p:150, color:"#26c6da", w:1, on:true, type:"sma", src:"close" },   // cyan / light blue
-  { p:200, color:"#ec407a", w:1, on:true, type:"sma", src:"close" },   // magenta / pink
-  { p:300, color:"#e0e0e0", w:1, on:true, type:"sma", src:"close" },   // white / light gray
+  { p:7,   color:"#ff9800", w:1, on:true, type:"ema", src:"close" },   // orange
+  { p:25,  color:"#3d5afe", w:1, on:true, type:"ema", src:"close" },   // blue / indigo
+  { p:99,  color:"#43a047", w:1, on:true, type:"ema", src:"close" },   // green
+  { p:150, color:"#26c6da", w:1, on:true, type:"ema", src:"close" },   // cyan / light blue
+  { p:200, color:"#ec407a", w:1, on:true, type:"ema", src:"close" },   // magenta / pink
+  { p:300, color:"#e0e0e0", w:1, on:true, type:"ema", src:"close" },   // white / light gray
+  { p:400, color:"#8e24aa", w:1, on:true, type:"ema", src:"close" },   // purple
 ];
 const MA_TYPES = [["SMA","sma"],["EMA","ema"],["WMA","wma"],["SMMA (RMA)","rma"]];
 const MA_SRCS  = [["Close","close"],["Open","open"],["High","high"],["Low","low"],["HL2","hl2"],["HLC3","hlc3"],["OHLC4","ohlc4"]];
@@ -2454,7 +2455,11 @@ function renderData(data, keepView){
     if(prev && cur && prev.time === cur.time){
       if(prev.high > cur.high) cur.high = prev.high;
       if(prev.low  < cur.low ) cur.low  = prev.low;
-      cur.close = prev.close;   // WS close is more recent than the lagging poll
+      // Trust the WS close over the (lagging) poll ONLY while ticks are actually flowing.
+      // Mobile WebViews can stall the socket without firing close; unconditional trust
+      // pinned the price at the last stale tick and the poll could never correct it
+      // (spread charts hit hardest — they need BOTH legs ticking to move at all).
+      if(Date.now()-_wsLastTickAt < 15000) cur.close = prev.close;
     }
   }
   lastData = data;                 // expose to the drawing engine (magnet/measure/extrapolation)
@@ -3540,8 +3545,8 @@ function addSymbolToGroup(name){ openAddSymbolDlg(name); }
 
 function showSectionMenu(name, x, y){
   showCtx(x, y, [
-    mi("✎ Rename",          ()=>renameGroup(name)),
-    mi("🗑 Remove section",  ()=>removeGroup(name)),
+    mi(icEdit()+"Rename",          ()=>renameGroup(name)),
+    mi(icTrash()+"Remove section", ()=>removeGroup(name)),
     msep(),
     mi("＋ Add symbol",      ()=>addSymbolToGroup(name)),
     mi("＋ Add section",     ()=>addGroup(name)),
@@ -4509,6 +4514,12 @@ const TOOLS = [
 // ── inline SVG icons ──
 function svg(p){ return `<svg viewBox="0 0 24 24">${p}</svg>`; }
 function icBell(){   return svg('<path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7z"/><path d="M10.5 20a1.5 1.5 0 0 0 3 0"/>'); }
+// Flat line icons for context menus (emoji render as 3D color glyphs on Android; these
+// inherit .mi svg's currentColor stroke so they stay regular monochrome).
+function icPause(){  return svg('<line x1="9" y1="5" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="19"/>'); }
+function icPlay(){   return svg('<path d="M8 5l11 7-11 7z"/>'); }
+function icEdit(){   return svg('<path d="M17 3l4 4L8 20l-5 1 1-5z"/>'); }
+function icTrash(){  return svg('<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 14h10l1-14"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>'); }
 function icNote(){   return svg('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'); }
 function icCross(){  return svg('<line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>'); }
 function icTrend(){  return svg('<line x1="4" y1="20" x2="20" y2="4"/><circle cx="4" cy="20" r="1.6"/><circle cx="20" cy="4" r="1.6"/>'); }
@@ -5503,6 +5514,9 @@ dcanvas.addEventListener("touchcancel", _touchEnd, {passive:false});
 window.addEventListener("mouseup", e=>{
   clearPillPress();                                     // release before the hold fires
   if(draw.alertDrag){                                   // end alert drag
+    // Commit the dragged level rounded (2dp / 5 sig figs) — raw yToPrice floats otherwise
+    // leak 10+ decimals into labels and push notifications.
+    const da=alerts.find(z=>z.id===draw.alertDrag.id); if(da) da.value=roundAlertAuto(da.value);
     saveAlerts(); renderAlertsPanel(); draw.alertDrag=null; downPt=null; downMoved=false; redraw();
     return;
   }
@@ -5717,9 +5731,9 @@ dcanvas.addEventListener("contextmenu", e=>{
 function showAlertMenu(id,x,y){
   const a=alerts.find(z=>z.id===id);
   showCtx(x,y,[
-    mi((a&&a.active?"⏸ Pause":"▶ Resume"), ()=>{ if(a){ a.active=!a.active; saveAlerts(); redraw(); renderAlertsPanel(); } }),
-    mi("⬡ Edit…", ()=>{ if(a) openAlertDialog({existing:a}); }),
-    mi("🗑 Delete", ()=>removeAlert(id)),
+    mi((a&&a.active?icPause()+"Pause":icPlay()+"Resume"), ()=>{ if(a){ a.active=!a.active; saveAlerts(); redraw(); renderAlertsPanel(); } }),
+    mi(icEdit()+"Edit…", ()=>{ if(a) openAlertDialog({existing:a}); }),
+    mi(icTrash()+"Delete", ()=>removeAlert(id)),
   ]);
 }
 function mi(label, fn, swatch){
@@ -5747,7 +5761,7 @@ function showShapeMenu(id,x,y){
     mi("Bring to Front", ()=>{ snapshotDraw(); draw.shapes=draw.shapes.filter(z=>z.id!==id).concat(s); persist(); redraw(); }),
     mi("Send to Back",   ()=>{ snapshotDraw(); draw.shapes=[s].concat(draw.shapes.filter(z=>z.id!==id)); persist(); redraw(); }),
     msep(),
-    mi("🗑 Delete", ()=>deleteShape(id)),
+    mi(icTrash()+"Delete", ()=>deleteShape(id)),
   ]);
 }
 function showChartMenu(x,y,p){
@@ -5781,7 +5795,7 @@ function attachPaneContextMenu(el, spec){
       items.push(mi(icBell()+"Add alert on "+lbl+"…", ()=>openAlertDialog({source:spec.alertSource}))); }
     if(items.length) items.push(msep());
     items.push(mi("Reset chart view", ()=>chart.timeScale().fitContent()));
-    if(spec.remove){ items.push(msep()); items.push(mi("🗑 "+(spec.removeLabel||"Remove indicator"), spec.remove)); }
+    if(spec.remove){ items.push(msep()); items.push(mi(icTrash()+(spec.removeLabel||"Remove indicator"), spec.remove)); }
     showCtx(e.clientX, e.clientY, items);
   });
 }
@@ -6086,6 +6100,14 @@ function closeAlertDlg(){ try{ stopAlertSound(); }catch(e){} alertDlg.classList.
 
 // Open the dialog. existing = an alert object to edit; price = pre-fill value for
 // a brand-new alert created by right-clicking the chart.
+// Auto-set alert values (dialog prefill, line drag) round to 3 decimals for prices ≥ 1 so
+// labels/notifications stay short (63866.439, not 63866.43878465). Sub-1 prices keep 5
+// significant digits so cheap coins don't collapse to 0.000. Typed input is never re-rounded.
+function roundAlertAuto(v){
+  if(v==null || !isFinite(v)) return v;
+  return Math.abs(v)>=1 ? Math.round(v*1000)/1000 : Number(v.toPrecision(5));
+}
+
 function openAlertDialog(opts={}){
   const editing = opts.existing || null;
   const cur = lastData.length ? lastData[lastData.length-1].close : 0;
@@ -6096,8 +6118,8 @@ function openAlertDialog(opts={}){
   const srcVal = opts.source ? sourceValue(opts.source) : null;
   const a = editing ? {...editing, notify:{...editing.notify}, sound:{...(editing.sound||ALERT_DEFAULT_SOUND)}} : {
     id:"a"+(alertUid++), source:src0, op:"crossing", target:"value",
-    value: opts.price!=null ? opts.price : (srcVal!=null ? srcVal : cur),
-    trigger:"once", expiry:null, message:"", notify:{...ALERT_DEFAULT_NOTIFY}, sound:{...ALERT_DEFAULT_SOUND}, active:true, _last:null,
+    value: roundAlertAuto(opts.price!=null ? opts.price : (srcVal!=null ? srcVal : cur)),
+    trigger:"every", expiry:null, message:"", notify:{...ALERT_DEFAULT_NOTIFY}, sound:{...ALERT_DEFAULT_SOUND}, active:true, _last:null,
     interval:null,
   };
   const srcList = alertSourcesWithDrawings();
@@ -8084,6 +8106,16 @@ applyRsiStyle();   // apply any persisted RSI style/visibility at boot
 // Recompute each MA line, push its swatch into the legend, and append a gear
 // button that opens the MA settings dialog (edit period/color/width/hide, add/remove).
 function maTag(m){ return (m.type||"sma").toUpperCase().replace("RMA","SMMA"); }
+// Each legend entry carries its own eye toggle for that MA (same `on` flag the settings
+// dialog's checkbox edits, persisted via saveMas). Hidden MAs stay in the legend —
+// dimmed, value omitted, slashed-eye icon — so they can be re-shown without the dialog.
+// Flat white stroke SVGs (same paths as the watchlist eye), not the 3D emoji glyphs.
+const MA_EYE_STYLE='width:11px;height:11px;vertical-align:-1px;fill:none;stroke:#d1d4dc;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round';
+function icMaEye(on){
+  return on
+    ? `<svg viewBox="0 0 24 24" style="${MA_EYE_STYLE}"><path d="M3 12s3.5-7 9-7 9 7 9 7-3.5 7-9 7-9-7-9-7z"/><circle cx="12" cy="12" r="2.5"/></svg>`
+    : `<svg viewBox="0 0 24 24" style="${MA_EYE_STYLE}"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.8 2.8M9.4 5.2A9.6 9.6 0 0 1 12 5c5 0 9 4.5 9 7a11 11 0 0 1-2.2 3.1M6.2 6.3A11.6 11.6 0 0 0 3 12c0 2.5 4 7 9 7 1.4 0 2.7-.3 3.9-.9"/></svg>`;
+}
 function renderMaLegend(data){
   const legend=[];
   maSeries.forEach((s,i)=>{
@@ -8091,12 +8123,28 @@ function renderMaLegend(data){
     const sd = maLine(data, m);
     s.setData(sd);
     s.applyOptions({ color:m.color, lineWidth:m.w||1, lineStyle:m.ls||0, visible:m.on!==false });
-    if(m.on!==false && sd.length) legend.push(`<span style="color:${m.color}">${maTag(m)}${m.p} ${fmt(sd[sd.length-1].value)}</span>`);
+    const on = m.on!==false;
+    const val = on && sd.length ? " "+fmt(sd[sd.length-1].value) : "";
+    legend.push(`<span style="color:${m.color}${on?"":";opacity:.45"}">${maTag(m)}${m.p}${val}`
+      + `<span class="maeye" data-i="${i}" title="${on?"Hide":"Show"} ${maTag(m)}${m.p}"`
+      + ` style="cursor:pointer;opacity:.75;margin:0 0 0 3px">${icMaEye(on)}</span></span>`);
   });
+  // Break the legend into rows of 4 so seven MAs don't run in one long line.
+  let rows="";
+  legend.forEach((h,i)=>{ rows += h; if((i+1)%4===0 && i!==legend.length-1) rows+="<br>"; });
   const box=document.getElementById("maLegend");
-  box.innerHTML = legend.join("") + '<span id="maGear" title="MA settings" style="cursor:pointer;opacity:.65;margin-right:0">⚙</span>';
+  box.innerHTML = rows
+    + '<span id="maGear" title="MA settings" style="cursor:pointer;opacity:.65;margin-right:0">⚙</span>';
   const g=document.getElementById("maGear");
   if(g) g.onclick = openMaSettings;
+  box.querySelectorAll(".maeye").forEach(el=>{
+    el.onclick = ev=>{ ev.stopPropagation();
+      const idx=+el.dataset.i; if(!MAS[idx]) return;
+      MAS[idx].on = MAS[idx].on===false;          // toggle (undefined counts as on)
+      saveMas();
+      renderMaLegend(lastData.length?lastData:data);
+    };
+  });
 }
 
 function openMaSettings(){
@@ -8688,6 +8736,8 @@ function rsiAlertDragMove(e){
 }
 function rsiAlertDragEnd(){
   if(!rsiAlertDrag) return;
+  // Commit the dragged level rounded, same as main-pane drags (short labels/notifications).
+  const a=alerts.find(z=>z.id===rsiAlertDrag.id); if(a) a.value=roundAlertAuto(a.value);
   rsiAlertDrag=null;
   document.documentElement.classList.remove("rsi-axis-drag");
   saveAlerts(); renderAlertsPanel();
@@ -9004,8 +9054,8 @@ function drawCrossPlus(){
 // One-tap alert from the ⊕ menu: price crossing the given level, all defaults.
 function addQuickAlert(price){
   if(price==null) return;
-  const a={ id:"a"+(alertUid++), source:"price", op:"crossing", target:"value", value:price,
-    trigger:"once", expiry:null, message:"",
+  const a={ id:"a"+(alertUid++), source:"price", op:"crossing", target:"value", value:roundAlertAuto(price),
+    trigger:"every", expiry:null, message:"",
     notify:{...ALERT_DEFAULT_NOTIFY}, sound:{...ALERT_DEFAULT_SOUND}, active:true, _last:null, interval:null };
   alerts.push(a); saveAlerts(); renderAlertsPanel(); redraw(); checkAlerts();
   toast("Alert added at "+fmt(price));
@@ -10514,7 +10564,12 @@ sizeCanvas();
 setTimeout(refreshPrices, 1200);
 window.addEventListener("resize", ()=>{ resize(); sizeCanvas(); });
 setInterval(refreshPrices, 6000);
-setInterval(()=>loadChart(activeSymbol, activeTF, true), 20000);  // keepView: don't snap the chart
+setInterval(()=>{
+  // Mobile WebViews can stall the WS without firing close (visibilitychange never sees
+  // it die) — if no tick for 30s while a socket is supposedly open, force a reconnect.
+  if(_ws && Date.now()-_wsLastTickAt>30000) wsConnect();
+  loadChart(activeSymbol, activeTF, true);                        // keepView: don't snap the chart
+}, 20000);
 setInterval(updateCountdown, 1000); updateCountdown();           // bar-close countdown pill
 
 // ── Real-time WebSocket (Coinbase ticker) ──
@@ -10523,7 +10578,7 @@ setInterval(updateCountdown, 1000); updateCountdown();           // bar-close co
 // The 20s poll stays as the source of truth / reconnect safety net (and covers
 // Binance/Bybit/ratio legs the WS doesn't handle). Auto-reconnects with backoff.
 const CB_WS = "wss://ws-feed.exchange.coinbase.com";
-let _ws=null, _wsSyms=[], _wsRetry=0, _wsLast={};
+let _ws=null, _wsSyms=[], _wsRetry=0, _wsLast={}, _wsLastTickAt=0;
 function wsProductsForActive(){
   // Only Coinbase spot legs get a live socket; ratios subscribe to both legs.
   const legs = activeSymbol.includes("/") ? activeSymbol.split("/") : [activeSymbol];
@@ -10567,10 +10622,10 @@ function wsConnect(){
   _wsSyms=prods;
   let ws; try{ ws=new WebSocket(CB_WS); }catch(e){ return; }
   _ws=ws;
-  ws.onopen=()=>{ _wsRetry=0; try{ ws.send(JSON.stringify({type:"subscribe", product_ids:prods, channels:["ticker"]})); }catch(e){} };
+  ws.onopen=()=>{ _wsRetry=0; _wsLastTickAt=Date.now(); try{ ws.send(JSON.stringify({type:"subscribe", product_ids:prods, channels:["ticker"]})); }catch(e){} };
   ws.onmessage=(ev)=>{
     let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
-    if(m.type==="ticker" && m.product_id && m.price){ _wsLast[m.product_id]=+m.price; applyTick(); }
+    if(m.type==="ticker" && m.product_id && m.price){ _wsLast[m.product_id]=+m.price; _wsLastTickAt=Date.now(); applyTick(); }
   };
   ws.onclose=()=>{ if(_ws===ws){ _ws=null; _wsRetry=Math.min(_wsRetry+1,6); setTimeout(()=>{ if(!_ws) wsConnect(); }, 1000*Math.pow(2,_wsRetry)); } };
   ws.onerror=()=>{ try{ ws.close(); }catch(e){} };
