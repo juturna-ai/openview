@@ -1854,17 +1854,18 @@ const rsiUnder = rsiChart.addBaselineSeries({
 // at the EXTREME end (farthest from baseValue) and *Color2 is at the BAND end (the
 // 70/30 level). We want it STRONG at the band and fading toward the RSI line, so the
 // band-end stop (…Color2) is the strong tint and the extreme-end stop (…Color1) fades
-// out. Tones = TradingView green #089981 / red #f23645.
+// out. Tone: a vivid emerald green #22a06b / matching red #d94452 — one hue per fill,
+// so the fill and its edge line are the SAME tone.
 const rsiOB = rsiChart.addBaselineSeries({
   baseValue:{ type:"price", price:70 }, lineWidth:2,
-  topFillColor1:"rgba(8,153,129,0.05)", topFillColor2:"rgba(8,153,129,0.6)", topLineColor:"rgba(8,153,129,0.9)",
+  topFillColor1:"rgba(34,160,107,0.05)", topFillColor2:"rgba(34,160,107,0.6)", topLineColor:"rgba(34,160,107,0.9)",
   bottomFillColor1:"rgba(0,0,0,0)", bottomFillColor2:"rgba(0,0,0,0)", bottomLineColor:"rgba(0,0,0,0)",
   priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale,
 });
 const rsiOS = rsiChart.addBaselineSeries({
   baseValue:{ type:"price", price:30 }, lineWidth:2,
   topFillColor1:"rgba(0,0,0,0)", topFillColor2:"rgba(0,0,0,0)", topLineColor:"rgba(0,0,0,0)",
-  bottomFillColor1:"rgba(242,54,69,0.05)", bottomFillColor2:"rgba(242,54,69,0.6)", bottomLineColor:"rgba(242,54,69,0.9)",
+  bottomFillColor1:"rgba(217,68,82,0.05)", bottomFillColor2:"rgba(217,68,82,0.6)", bottomLineColor:"rgba(217,68,82,0.9)",
   priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale,
 });
 // dashed 70 / 30 bands — TradingView tints these purple (the RSI plot color).
