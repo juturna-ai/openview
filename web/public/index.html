@@ -9092,10 +9092,13 @@ function updateRsiAlertLines(){
   if(!alertLinesVisible) return;
   alerts.forEach(a=>{
     if(a.source!=="rsi" || a.target!=="value" || a.value==null || !isFinite(a.value)) return;
+    // The RSI pane already has WHITE 30/50/70 band lines, so the old white
+    // alertLineColor line was invisible against them. Use the accent blue at width 2
+    // + an axis pill so the alert level clearly stands out from the bands.
     try{ rsiAlertLines.push({ id:a.id, pl:rsiLine.createPriceLine({
-      price:a.value, color:a.active?alertLineColor:"#888",
-      lineWidth:1, lineStyle:LightweightCharts.LineStyle.Dashed,
-      axisLabelVisible:false, title:"",   // no axis pill — hover info lives in the on-line pill
+      price:a.value, color:a.active?"#2962FF":"#888",
+      lineWidth:2, lineStyle:LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible:true, title:"",
     }) }); }catch(e){}
   });
 }
