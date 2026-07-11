@@ -161,7 +161,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .ov-tab:hover { color: var(--text); background: var(--hover); }
 .ov-tab.active {
   background: var(--bg); height: 28px; position: relative; z-index: 1;
-  color: var(--text);
+  color: #715587;
 }
 
 /* ── Home-tab heading nav (Home · Openview · APP · About us) ── */
@@ -207,7 +207,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .ov-hnav-link:hover { opacity: 1; }
 .ov-hnav-link.active {
   opacity: 1; font-weight: 600;
-  color: var(--text);
+  color: #715587;
 }
 
 /* Shell: tab bar + surface + footer stack to a full viewport; the surface grows so

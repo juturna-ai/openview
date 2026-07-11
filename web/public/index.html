@@ -46,7 +46,7 @@
     transition:color .12s ease, background .12s ease;}
   #ovTabs .ov-tab:hover{color:var(--text); background:var(--hover);}
   #ovTabs .ov-tab.active{background:var(--bg); height:28px;
-    border-color:var(--border); position:relative; z-index:1; color:var(--text);}
+    border-color:var(--border); position:relative; z-index:1; color:#715587;}
   @keyframes ovTabFlow{0%{background-position:0 0,0 0;}100%{background-position:300% 0,0 0;}}
   @keyframes ovTabPulse{0%,100%{filter:brightness(0.92);}50%{filter:brightness(1.15);}}
   /* When the tab bar is present (NOT embed), shrink the chart app to make room. */
@@ -5323,12 +5323,16 @@ rsiEl.addEventListener("touchmove", e=>{
 }, {passive:false});
 function _rsiTouchEnd(e){
   if(rsiAxisDrag) _rsiTouchMouse("mouseup", document, {clientX:0, clientY:0});
-  // A stationary TAP on the plot (no pan) surfaces the ⊕ quick-add-alert button at the
-  // tapped level — touch has no hover, so this is how a phone user places an RSI alert.
-  if(_rsiTimePan && !_rsiTimePan.moved && !rsiAxisDrag && rsiCrossPlusEl && draw.tool==="cross"){
+  // A stationary TAP on the plot (no pan). Touch has no hover, so this is how a phone
+  // user interacts with RSI alerts: tap ON a line → show its info pill (badge + 🗑 to
+  // delete); tap empty space → surface the ⊕ quick-add-alert button at that level.
+  if(_rsiTimePan && !_rsiTimePan.moved && !rsiAxisDrag && draw.tool==="cross"){
     const t=e && e.changedTouches && e.changedTouches[0];
     if(t){ const p=_rsiPt(t);
-      if(p.y>7 && p.y<rsiEl.clientHeight-7 && !inRsiPriceAxis(p)){
+      const hitId=rsiAlertHit(p);
+      if(hitId){ showRsiAlertPill(hitId); hideRsiCrossPlus(); }
+      else if(rsiCrossPlusEl && p.y>7 && p.y<rsiEl.clientHeight-7 && !inRsiPriceAxis(p)){
+        if(_rsiPillId) hideRsiAlertPill();
         rsiCrossPlusEl.style.top=p.y+"px";
         rsiCrossPlusEl.style.right=(rsiAxisW()+5)+"px";
         rsiCrossPlusEl.style.display="flex";
@@ -9197,7 +9201,7 @@ function rsiAlertHit(p){
   for(const e of rsiAlertLines){
     const a=alerts.find(z=>z.id===e.id); if(!a) continue;
     const y=rsiLine.priceToCoordinate(a.value);
-    if(y!=null && Math.abs(p.y-y)<6) return a.id;
+    if(y!=null && Math.abs(p.y-y)<10) return a.id;   // finger-friendly grab band
   }
   return null;
 }
@@ -9251,7 +9255,9 @@ function showRsiAlertPill(id){
 function hideRsiAlertPill(){
   _rsiPillId=null; rsiAlertPill.style.display="none";
 }
-rsiAlertPill.querySelector(".trash").onclick=e=>{ e.stopPropagation(); if(_rsiPillId){ const id=_rsiPillId; hideRsiAlertPill(); removeAlert(id); } };
+const _rsiTrashDel=e=>{ e.stopPropagation(); e.preventDefault(); if(_rsiPillId){ const id=_rsiPillId; hideRsiAlertPill(); removeAlert(id); } };
+rsiAlertPill.querySelector(".trash").addEventListener("click", _rsiTrashDel);
+rsiAlertPill.querySelector(".trash").addEventListener("touchstart", _rsiTrashDel, {passive:false});   // phones: tap 🗑 to delete
 rsiEl.addEventListener("mousedown", e=>rsiAlertDragStart(e,false));
 rsiEl.addEventListener("touchstart", e=>rsiAlertDragStart(e,true), {passive:false});
 // Right-click an RSI alert line → the same Pause/Edit/Delete menu as the main pane.
