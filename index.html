@@ -45,6 +45,9 @@
   html.embed #maLegend{white-space:normal; width:auto; max-width:100%;}
   /* App shows OHLC in its own UI → hide the engine's OHLC legend row in embed mode. */
   html.embed #ohlcRow{display:none;}
+  /* Indicators menu opened from the mobile app ({fvx:'indmenu'}): the desktop position
+     (left:60px, fixed 340px) overflows a ~390px phone WebView — pin it inside. */
+  html.embed #indicatorsMenu{left:8px; top:34px; width:min(340px, calc(100vw - 16px)); max-height:75vh;}
   /* ── Multi-chart grid (iframe panels) ── */
   #chartGrid{display:none; position:absolute; top:38px; left:0; right:0; bottom:0; z-index:35;
     background:var(--bg); gap:2px; grid-auto-rows:1fr;}
@@ -2800,6 +2803,9 @@ window.addEventListener("message", e=>{
   // Host → embed: open the symbol/pair details card (mobile app "View details" action).
   // Falls back to the current chart symbol when the host doesn't pass one.
   if(d.fvx==="details" && IS_EMBED){ try{ openPairInfoCard(d.sym || activeSymbol); }catch(err){} }
+  // Host → embed: open the engine's own Indicators menu (mobile ƒ button). Indicators
+  // are engine-owned in embed mode — full catalog, settings dialog, per-symbol persistence.
+  if(d.fvx==="indmenu" && IS_EMBED){ try{ toggleIndicatorsMenu(); }catch(err){} }
   // Host → embed: open the engine's alert dialog (mobile app bell → single alert editor).
   if(d.fvx==="alertdialog" && IS_EMBED){ try{ openAlertDialog(d.existing?{existing:d.existing}:{}); }catch(err){} }
   // Host → embed: replace a symbol's alerts (mobile Alerts tab edits). Active symbol →
@@ -4637,6 +4643,9 @@ const draw = {
   alertDrag:null,     // {id} of alert line being dragged to a new price level
   drag:null,          // {id, handle:int|'body', last:{time,price}}
   mouse:{x:0,y:0},
+  stickyLine:null,    // {price} — touch: stationary tap pins a price line that survives
+                      // finger-lift; drag near it moves it, tap again dismisses. Ephemeral.
+  stickyDrag:false,   // true while the sticky line is being dragged
 };
 
 // ── Undo / redo ──
@@ -5266,11 +5275,20 @@ let uid=1; function newId(){ let id; do{ id="s"+(uid++); }while(draw.shapes.some
 
 // Tracks the press location so mouseup can tell a CLICK from a DRAG.
 let downPt=null, downMoved=false;
+// True once any touch gesture has driven the synthetic mouse events — gates touch-only
+// UX (sticky price line tap-toggle) so plain desktop mouse clicks keep their behavior.
+let _touchActive=false;
+// Set when a press's job was dismissing an alert hover pill — that tap must not ALSO
+// toggle the sticky price line on release.
+let _dismissedPill=false;
 
 dcanvas.addEventListener("mousedown", e=>{
   if(e.button!==0) return;                 // left only; right handled by contextmenu
   e.preventDefault();
   stopAutoSnap();                          // a real pan gesture → stop auto-snapping to latest
+  // Trusted = a real mouse press (the touch bridge dispatches untrusted synthetics) —
+  // drop the touch flag so desktop clicks after touch input keep desktop behavior.
+  if(e.isTrusted) _touchActive=false;
   const p=evtPt(e), c=ptToCoord(p);
   downPt=p; downMoved=false;
 
@@ -5314,7 +5332,14 @@ dcanvas.addEventListener("mousedown", e=>{
   // ── A press anywhere else dismisses the on-line alert pill. On touch no mousemove
   // fires between taps, so the hover set by tapping the line would otherwise stick
   // forever — tap the line to show the pill, tap anywhere else to hide it. ──
-  if(draw.alertHover!=null){ draw.alertHover=null; redraw(); }
+  if(draw.alertHover!=null){ draw.alertHover=null; _dismissedPill=true; redraw(); }
+
+  // ── Sticky price line: press near it → drag to a new level (stationary tap on it
+  // resolves to dismiss in mouseup, same !downMoved discrimination as alert pills). ──
+  if(draw.tool==="cross" && draw.stickyLine && !inPriceAxis(p)){
+    const sy=priceToY(draw.stickyLine.price);
+    if(sy!=null && Math.abs(p.y-sy)<8){ draw.stickyDrag=true; redraw(); return; }
+  }
 
   // ── CROSSHAIR mode: click a shape → select/drag it; click empty → pan the chart ──
   if(draw.tool==="cross"){
@@ -5471,6 +5496,10 @@ dcanvas.addEventListener("mousemove", e=>{
   if(draw.alertDrag){ const da=alerts.find(z=>z.id===draw.alertDrag.id);
     if(da){ const np=yToPrice(p.y); if(np!=null){ da.value=np; da._last=null; redraw(); } }
     dcanvas.style.cursor="ns-resize"; return; }
+  // Dragging the sticky price line to a new level.
+  if(draw.stickyDrag && draw.stickyLine){ const np=yToPrice(p.y);
+    if(np!=null){ draw.stickyLine.price=np; redraw(); }
+    dcanvas.style.cursor="ns-resize"; return; }
   if(draw.drag && !draw.locked){ applyDrag(draw.drag, c); redraw(); return; }
 
   if(draw.pending){
@@ -5525,6 +5554,7 @@ function _touchMouse(type, target, t){
 }
 dcanvas.addEventListener("touchstart", e=>{
   e.preventDefault();
+  _touchActive=true;
   if(e.touches.length===1 && !_pinch){
     _touchMouse("mousedown", dcanvas, e.touches[0]);
   } else if(e.touches.length===2){
@@ -5561,6 +5591,11 @@ function _touchEnd(e){
     // mouseup listeners live on both. changedTouches carries the lift-off point.
     const t=e.changedTouches && e.changedTouches[0];
     _touchMouse("mouseup", dcanvas, t || {clientX:0, clientY:0});
+    // Finger lifted: hide the transient crosshair (touch never fires mouseleave, so
+    // without this the dashed cross + axis tags linger at the last touch point). The
+    // sticky price line is custom-drawn from draw.stickyLine and survives this.
+    try{ chart.clearCrosshairPosition(); }catch(err){}
+    draw.mouse=null; redraw();
   } else if(_pinch && e.touches.length<2){
     _pinch=null;
   }
@@ -5577,8 +5612,27 @@ window.addEventListener("mouseup", e=>{
     saveAlerts(); renderAlertsPanel(); draw.alertDrag=null; downPt=null; downMoved=false; redraw();
     return;
   }
+  if(draw.stickyDrag){                                  // end sticky-line drag
+    // Stationary press ON the line (no move) = tap → dismiss it; a real drag commits
+    // the new level rounded, same as alert-line drags.
+    if(!downMoved) draw.stickyLine=null;
+    else if(draw.stickyLine) draw.stickyLine.price=roundAlertAuto(draw.stickyLine.price);
+    draw.stickyDrag=false; downPt=null; downMoved=false; redraw();
+    return;
+  }
   if(axisDrag){ axisDrag=null; downPt=null; downMoved=false; dcanvas.style.cursor="default"; return; }  // end axis stretch
-  if(panState){ panState=null; downPt=null; downMoved=false; redraw(); return; }   // end chart pan
+  if(panState){                                          // end chart pan
+    // Stationary TOUCH tap on empty plot toggles the sticky price line: tap → dashed
+    // level pinned at that price (survives finger-lift; its ⊕ sets an alert there);
+    // tap anywhere again → dismissed. Desktop mouse clicks keep plain deselect/pan.
+    const tapPt=downPt, wasTap=!downMoved, atePill=_dismissedPill;
+    panState=null; downPt=null; downMoved=false; _dismissedPill=false;
+    if(wasTap && !atePill && _touchActive && draw.tool==="cross" && tapPt && !inPriceAxis(tapPt)){
+      if(draw.stickyLine) draw.stickyLine=null;
+      else { const pr=yToPrice(tapPt.y); if(pr!=null) draw.stickyLine={ price:pr }; }
+    }
+    redraw(); return;
+  }
   // finishing a drag-edit of an existing shape. If nothing actually moved (a plain
   // click that started a drag), discard the snapshot pushed at drag-start so undo
   // isn't cluttered with no-op entries.
@@ -6534,6 +6588,7 @@ function redraw(){
     if(window.volProfileOn) drawVolumeProfile(W,H);   // horizontal volume-by-price histogram
     if(draw.sessions!==false) drawSessionBreaks(W,H); // day-boundary lines (intraday only)
     drawAlertLines();
+    drawStickyLine();                                 // pinned tap-to-place price line (touch)
     drawCrossPlus();                                  // ⊕ add-alert button on the crosshair
     if(!draw.hidden){
       for(const s of draw.shapes){ if(s.hidden) continue; drawShape(s, s.id===draw.sel, s.id===draw.hover); }
@@ -7129,7 +7184,7 @@ const IND_CATALOG = [
   { type:"lsma",  name:"Least Squares MA",      cat:"Moving Averages", pane:"main", params:{length:25, src:"close", color:"#5c6bc0"} },
   { type:"envel", name:"Envelopes",             cat:"Moving Averages", pane:"main", params:{length:20, pct:1, src:"close", color:"#78909c"} },
   // ── Oscillators (sub-pane) ──
-  { type:"rsi",   name:"RSI",                   cat:"Oscillators", pane:"sub", params:{length:14, src:"close", color:"#9c6ade"} },
+  { type:"rsi",   name:"RSI",                   cat:"Oscillators", pane:"sub", params:{length:14, src:"close", divergence:false, maType:"SMA", smooth:14, bbStdDev:2, color:"#7e57c2"} },
   { type:"macd",  name:"MACD",                  cat:"Oscillators", pane:"sub", params:{fast:12, slow:26, signal:9} },
   { type:"stoch", name:"Stochastic",            cat:"Oscillators", pane:"sub", params:{k:14, smooth:3, d:3} },
   { type:"stochrsi",name:"Stochastic RSI",      cat:"Oscillators", pane:"sub", params:{rsiLen:14, stochLen:14, k:3, d:3} },
@@ -7225,7 +7280,7 @@ const IND_META = {
   smma: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["SMMA"] },
   lsma: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["LSMA"] },
   envel: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"pct",label:"Percent",type:"num",min:0,step:0.01},{key:"src",label:"Source",type:"src"}], plots:["Basis","Upper","Lower"] },
-  rsi: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"}], plots:["RSI"] },
+  rsi: { inputs:[{key:"length",label:"RSI Length",type:"num",min:1,step:1},{key:"src",label:"Source",type:"src"},{key:"divergence",label:"Calculate Divergence",type:"bool"},{key:"maType",label:"Smoothing Type",type:"sel",opts:["SMA","EMA","WMA","RMA","VWMA","Bollinger Bands"]},{key:"smooth",label:"Smoothing Length",type:"num",min:1,step:1},{key:"bbStdDev",label:"BB StdDev",type:"num",min:0.1,step:0.1}], plots:["RSI","RSI-based MA","RSI Upper Band","RSI Middle Band","RSI Lower Band"] },
   macd: { inputs:[{key:"fast",label:"Fast Length",type:"num",min:1,step:1},{key:"slow",label:"Slow Length",type:"num",min:1,step:1},{key:"signal",label:"Signal Smoothing",type:"num",min:1,step:1}], plots:["Histogram","MACD","Signal"] },
   stoch: { inputs:[{key:"k",label:"%K Length",type:"num",min:1,step:1},{key:"smooth",label:"%K Smoothing",type:"num",min:1,step:1},{key:"d",label:"%D Smoothing",type:"num",min:1,step:1}], plots:["%K","%D"] },
   stochrsi: { inputs:[{key:"rsiLen",label:"RSI Length",type:"num",min:1,step:1},{key:"stochLen",label:"Stochastic Length",type:"num",min:1,step:1},{key:"k",label:"%K Smoothing",type:"num",min:1,step:1},{key:"d",label:"%D Smoothing",type:"num",min:1,step:1}], plots:["%K","%D"] },
@@ -7758,7 +7813,12 @@ function plotSpec(ind){
     case "sma": case "ema": case "wma": case "vwma": case "hma": case "dema":
     case "tema": case "alma": case "smma": case "lsma":
       return [L(c||"#ffeb3b",2)];
-    case "rsi": return [L(c||"#9c6ade")];
+    // TV-parity RSI: RSI + RSI-based MA + dashed 70/50/30 bands (s=lineStyle, lv=false hides
+    // the bands' axis labels/price lines so only RSI + MA mark the scale, like the built-in pane).
+    case "rsi": return [L(c||"#7e57c2",2),{k:"line",color:"#e6b400",w:2},
+      {k:"line",color:"rgba(124,87,194,0.5)",w:1,s:2,lv:false},
+      {k:"line",color:"#3a3e4a",w:1,s:2,lv:false},
+      {k:"line",color:"rgba(124,87,194,0.5)",w:1,s:2,lv:false}];
     case "cci": case "willr": case "mom": case "roc": case "cmo": case "dpo":
     case "atr": case "stdev": case "chop": case "bbw": case "obv": case "mfi":
     case "adl": case "cmf": case "chaikin": case "pvt": case "fi": case "bop":
@@ -7852,7 +7912,8 @@ function buildIndicatorSeries(ind){
   sc.timeScale().subscribeVisibleLogicalRangeChange(ind.syncSub);
   ind.series=specs.map(sp=> recordData(alignSubSeries(sp.k==="hist"
     ? sc.addHistogramSeries({color:sp.color})
-    : sc.addLineSeries({color:sp.color,lineWidth:sp.w}))));
+    : sc.addLineSeries({color:sp.color,lineWidth:sp.w,lineStyle:sp.s||0,
+        ...(sp.lv===false?{lastValueVisible:false,priceLineVisible:false,crosshairMarkerVisible:false}:{})}))));
   registerPane(sc, ind.series[0]);   // share the crosshair with the main chart + other panes
   // New bottom pane → move the date axis down to it (and off the pane now above it).
   setTimeout(()=>{ try{ sc.applyOptions({width:el.clientWidth,height:el.clientHeight}); }catch(e){} alignPriceAxes(); },0);
@@ -7875,7 +7936,15 @@ function renderIndicator(ind){
       case "lsma": S[0].setData(lsmaCalc(d,pp.length,pp.src)); break;
       case "envel": { const r=envelCalc(d,pp.length,pp.pct,pp.src); S[0].setData(r.up); S[1].setData(r.mid); S[2].setData(r.lo); break; }
       // oscillators
-      case "rsi": S[0].setData(rsiCalc(d,pp.length,pp.src)); break;
+      case "rsi": { // TV parity: RSI + smoothing MA + constant 70/50/30 band lines + divergence markers
+        const r=rsiCalc(d,pp.length,pp.src);
+        S[0].setData(r);
+        S[1].setData(rsiSmoothMA(r.filter(p=>p.value!=null),pp.smooth||14,pp.maType));
+        S[2].setData(d.map(b=>({time:b.time,value:70})));
+        S[3].setData(d.map(b=>({time:b.time,value:50})));
+        S[4].setData(d.map(b=>({time:b.time,value:30})));
+        try{ S[0].setMarkers(pp.divergence ? rsiDivergenceMarkers(d, r.filter(p=>p.value!=null)) : []); }catch(e){}
+        break; }
       case "macd": { const r=macdCalc(d,pp.fast,pp.slow,pp.signal); S[0].setData(hist(r.hist)); S[1].setData(r.macd); S[2].setData(r.signal); break; }
       case "ppo": { const r=ppoCalc(d,pp.fast,pp.slow,pp.signal); S[0].setData(hist(r.hist)); S[1].setData(r.ppo); S[2].setData(r.signal); break; }
       case "stoch": { const r=stochCalc(d,pp.k,pp.d); S[0].setData(r.k); S[1].setData(r.d); break; }
@@ -8088,10 +8157,10 @@ function ensurePlotState(ind){
   const specs=plotSpec(ind);
   // LWC lineWidth wants an integer 1–6; plotSpec defaults may be fractional (e.g. 1.5).
   const w0=sp=>Math.max(1, Math.round(sp.w||1));
-  if(!ind.plotStyle) ind.plotStyle = specs.map(sp=>({ color:sp.color, width:w0(sp), style:0 }));
+  if(!ind.plotStyle) ind.plotStyle = specs.map(sp=>({ color:sp.color, width:w0(sp), style:sp.s||0 }));
   if(!ind.plotHidden) ind.plotHidden = specs.map(()=>false);
   // keep arrays in sync if the plot count changed (e.g. ribbon count param)
-  while(ind.plotStyle.length < specs.length){ const sp=specs[ind.plotStyle.length]; ind.plotStyle.push({color:sp.color,width:w0(sp),style:0}); }
+  while(ind.plotStyle.length < specs.length){ const sp=specs[ind.plotStyle.length]; ind.plotStyle.push({color:sp.color,width:w0(sp),style:sp.s||0}); }
   while(ind.plotHidden.length < specs.length) ind.plotHidden.push(false);
   return specs;
 }
@@ -8123,6 +8192,8 @@ function openIndicatorSettings(id){
   const inputsHtml = inputEntries.length ? inputEntries.map(f=>{
     const v=ind.params[f.key];
     if(f.type==="src") return '<div class="field"><label>'+f.label+'</label><select id="ip_'+f.key+'">'+SRC_OPTS.map(o=>'<option value="'+o+'" '+(o===v?"selected":"")+'>'+o+'</option>').join("")+'</select></div>';
+    if(f.type==="sel") return '<div class="field"><label>'+f.label+'</label><select id="ip_'+f.key+'">'+(f.opts||[]).map(o=>'<option value="'+o+'" '+(o===v?"selected":"")+'>'+o+'</option>').join("")+'</select></div>';
+    if(f.type==="bool") return '<div class="field"><label>'+f.label+'</label><input type="checkbox" id="ip_'+f.key+'" '+(v?"checked":"")+'></div>';
     const step=f.step||(FLOAT_PARAMS.has(f.key)?0.01:1);
     return '<div class="field"><label>'+f.label+'</label><input type="number" id="ip_'+f.key+'" value="'+v+'" step="'+step+'"'+(f.min!=null?' min="'+f.min+'"':'')+'></div>';
   }).join("") : '<div class="field" style="color:var(--muted)">No inputs for this indicator.</div>';
@@ -8158,7 +8229,7 @@ function openIndicatorSettings(id){
   const apply=()=>{
     // inputs → params (skip color; handled by Style)
     inputEntries.forEach(f=>{ const el=document.getElementById("ip_"+f.key); if(!el) return;
-      ind.params[f.key]= f.type==="src" ? el.value : +el.value; });
+      ind.params[f.key]= (f.type==="src"||f.type==="sel") ? el.value : f.type==="bool" ? el.checked : +el.value; });
     // style → plotStyle + sync a legacy single `color` param so the legend swatch matches plot 0
     specs.forEach((sp,i)=>{
       const cl=document.getElementById("pcl_"+i), pw=document.getElementById("pw_"+i), ps=document.getElementById("ps_"+i), pv=document.getElementById("pv_"+i);
@@ -9194,15 +9265,18 @@ let _pillPressTimer=null;
 function clearPillPress(){ if(_pillPressTimer){ clearTimeout(_pillPressTimer); _pillPressTimer=null; } }
 function drawCrossPlus(){
   crossPlusHit=null;
-  if(draw.tool!=="cross" || !draw.mouse) return;
+  if(draw.tool!=="cross") return;
   // Hide while any gesture/UI owns the pointer (drag, pan, pending shape, hover pill).
-  if(draw.alertDrag || draw.drag || draw.pending || panState || axisDrag) return;
+  if(draw.alertDrag || draw.stickyDrag || draw.drag || draw.pending || panState || axisDrag) return;
   if(draw.alertHover!=null || draw.hover!=null) return;
-  const p=draw.mouse;
-  if(inPriceAxis(p)) return;
-  const price=yToPrice(p.y); if(price==null) return;
+  // Anchor at the live cursor; after a touch lifts (draw.mouse cleared) fall back to
+  // the sticky price line so its ⊕ stays tappable to set an alert at that level.
+  let price=null, cy=null;
+  if(draw.mouse && !inPriceAxis(draw.mouse)){ price=yToPrice(draw.mouse.y); cy=draw.mouse.y; }
+  else if(draw.stickyLine){ price=draw.stickyLine.price; cy=priceToY(price); }
+  if(price==null || cy==null) return;
   // Small dark button, same palette as the alert hover pill (#1e222d / gray border).
-  const r=8, cx=dcanvas.clientWidth-axisW()-r-5, cy=p.y;
+  const r=8, cx=dcanvas.clientWidth-axisW()-r-5;
   dctx.save();
   dctx.fillStyle="#1e222d"; dctx.strokeStyle="#9aa0aa"; dctx.lineWidth=1;
   dctx.beginPath(); dctx.arc(cx,cy,r,0,7); dctx.fill(); dctx.stroke();
@@ -9211,6 +9285,26 @@ function drawCrossPlus(){
   dctx.moveTo(cx,cy-3.5); dctx.lineTo(cx,cy+3.5); dctx.stroke();
   dctx.restore();
   crossPlusHit={ x:cx, y:cy, r, price };
+}
+// ── Sticky price line (touch): stationary tap pins a dashed level that survives
+// finger-lift — drag near it to move, tap again to dismiss. Ephemeral (not persisted,
+// cleared on symbol change). Drawn like an alert line but in accent blue, with a
+// left-edge price tag so the level reads at a glance.
+function drawStickyLine(){
+  const s=draw.stickyLine; if(!s) return;
+  const y=priceToY(s.price); if(y==null) return;
+  const W=dcanvas.clientWidth;
+  dctx.save();
+  dctx.strokeStyle="#2962ff"; dctx.setLineDash([5,4]); dctx.lineWidth=1;
+  dctx.beginPath(); dctx.moveTo(0,y); dctx.lineTo(W,y); dctx.stroke(); dctx.setLineDash([]);
+  const label=fmt(s.price); dctx.font="10px sans-serif";
+  const w=dctx.measureText(label).width+12, h=16, bx=6, by=y-h/2;
+  dctx.fillStyle="#2962ff";
+  if(dctx.roundRect){ dctx.beginPath(); dctx.roundRect(bx,by,w,h,4); dctx.fill(); }
+  else dctx.fillRect(bx,by,w,h);
+  dctx.fillStyle="#fff"; dctx.textBaseline="middle"; dctx.fillText(label,bx+6,y+0.5);
+  dctx.textBaseline="alphabetic";
+  dctx.restore();
 }
 // One-tap alert from the ⊕ menu: price crossing the given level, all defaults.
 function addQuickAlert(price){
@@ -10827,7 +10921,9 @@ function wsConnect(){
 // of activeSymbol so we don't have to thread a callback through every call site.
 let _wsSymSeen=null;
 setInterval(()=>{
-  if(activeSymbol!==_wsSymSeen){ _wsSymSeen=activeSymbol; _wsLast={}; wsConnect(); }
+  if(activeSymbol!==_wsSymSeen){ _wsSymSeen=activeSymbol; _wsLast={}; wsConnect();
+    // A pinned price from the previous symbol is meaningless on the new chart.
+    draw.stickyLine=null; draw.stickyDrag=false; }
 }, 1000);
 // Zero-delay alert requirement: don't sit out the exponential backoff when the tab
 // becomes visible again or the network returns — reconnect the tick feed immediately.
