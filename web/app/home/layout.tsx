@@ -6,7 +6,7 @@ import HomeNav from './HomeNav';
 export default function HomeLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="ov-home-shell">
-      <OvTabs active="home" />
+      <OvTabs />
       <div className="ov-home-bg">
         <HomeNav />
         {children}

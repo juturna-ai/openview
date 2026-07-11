@@ -753,8 +753,10 @@ The binding constraint (verified in code, not assumed):
 | `/home/openview` | `app/home/openview/page.tsx` | Platform description (what OpenView is). |
 | `/home/app` | `app/home/app/page.tsx` | The phone app. |
 | `/home/about` | `app/home/about/page.tsx` | Who we are. |
+| `/home/journal` | `app/home/journal/page.tsx` | **Coming soon** placeholder (folder-tab "Journal"). |
+| `/home/wallet` | `app/home/wallet/page.tsx` | **Coming soon** placeholder (folder-tab "Wallet"). |
 
-`/home/*` share `app/home/layout.tsx` → dark folder-tab bar (`OvTabs`, Home ↔ OpenView) + heading nav (`app/home/HomeNav.tsx`: Home · Openview · APP · About us). The nav "Openview" is the **description** page (`/home/openview`), NOT the chart — the chart is the folder-tab "OpenView" → `/`. Old `(site)` navbar pages (`/about`, `/portfolio`, `/contact`) are unrelated leftovers.
+`/home/*` share `app/home/layout.tsx` → dark folder-tab bar (`OvTabs`, tabs: Home · Openview · Journal · Wallet) + heading nav (`app/home/HomeNav.tsx`: Home · Openview · APP · About us). `OvTabs` is a client component that derives the active tab from `usePathname()`. The raw engine tab bars (`index.html`, `web/public/index.html` `#ovTabs`) mirror the same tabs (Journal/Wallet link to `/home/journal`, `/home/wallet`). The nav "Openview" is the **description** page (`/home/openview`), NOT the chart — the chart is the folder-tab "OpenView" → `/`. Old `(site)` navbar pages (`/about`, `/portfolio`, `/contact`) are unrelated leftovers.
 | `/about` | `app/(site)/about/page.tsx` | Marketing copy. |
 | `/portfolio` | `app/(site)/portfolio/page.tsx` | Project cards. |
 | `/contact` | `app/(site)/contact/page.tsx` + `ContactForm.tsx` (`'use client'`) | `mailto:` form, no backend, no stored data, no secret. |
