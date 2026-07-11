@@ -747,13 +747,20 @@ The binding constraint (verified in code, not assumed):
 | `/` | `public/index.html` (rewrite) | **Chart engine, verbatim.** Mobile + grid + embed contract. |
 | `/index.html?…` | `public/index.html` (static) | Grid iframe `src`. 200 direct, params preserved. |
 | `/assets/*`, `/images/*` | `public/` | Engine icons, sounds, screenshots — same relative paths. |
-| `/home` | `app/(site)/home/page.tsx` | **Landing page.** Navbar + hero + feature cards. |
+| `/home` | `app/home/page.tsx` | **Landing page.** Hero-only "OpenView". |
+| `/home/openview` | `app/home/openview/page.tsx` | Platform description (what OpenView is). |
+| `/home/app` | `app/home/app/page.tsx` | The phone app. |
+| `/home/about` | `app/home/about/page.tsx` | Who we are. |
+
+`/home/*` share `app/home/layout.tsx` → dark folder-tab bar (`OvTabs`, Home ↔ OpenView) + heading nav (`app/home/HomeNav.tsx`: Home · Openview · APP · About us). The nav "Openview" is the **description** page (`/home/openview`), NOT the chart — the chart is the folder-tab "OpenView" → `/`. Old `(site)` navbar pages (`/about`, `/portfolio`, `/contact`) are unrelated leftovers.
 | `/about` | `app/(site)/about/page.tsx` | Marketing copy. |
 | `/portfolio` | `app/(site)/portfolio/page.tsx` | Project cards. |
 | `/contact` | `app/(site)/contact/page.tsx` + `ContactForm.tsx` (`'use client'`) | `mailto:` form, no backend, no stored data, no secret. |
 | `/chart` | `app/chart/page.tsx` + `ChartEngine.tsx` (`'use client'`) | Full-viewport engine iframe for in-app nav (no navbar). |
 
-Layout structure: `app/layout.tsx` (root `<html><body>`), `app/(site)/layout.tsx` (adds `Navbar`). The `(site)` route group scopes the navbar to marketing pages; `/chart` sits outside it (full-viewport, no navbar). Site chrome CSS in `app/globals.css` mirrors the engine's TV colour vars. Single client-nav component `app/Navbar.tsx` (uses `usePathname` for the active link; "Open Chart" is a plain `<a href="/">` so it does a real navigation to the static engine).
+**Folder-tab bar (Home ↔ OpenView):** a dark, browser-tab-style bar. It exists in TWO places kept visually identical: (1) injected into the chart engine as `#ovTabs`, first child of `<body>` in `index.html` — `html:not(.embed) #app` shrinks to `calc(100vh - 34px)` to make room, and `html.embed #ovTabs{display:none}` hides it so the **phone app / grid panels (embed=1) show only the chart, no tabs**; (2) the React `app/OvTabs.tsx` component used by `/home`. The "OpenView" tab → `/` (chart), "Home" tab → `/home`. Styles mirror each other (`.ov-tabs`/`.ov-tab` in globals.css ≡ `#ovTabs` in index.html).
+
+Layout structure: `app/layout.tsx` (root `<html><body>`), `app/(site)/layout.tsx` (adds `Navbar` — used by /about, /portfolio, /contact only; /home is standalone with `OvTabs`). The `(site)` route group scopes the navbar to marketing pages; `/chart` sits outside it (full-viewport, no navbar). Site chrome CSS in `app/globals.css` mirrors the engine's TV colour vars. Single client-nav component `app/Navbar.tsx` (uses `usePathname` for the active link; "Open Chart" is a plain `<a href="/">` so it does a real navigation to the static engine).
 
 ### Key files
 

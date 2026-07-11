@@ -30,7 +30,23 @@
   ::-webkit-scrollbar-corner{background:var(--bg);}
   html,body{height:100%; font-family:'Trebuchet MS',-apple-system,'Segoe UI',Roboto,Ubuntu,Tahoma,Arial,sans-serif; background:var(--bg); color:var(--text); overflow:hidden;}
   #app{display:flex; height:100vh; width:100vw;}
+  /* ── Folder-tab bar (site nav): Home ↔ OpenView. Dark, browser-tab style. Sits above
+     #app. Hidden entirely in embed mode (phone app / grid panels) — see html.embed rule
+     below — so the mobile WebView only ever sees the raw chart. */
+  #ovTabs{display:flex; align-items:flex-end; gap:2px; height:34px; padding:0 8px;
+    background:var(--panel2); border-bottom:1px solid var(--border); user-select:none;}
+  #ovTabs .ov-tab{display:inline-flex; align-items:center; height:26px; padding:0 16px;
+    font-size:13px; font-weight:600; color:var(--muted); background:var(--panel);
+    border:1px solid var(--border); border-bottom:none;
+    border-radius:8px 8px 0 0; cursor:pointer; text-decoration:none; line-height:1;
+    transition:color .12s ease, background .12s ease;}
+  #ovTabs .ov-tab:hover{color:var(--text); background:var(--hover);}
+  #ovTabs .ov-tab.active{color:var(--text); background:var(--bg); height:28px;
+    border-color:var(--border); position:relative; z-index:1;}
+  /* When the tab bar is present (NOT embed), shrink the chart app to make room. */
+  html:not(.embed) #app{height:calc(100vh - 34px);}
   /* Embed mode (grid panel): hide the watchlist so the panel is pure chart */
+  html.embed #ovTabs{display:none;}
   html.embed #watchlist{display:none;}
   html.embed #rightPanel{display:none !important;}   /* docked rail panels stay host-only */
   /* Mobile app frames this page and provides its own toolbar → hide the engine's
@@ -876,6 +892,10 @@
 </style>
 </head>
 <body>
+<div id="ovTabs">
+  <a class="ov-tab" href="/home">Home</a>
+  <a class="ov-tab active" href="/" aria-current="page">OpenView</a>
+</div>
 <div id="app">
   <div id="toolbar"></div>
   <div id="main">

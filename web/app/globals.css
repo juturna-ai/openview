@@ -129,3 +129,68 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 
 /* Chart route: full-viewport engine frame */
 .ov-chart-frame { position: fixed; inset: 0; border: 0; width: 100vw; height: 100vh; }
+
+/* ── Folder-tab bar (Home ↔ OpenView) — mirrors index.html #ovTabs exactly ── */
+.ov-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 34px;
+  padding: 0 8px;
+  background: var(--panel2);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+.ov-tab {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  line-height: 1;
+  transition: color .12s ease, background .12s ease;
+}
+.ov-tab:hover { color: var(--text); background: var(--hover); }
+.ov-tab.active { color: var(--text); background: var(--bg); height: 28px; position: relative; z-index: 1; }
+
+/* ── Home-tab heading nav (Home · Openview · APP · About us) ── */
+.ov-hnav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 28px;
+  padding: 18px 16px;
+}
+.ov-hnav-link {
+  font-size: 16px;
+  color: var(--text);
+  opacity: 0.85;
+  transition: opacity .12s ease, color .12s ease;
+}
+.ov-hnav-link:hover { opacity: 1; }
+.ov-hnav-link.active { color: #fff; opacity: 1; font-weight: 600; }
+
+/* ── Home hero (hero only, dark). 34px tabs + ~61px nav row above it. ── */
+.ov-home { height: calc(100vh - 34px - 61px); display: flex; }
+.ov-home-hero {
+  margin: auto;
+  text-align: center;
+  padding: 24px;
+}
+.ov-home-hero h1 {
+  font-size: clamp(48px, 12vw, 128px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  background: linear-gradient(180deg, var(--text), var(--muted));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
