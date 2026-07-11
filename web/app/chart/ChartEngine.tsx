@@ -25,5 +25,5 @@ export default function ChartEngine() {
   }, []);
 
   if (src === null) return <div className="ov-chart-frame" aria-hidden />;
-  return <iframe className="ov-chart-frame" src={src} title="OpenView chart" />;
+  return <iframe className="ov-chart-frame" src={src} title="Openview chart" />;
 }

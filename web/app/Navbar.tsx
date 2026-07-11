@@ -18,7 +18,7 @@ export default function Navbar() {
     <nav className="ov-nav">
       <Link href="/home" className="ov-brand">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/assets/freeview.png" alt="OpenView" />
+        <img src="/assets/freeview.png" alt="Openview" />
         <span>Open<span className="dot">View</span></span>
       </Link>
       <div className="ov-links">

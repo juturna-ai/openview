@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = { title: 'App — OpenView' };
+export const metadata: Metadata = { title: 'App — Openview' };
 
 export default function AppPage() {
   return (
     <div className="ov-container ov-prose">
-      <h2 className="ov-h2">The OpenView App</h2>
+      <h2 className="ov-h2">The Openview App</h2>
       <p>
-        OpenView also comes as a mobile app for iOS and Android. It runs the exact same charting
+        Openview also comes as a mobile app for iOS and Android. It runs the exact same charting
         engine as the web — the full chart, indicators, drawings, and alerts — tuned for touch, so
         pinch-zoom, drag-pan, and long-press crosshair all feel native.
       </p>

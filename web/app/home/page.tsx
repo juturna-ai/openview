@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = { title: 'OpenView' };
+export const metadata: Metadata = { title: 'Openview' };
 
 // Home landing — hero only. Folder tabs + heading nav come from home/layout.tsx.
 export default function HomePage() {

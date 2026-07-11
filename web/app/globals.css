@@ -132,6 +132,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 
 /* ── Folder-tab bar (Home ↔ OpenView) — mirrors index.html #ovTabs exactly ── */
 .ov-tabs {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 2px;
@@ -160,21 +161,21 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .ov-tab:hover { color: var(--text); background: var(--hover); }
 .ov-tab.active {
   background: var(--bg); height: 28px; position: relative; z-index: 1;
-  /* plum text with a brightness band sweeping through — same motion as Juturna, same color */
+  /* plum text with the same continuous brightness flow as Juturna */
   color: transparent;
   -webkit-text-fill-color: transparent;
   background-image:
     linear-gradient(
       90deg,
-      #6f5f7a, #b0a5bd 20%, #e6dcf0 32%, #b0a5bd 44%,
-      #6f5f7a 60%, #b0a5bd 78%, #e6dcf0 90%, #6f5f7a
+      #4a3d59, #b0a5bd 20%, #c9bdd6 32%, #b0a5bd 44%,
+      #4a3d59 60%, #b0a5bd 78%, #c9bdd6 90%, #4a3d59
     ),
     linear-gradient(var(--bg), var(--bg));
   background-size: 300% 100%, 100% 100%;
   background-position: 0 0, 0 0;
   -webkit-background-clip: text, padding-box;
   background-clip: text, padding-box;
-  animation: ov-brand-flow 30s linear infinite, ov-brand-pulse 8s ease-in-out infinite;
+  animation: ov-brand-flow 60s linear infinite, ov-brand-pulse 14s ease-in-out infinite;
 }
 
 /* ── Home-tab heading nav (Home · Openview · APP · About us) ── */
@@ -186,23 +187,25 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   gap: 28px;
   padding: 18px 16px;
 }
-.ov-hnav-brand {
+/* Brand lockup pinned into the folder-tab bar (top-right), level with the tabs */
+.ov-tabs-brand {
   position: absolute;
-  left: clamp(16px, 4vw, 40px);
+  right: clamp(16px, 4vw, 40px);
   top: 50%;
   transform: translateY(-50%);
   display: flex;
+  flex-direction: row-reverse;
   align-items: center;
-  gap: 10px;
-  font-size: 18px;
+  gap: 8px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--text);
 }
-.ov-hnav-brand img {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+.ov-tabs-brand img {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
 }
 .ov-hnav-links {
   display: flex;
@@ -218,21 +221,32 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .ov-hnav-link:hover { opacity: 1; }
 .ov-hnav-link.active {
   opacity: 1; font-weight: 600;
-  /* plum text with the same brightness band sweeping across as the folder tab */
+  /* plum text with the same continuous brightness flow as Juturna */
   color: transparent;
   -webkit-text-fill-color: transparent;
   background: linear-gradient(
       90deg,
-      #6f5f7a, #b0a5bd 20%, #e6dcf0 32%, #b0a5bd 44%,
-      #6f5f7a 60%, #b0a5bd 78%, #e6dcf0 90%, #6f5f7a
+      #4a3d59, #b0a5bd 20%, #c9bdd6 32%, #b0a5bd 44%,
+      #4a3d59 60%, #b0a5bd 78%, #c9bdd6 90%, #4a3d59
     ) 0 0 / 300%;
   -webkit-background-clip: text;
   background-clip: text;
-  animation: ov-brand-flow 30s linear infinite, ov-brand-pulse 8s ease-in-out infinite;
+  animation: ov-brand-flow 60s linear infinite, ov-brand-pulse 14s ease-in-out infinite;
+}
+
+/* Shell: tab bar + surface + footer stack to a full viewport; the surface grows so
+   short content still pushes the footer to the bottom — the footer never gets taller. */
+.ov-home-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Home surface: nav row + hero share ONE gradient so they read continuous. ── */
 .ov-home-bg {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
   background:
     /* soft dark-to-clear fade at the very top so the flat tab bar eases into color */
     linear-gradient(180deg, var(--bg) 0%, rgba(19, 23, 34, 0) 120px),
@@ -240,12 +254,13 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
     radial-gradient(700px 500px at 80% 30%, rgba(109, 40, 217, 0.11), transparent 55%),
     var(--bg);
 }
+/* Content region (everything after the nav) grows to fill, so the footer sits low. */
+.ov-home-bg > :not(.ov-hnav) { flex: 1 0 auto; }
 
 /* ── Home hero (hero only). Background comes from .ov-home-bg above. ── */
 .ov-home {
   position: relative;
   overflow: hidden;
-  min-height: calc(100vh - 34px - 61px - 61px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -308,18 +323,19 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.3);
 }
+/* Juturna keeps the ORIGINAL continuous-flow gradient (not the tab/nav glint). */
 .ov-powered-by a {
   font-weight: 600;
   color: transparent;
   -webkit-text-fill-color: transparent;
   background: linear-gradient(
       90deg,
-      #6f5f7a, #b0a5bd 20%, #e6dcf0 32%, #b0a5bd 44%,
-      #6f5f7a 60%, #b0a5bd 78%, #e6dcf0 90%, #6f5f7a
+      #4a3d59, #b0a5bd 20%, #c9bdd6 32%, #b0a5bd 44%,
+      #4a3d59 60%, #b0a5bd 78%, #c9bdd6 90%, #4a3d59
     ) 0 0 / 300%;
   -webkit-background-clip: text;
   background-clip: text;
-  animation: ov-brand-flow 30s linear infinite, ov-brand-pulse 8s ease-in-out infinite;
+  animation: ov-brand-flow 60s linear infinite, ov-brand-pulse 14s ease-in-out infinite;
 }
 .ov-powered-by a:hover { opacity: 0.8; }
 @keyframes ov-brand-flow {
@@ -330,3 +346,4 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   0%, 100% { filter: brightness(0.92); }
   50% { filter: brightness(1.15); }
 }
+

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'OpenView — Live Crypto Charts',
+  title: 'Openview — Live Crypto Charts',
   description: 'Free, keyless, TradingView-style crypto charts. No signup, no paywall.',
   icons: {
     icon: [

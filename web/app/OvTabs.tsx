@@ -13,7 +13,12 @@ export default function OvTabs({ active }: { active: 'home' | 'openview' }) {
       {/* Plain anchor to `/index.html` (the raw chart engine). We target index.html — NOT `/` —
           because a bare `/` redirects to /home for browsers (see next.config.js); /index.html
           serves the engine directly with no redirect. */}
-      <a href="/index.html" className={'ov-tab' + (active === 'openview' ? ' active' : '')}>OpenView</a>
+      <a href="/index.html" className={'ov-tab' + (active === 'openview' ? ' active' : '')}>Openview</a>
+      <Link href="/home" className="ov-tabs-brand">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/assets/freeview.png" alt="Openview" />
+        <span>Openview</span>
+      </Link>
     </div>
   );
 }

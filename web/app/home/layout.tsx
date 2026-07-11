@@ -5,14 +5,14 @@ import HomeNav from './HomeNav';
 // /home/about): the dark folder-tab bar (Home ↔ OpenView) + the heading nav row.
 export default function HomeLayout({ children }: { children: React.ReactNode }) {
   return (
-    <>
+    <div className="ov-home-shell">
       <OvTabs active="home" />
       <div className="ov-home-bg">
         <HomeNav />
         {children}
       </div>
       <footer className="ov-footer">
-        <div>© {new Date().getFullYear()} OpenView</div>
+        <div>© {new Date().getFullYear()} Openview</div>
         <p className="ov-powered-by">
           Powered by{' '}
           <a href="https://juturna.io/" target="_blank" rel="noopener noreferrer">
@@ -23,6 +23,6 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
           <a href="/home/privacy">Privacy</a>
         </div>
       </footer>
-    </>
+    </div>
   );
 }

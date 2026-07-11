@@ -14,7 +14,7 @@ export default function ContactForm() {
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const subject = encodeURIComponent(`OpenView contact — ${name || 'no name'}`);
+    const subject = encodeURIComponent(`Openview contact — ${name || 'no name'}`);
     const body = encodeURIComponent(`From: ${name} <${email}>\n\n${message}`);
     window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
   }

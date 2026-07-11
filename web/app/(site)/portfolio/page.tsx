@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = { title: 'Portfolio — OpenView' };
+export const metadata: Metadata = { title: 'Portfolio — Openview' };
 
 const ITEMS = [
   { title: 'Charting Engine', desc: 'A single-file, dependency-light charting engine: 15+ chart types, indicators, drawings, alerts, and multi-chart layouts.' },

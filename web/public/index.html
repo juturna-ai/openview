@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OpenView — Live Crypto Charts</title>
+<title>Openview — Live Crypto Charts</title>
 <link rel="icon" type="image/x-icon" href="assets/freeview.ico">
 <link rel="icon" type="image/png" sizes="256x256" href="assets/freeview.png">
 <link rel="apple-touch-icon" href="assets/freeview.png">
@@ -33,8 +33,12 @@
   /* ── Folder-tab bar (site nav): Home ↔ OpenView. Dark, browser-tab style. Sits above
      #app. Hidden entirely in embed mode (phone app / grid panels) — see html.embed rule
      below — so the mobile WebView only ever sees the raw chart. */
-  #ovTabs{display:flex; align-items:flex-end; gap:2px; height:34px; padding:0 8px;
+  #ovTabs{position:relative; display:flex; align-items:flex-end; gap:2px; height:34px; padding:0 8px;
     background:var(--panel2); border-bottom:1px solid var(--border); user-select:none;}
+  #ovTabs .ov-tabs-brand{position:absolute; right:clamp(16px,4vw,40px); top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:row-reverse; align-items:center; gap:8px;
+    font-size:15px; font-weight:700; letter-spacing:-0.01em; color:var(--text); text-decoration:none;}
+  #ovTabs .ov-tabs-brand img{width:20px; height:20px; border-radius:6px;}
   #ovTabs .ov-tab{display:inline-flex; align-items:center; height:26px; padding:0 16px;
     font-size:13px; font-weight:600; color:rgba(255,255,255,0.7); background:var(--panel);
     border:1px solid var(--border); border-bottom:none;
@@ -44,10 +48,10 @@
   #ovTabs .ov-tab.active{background:var(--bg); height:28px;
     border-color:var(--border); position:relative; z-index:1;
     color:transparent; -webkit-text-fill-color:transparent;
-    background-image:linear-gradient(90deg,#6f5f7a,#b0a5bd 20%,#e6dcf0 32%,#b0a5bd 44%,#6f5f7a 60%,#b0a5bd 78%,#e6dcf0 90%,#6f5f7a),linear-gradient(var(--bg),var(--bg));
+    background-image:linear-gradient(90deg,#4a3d59,#b0a5bd 20%,#c9bdd6 32%,#b0a5bd 44%,#4a3d59 60%,#b0a5bd 78%,#c9bdd6 90%,#4a3d59),linear-gradient(var(--bg),var(--bg));
     background-size:300% 100%,100% 100%; background-position:0 0,0 0;
     -webkit-background-clip:text,padding-box; background-clip:text,padding-box;
-    animation:ovTabFlow 30s linear infinite, ovTabPulse 8s ease-in-out infinite;}
+    animation:ovTabFlow 60s linear infinite, ovTabPulse 14s ease-in-out infinite;}
   @keyframes ovTabFlow{0%{background-position:0 0,0 0;}100%{background-position:300% 0,0 0;}}
   @keyframes ovTabPulse{0%,100%{filter:brightness(0.92);}50%{filter:brightness(1.15);}}
   /* When the tab bar is present (NOT embed), shrink the chart app to make room. */
@@ -910,7 +914,8 @@
 <body>
 <div id="ovTabs">
   <a class="ov-tab" href="/home">Home</a>
-  <a class="ov-tab active" href="/index.html" aria-current="page">OpenView</a>
+  <a class="ov-tab active" href="/index.html" aria-current="page">Openview</a>
+  <a class="ov-tabs-brand" href="/home"><img src="/assets/freeview.png" alt="Openview"><span>Openview</span></a>
 </div>
 <div id="app">
   <div id="toolbar"></div>

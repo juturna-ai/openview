@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = { title: 'Privacy — OpenView' };
+export const metadata: Metadata = { title: 'Privacy — Openview' };
 
 export default function PrivacyPage() {
   return (
     <div className="ov-container ov-prose">
       <h2 className="ov-h2">Privacy</h2>
       <p>
-        OpenView is keyless and client-side by design. Your charts, watchlists, and settings stay in
+        Openview is keyless and client-side by design. Your charts, watchlists, and settings stay in
         your browser — there is no account to create and nothing is sent to us.
       </p>
       <p>
