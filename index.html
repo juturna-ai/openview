@@ -222,7 +222,7 @@
   #rsiWrap.pane-collapsed #rsi{opacity:0; pointer-events:none;}
   #rsiLabel .subClose{cursor:pointer; margin-left:8px; color:var(--muted);}
   #rsiLabel .subClose:hover{color:var(--text);}
-  #rsiWrap .paneResize{position:absolute; top:-3px; left:0; right:0; height:7px; z-index:8; cursor:ns-resize;}
+  #rsiWrap .paneResize{position:absolute; top:-3px; left:0; right:0; height:7px; z-index:8; cursor:ns-resize; touch-action:none;}
   #rsiWrap .paneResize:hover{background:rgba(41,98,255,0.25);}
   #subPanes{flex:0 1 auto; min-height:0;}
   #rsiLabel{position:absolute; top:6px; left:10px; font-size:11px; color:var(--muted); z-index:5;}
@@ -404,7 +404,7 @@
   .subpane .subEye:hover{color:var(--text);}
   .subpane.hiddenInd{opacity:.5;}
   /* Drag handle straddling a pane's top border to resize the pane above/below it. */
-  .subpane .paneResize{position:absolute; top:-3px; left:0; right:0; height:7px; z-index:8; cursor:ns-resize;}
+  .subpane .paneResize{position:absolute; top:-3px; left:0; right:0; height:7px; z-index:8; cursor:ns-resize; touch-action:none;}
   .subpane .paneResize:hover{background:rgba(41,98,255,0.25);}
 
   /* ── indicator legend (rows inside the floating #chartLegend) ── */
@@ -1825,9 +1825,9 @@ const rsiUnder = rsiChart.addBaselineSeries({
   autoscaleInfoProvider:rsiScale,
 });
 // dashed 70 / 30 bands — TradingView tints these purple (the RSI plot color).
-const band70  = rsiChart.addLineSeries({ color:"rgba(124,87,194,0.5)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
-const band30  = rsiChart.addLineSeries({ color:"rgba(124,87,194,0.5)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
-const band50  = rsiChart.addLineSeries({ color:"#3a3e4a", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
+const band70  = rsiChart.addLineSeries({ color:"rgba(255,255,255,0.75)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
+const band30  = rsiChart.addLineSeries({ color:"rgba(255,255,255,0.75)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
+const band50  = rsiChart.addLineSeries({ color:"#7986cb", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
 // RSI line (TradingView purple #7E57C2, thin) + smoothing MA (gold, thicker), added last = on top.
 const rsiLine = rsiChart.addLineSeries({ color:"#7e57c2", lineWidth:2, priceLineVisible:false, lastValueVisible:true, autoscaleInfoProvider:rsiScale });
 const rsiMa   = rsiChart.addLineSeries({ color:"#e6b400", lineWidth:2, priceLineVisible:false, lastValueVisible:true, autoscaleInfoProvider:rsiScale });
@@ -5950,8 +5950,8 @@ function movePane(el, dir){
   try{ const wrap=document.getElementById("subPanes");
     wrap.insertBefore(rsiWrapEl, wrap.firstChild); wrap.style.display="flex"; }catch(e){}
   const mk=(txt,title,fn)=>{ const s=document.createElement("span"); s.className="subClose"; s.textContent=txt; s.title=title; s.onclick=fn; label.appendChild(s); return s; };
-  mk("↑","Move pane up",   ()=>movePane(rsiWrapEl,-1));
-  mk("↓","Move pane down", ()=>movePane(rsiWrapEl, 1));
+  // No ↑/↓ reorder buttons (owner request): the arrow glyphs render as odd vertical
+  // dotted strokes on phones. Label keeps collapse/settings/close only.
   mk("▁","Collapse / restore", rsiCollapse);
   mk("⚙","RSI settings", ()=>openRsiSettings());
   mk("×","Close RSI pane", hideRsiPane);
@@ -5962,8 +5962,9 @@ function movePane(el, dir){
   // The axis-width recompute (alignPriceAxes, inside resize()) is deferred to mouseup —
   // re-running it mid-drag jitters the plot width.
   const grip=document.createElement("div"); grip.className="paneResize"; grip.title="Drag to resize pane";
-  grip.addEventListener("mousedown", e=>{
+  grip.addEventListener("pointerdown", e=>{
     e.preventDefault(); e.stopPropagation();
+    try{ grip.setPointerCapture(e.pointerId); }catch(err){}
     const startY=e.clientY, startH=rsiWrapEl.getBoundingClientRect().height;
     let raf=0, lastY=e.clientY;
     const apply=()=>{
@@ -5983,11 +5984,11 @@ function movePane(el, dir){
     };
     const onMove=ev=>{ lastY=ev.clientY; if(!raf) raf=requestAnimationFrame(apply); };
     const onUp=()=>{
-      document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp);
+      document.removeEventListener("pointermove",onMove); document.removeEventListener("pointerup",onUp);
       if(raf){ cancelAnimationFrame(raf); raf=0; }
       try{ resize(); sizeCanvas(); }catch(err){}
     };
-    document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
+    document.addEventListener("pointermove",onMove); document.addEventListener("pointerup",onUp);
   });
   rsiWrapEl.appendChild(grip);
   // Honor a previously-closed pane on boot.
@@ -7776,8 +7777,9 @@ function wirePaneResize(grip, el){
   // drawings overlay together (growing a sub-pane shrinks #chartWrap, so without the
   // main-chart/overlay resize the drawings bounced during the drag). alignPriceAxes
   // (axis-width recompute) waits for mouseup — mid-drag it jitters the plot width.
-  grip.addEventListener("mousedown", e=>{
+  grip.addEventListener("pointerdown", e=>{
     e.preventDefault(); e.stopPropagation();
+    try{ grip.setPointerCapture(e.pointerId); }catch(err){}
     const startY=e.clientY, startH=el.getBoundingClientRect().height;
     let raf=0, lastY=e.clientY;
     const apply=()=>{
@@ -7795,11 +7797,11 @@ function wirePaneResize(grip, el){
     };
     const onMove=ev=>{ lastY=ev.clientY; if(!raf) raf=requestAnimationFrame(apply); };
     const onUp=()=>{
-      document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp);
+      document.removeEventListener("pointermove",onMove); document.removeEventListener("pointerup",onUp);
       if(raf){ cancelAnimationFrame(raf); raf=0; }
       try{ resize(); sizeCanvas(); }catch(e){}
     };
-    document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
+    document.addEventListener("pointermove",onMove); document.addEventListener("pointerup",onUp);
   });
 }
 // PLOT DESCRIPTORS: for each type, how many series and of what kind/color.
@@ -7816,9 +7818,9 @@ function plotSpec(ind){
     // TV-parity RSI: RSI + RSI-based MA + dashed 70/50/30 bands (s=lineStyle, lv=false hides
     // the bands' axis labels/price lines so only RSI + MA mark the scale, like the built-in pane).
     case "rsi": return [L(c||"#7e57c2",2),{k:"line",color:"#e6b400",w:2},
-      {k:"line",color:"rgba(124,87,194,0.5)",w:1,s:2,lv:false},
-      {k:"line",color:"#3a3e4a",w:1,s:2,lv:false},
-      {k:"line",color:"rgba(124,87,194,0.5)",w:1,s:2,lv:false}];
+      {k:"line",color:"rgba(255,255,255,0.75)",w:1,s:2,lv:false},
+      {k:"line",color:"#7986cb",w:1,s:2,lv:false},
+      {k:"line",color:"rgba(255,255,255,0.75)",w:1,s:2,lv:false}];
     case "cci": case "willr": case "mom": case "roc": case "cmo": case "dpo":
     case "atr": case "stdev": case "chop": case "bbw": case "obv": case "mfi":
     case "adl": case "cmf": case "chaikin": case "pvt": case "fi": case "bop":
@@ -7883,13 +7885,12 @@ function buildIndicatorSeries(ind){
   const el=document.createElement("div"); el.className="subpane";
   const label=document.createElement("div"); label.className="subLabel"; label.textContent=ind.name;
   const eye=document.createElement("span"); eye.className="subEye"; eye.textContent=ind.hidden?"🚫":"👁"; eye.title="Hide / show"; eye.onclick=()=>toggleIndicatorHidden(ind.id);
-  const up=document.createElement("span"); up.className="subClose"; up.textContent="↑"; up.title="Move pane up"; up.onclick=()=>movePane(el,-1);
-  const dn=document.createElement("span"); dn.className="subClose"; dn.textContent="↓"; dn.title="Move pane down"; dn.onclick=()=>movePane(el,1);
+  // No ↑/↓ reorder buttons (owner request — see the RSI label note above).
   const collapse=document.createElement("span"); collapse.className="subClose"; collapse.textContent="▁"; collapse.title="Collapse / restore"; collapse.onclick=()=>togglePaneCollapse(el);
   const maxi=document.createElement("span"); maxi.className="subClose"; maxi.textContent="⤢"; maxi.title="Maximize / restore"; maxi.onclick=()=>togglePaneMaximize(el);
   const gear=document.createElement("span"); gear.className="subClose"; gear.textContent="⚙"; gear.title="Settings"; gear.onclick=()=>openIndicatorSettings(ind.id);
   const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeIndicator(ind.id);
-  label.appendChild(eye); label.appendChild(up); label.appendChild(dn); label.appendChild(collapse); label.appendChild(maxi); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
+  label.appendChild(eye); label.appendChild(collapse); label.appendChild(maxi); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
   const grip=document.createElement("div"); grip.className="paneResize"; grip.title="Drag to resize pane"; wirePaneResize(grip,el); el.appendChild(grip);
   wrap.appendChild(el); ind.paneEl=el;
   // Right-click the sub-pane → app menu (Settings / Add alert / Remove), same as
@@ -7911,9 +7912,10 @@ function buildIndicatorSeries(ind){
   chart.timeScale().subscribeVisibleLogicalRangeChange(ind.syncMain);
   sc.timeScale().subscribeVisibleLogicalRangeChange(ind.syncSub);
   ind.series=specs.map(sp=> recordData(alignSubSeries(sp.k==="hist"
-    ? sc.addHistogramSeries({color:sp.color})
+    ? sc.addHistogramSeries({color:sp.color,priceLineVisible:false})
     : sc.addLineSeries({color:sp.color,lineWidth:sp.w,lineStyle:sp.s||0,
-        ...(sp.lv===false?{lastValueVisible:false,priceLineVisible:false,crosshairMarkerVisible:false}:{})}))));
+        priceLineVisible:false,   // no dotted last-value line (TV keeps only the axis pill)
+        ...(sp.lv===false?{lastValueVisible:false,crosshairMarkerVisible:false}:{})}))));
   registerPane(sc, ind.series[0]);   // share the crosshair with the main chart + other panes
   // New bottom pane → move the date axis down to it (and off the pane now above it).
   setTimeout(()=>{ try{ sc.applyOptions({width:el.clientWidth,height:el.clientHeight}); }catch(e){} alignPriceAxes(); },0);
@@ -10581,16 +10583,16 @@ document.getElementById("symbolBox").onclick = ()=>openAddSymbolDlg(null);
 (function wireWlResize(){
   const grip=document.getElementById("wlResize"); if(!grip) return;
   try{ const w=localStorage.getItem("fv_wl_width"); if(w) document.documentElement.style.setProperty("--wl-w", w+"px"); }catch(e){}
-  grip.addEventListener("mousedown", e=>{
+  grip.addEventListener("pointerdown", e=>{
     e.preventDefault();
     const onMove=ev=>{
       const w=Math.max(200, Math.min(window.innerWidth*0.5, window.innerWidth-ev.clientX));
       document.documentElement.style.setProperty("--wl-w", w+"px");
       resize(); sizeCanvas();
     };
-    const onUp=()=>{ document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp);
+    const onUp=()=>{ document.removeEventListener("pointermove",onMove); document.removeEventListener("pointerup",onUp);
       const cur=getComputedStyle(document.getElementById("watchlist")).width; try{ localStorage.setItem("fv_wl_width", parseInt(cur)); }catch(e){} };
-    document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
+    document.addEventListener("pointermove",onMove); document.addEventListener("pointerup",onUp);
   });
 })();
 // Watchlist name dropdown: switch between named watchlists or create a new one.
@@ -10745,13 +10747,13 @@ document.querySelectorAll("#wlCols span[data-sort]").forEach(h=>{
     try{ const w=localStorage.getItem("fv_wl_"+cls); if(w) document.documentElement.style.setProperty("--wl-"+cls, w+"px"); }catch(e){}
     const grip=document.createElement("div"); grip.className="colgrip";
     cell.appendChild(grip);
-    grip.addEventListener("mousedown", e=>{
+    grip.addEventListener("pointerdown", e=>{
       e.preventDefault(); e.stopPropagation();
       const startX=e.clientX, startW=cell.getBoundingClientRect().width;
       const onMove=ev=>{ const w=Math.max(40, startW-(ev.clientX-startX)); document.documentElement.style.setProperty("--wl-"+cls, w+"px"); };
-      const onUp=()=>{ document.removeEventListener("mousemove",onMove); document.removeEventListener("mouseup",onUp);
+      const onUp=()=>{ document.removeEventListener("pointermove",onMove); document.removeEventListener("pointerup",onUp);
         try{ localStorage.setItem("fv_wl_"+cls, parseInt(getComputedStyle(cell).width)); }catch(e){} };
-      document.addEventListener("mousemove",onMove); document.addEventListener("mouseup",onUp);
+      document.addEventListener("pointermove",onMove); document.addEventListener("pointerup",onUp);
     });
   });
 })();

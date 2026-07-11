@@ -314,3 +314,17 @@ answers it immediately, so liveness is known within ms; (2) UI — any status li
 while visible needs a live refresher (self-clearing interval keyed on the element's existence),
 not a value snapshotted at render. Generally: never derive "connected" from a channel whose normal
 idle behavior is silence.
+
+## Session lessons (2026-07-10, RSI pane phone polish)
+- **Text-glyph buttons (↑ ↓ arrows) render as odd vertical dotted strokes on Android
+  WebView fonts** — owner removed the pane-reorder arrows for this reason. Verify any
+  glyph-based UI at phone width/DPR before shipping; prefer SVG icons.
+- **LWC line series default `priceLineVisible:true`** — every sub-pane indicator series
+  was drawing a dotted last-value line in its own color (the "stray yellow/purple dotted
+  lines"). Always set it explicitly; keep only the axis pill (lastValueVisible).
+- **Drag handlers must use pointer events, not mouse events** — pane-resize grips wired
+  to mousedown/mousemove worked with a mouse but silently did nothing on touch (grip
+  highlighted, no resize). pointerdown/pointermove/pointerup + `touch-action:none` on the
+  grip covers both.
+- **`pkill -f <pattern>` can match the invoking shell's own command line** (exit 144 mid-
+  script) — put cleanup pkill in its own command or use a PID file.
