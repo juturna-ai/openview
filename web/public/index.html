@@ -36,13 +36,20 @@
   #ovTabs{display:flex; align-items:flex-end; gap:2px; height:34px; padding:0 8px;
     background:var(--panel2); border-bottom:1px solid var(--border); user-select:none;}
   #ovTabs .ov-tab{display:inline-flex; align-items:center; height:26px; padding:0 16px;
-    font-size:13px; font-weight:600; color:var(--muted); background:var(--panel);
+    font-size:13px; font-weight:600; color:rgba(255,255,255,0.7); background:var(--panel);
     border:1px solid var(--border); border-bottom:none;
     border-radius:8px 8px 0 0; cursor:pointer; text-decoration:none; line-height:1;
     transition:color .12s ease, background .12s ease;}
   #ovTabs .ov-tab:hover{color:var(--text); background:var(--hover);}
-  #ovTabs .ov-tab.active{color:var(--text); background:var(--bg); height:28px;
-    border-color:var(--border); position:relative; z-index:1;}
+  #ovTabs .ov-tab.active{background:var(--bg); height:28px;
+    border-color:var(--border); position:relative; z-index:1;
+    color:transparent; -webkit-text-fill-color:transparent;
+    background-image:linear-gradient(90deg,#6f5f7a,#b0a5bd 20%,#e6dcf0 32%,#b0a5bd 44%,#6f5f7a 60%,#b0a5bd 78%,#e6dcf0 90%,#6f5f7a),linear-gradient(var(--bg),var(--bg));
+    background-size:300% 100%,100% 100%; background-position:0 0,0 0;
+    -webkit-background-clip:text,padding-box; background-clip:text,padding-box;
+    animation:ovTabFlow 30s linear infinite, ovTabPulse 8s ease-in-out infinite;}
+  @keyframes ovTabFlow{0%{background-position:0 0,0 0;}100%{background-position:300% 0,0 0;}}
+  @keyframes ovTabPulse{0%,100%{filter:brightness(0.92);}50%{filter:brightness(1.15);}}
   /* When the tab bar is present (NOT embed), shrink the chart app to make room. */
   html:not(.embed) #app{height:calc(100vh - 34px);}
   /* Embed mode (grid panel): hide the watchlist so the panel is pure chart */
@@ -5317,6 +5324,31 @@ function _rsiTouchEnd(e){
 }
 rsiEl.addEventListener("touchend", _rsiTouchEnd);
 rsiEl.addEventListener("touchcancel", _rsiTouchEnd);
+// Mouse-wheel zoom over the RSI plot (desktop) — mirrors the main pane's dcanvas wheel
+// handler, anchored at the cursor's x, driving the shared time scale. Skips the right
+// axis gutter (that's value-scale territory). shift/horizontal wheel → sideways pan.
+rsiEl.addEventListener("wheel", e=>{
+  const p={ x:e.clientX-rsiEl.getBoundingClientRect().left };
+  if(inRsiPriceAxis(p)) return;                        // axis gutter: leave value-scale alone
+  e.preventDefault(); stopAutoSnap();
+  const ts=chart.timeScale(); const range=ts.getVisibleLogicalRange(); if(!range) return;
+  const { from, to }=range, span=to-from;
+  if(e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)){
+    const delta=(e.shiftKey ? e.deltaY : e.deltaX);
+    let shift=(delta/100)*span*0.1;
+    if(from+shift < 0){ shift=-from; if(!_loadingOlder && !_historyExhausted) loadOlderHistory(); }
+    ts.setVisibleLogicalRange({ from:from+shift, to:to+shift }); redraw(); return;
+  }
+  const w=rsiEl.clientWidth-rsiAxisW() || 1;
+  const frac=Math.min(1, Math.max(0, p.x/w));
+  const anchor=from+span*frac;
+  const factor=e.deltaY>0 ? 1.1 : 1/1.1;
+  const { minSpan, maxSpan }=zoomSpanLimits();
+  const newSpan=Math.min(maxSpan, Math.max(minSpan, span*factor));
+  if(newSpan===span){ redraw(); return; }
+  ts.setVisibleLogicalRange({ from:anchor-(anchor-from)*(newSpan/span), to:anchor+(to-anchor)*(newSpan/span) });
+  redraw();
+}, {passive:false});
 
 // ─────────────────────────────────────────────────────────────────────
 //  COORDINATE CONVERSION  (price/time ⇄ pixels)
