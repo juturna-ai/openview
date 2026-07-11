@@ -36,7 +36,7 @@ export default function Navbar() {
       {/* Launches the live chart engine (root document). Plain anchor, not <Link>, so it
           performs a real navigation to the static engine at `/` rather than a client-side
           route transition (there is no App Router page at `/`). */}
-      <a href="/" className="ov-cta">Open Chart</a>
+      <a href="/index.html" className="ov-cta">Open Chart</a>
     </nav>
   );
 }

@@ -17,7 +17,7 @@ export default function AboutUsPage() {
         ourselves, shared with anyone who wants it.
       </p>
       <p>
-        <a href="/">Try the charts →</a>
+        <a href="/index.html">Try the charts →</a>
       </p>
     </div>
   );

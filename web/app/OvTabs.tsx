@@ -10,8 +10,10 @@ export default function OvTabs({ active }: { active: 'home' | 'openview' }) {
   return (
     <div className="ov-tabs">
       <Link href="/home" className={'ov-tab' + (active === 'home' ? ' active' : '')}>Home</Link>
-      {/* Plain anchor: `/` is the raw static chart engine, not an App Router page. */}
-      <a href="/" className={'ov-tab' + (active === 'openview' ? ' active' : '')}>OpenView</a>
+      {/* Plain anchor to `/index.html` (the raw chart engine). We target index.html — NOT `/` —
+          because a bare `/` redirects to /home for browsers (see next.config.js); /index.html
+          serves the engine directly with no redirect. */}
+      <a href="/index.html" className={'ov-tab' + (active === 'openview' ? ' active' : '')}>OpenView</a>
     </div>
   );
 }

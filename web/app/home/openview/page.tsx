@@ -23,7 +23,7 @@ export default function OpenviewInfoPage() {
         public exchange APIs, so there is no backend and nothing to sign up for.
       </p>
       <p>
-        <a href="/">Open the live charts →</a>
+        <a href="/index.html">Open the live charts →</a>
       </p>
     </div>
   );

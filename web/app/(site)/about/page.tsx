@@ -21,7 +21,7 @@ export default function AboutPage() {
         it natively for touch — pinch-zoom, drag-pan, and long-press crosshair.
       </p>
       <p>
-        <a href="/">Open the live chart →</a>
+        <a href="/index.html">Open the live chart →</a>
       </p>
     </div>
   );
