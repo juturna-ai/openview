@@ -5264,18 +5264,56 @@ function _rsiTouchMouse(type, target, t){
     bubbles:true, cancelable:true, view:window,
   }));
 }
+// Time pan (1 finger, horizontal) + pinch-zoom (2 fingers) on the RSI PLOT — mirrors
+// the main pane's dcanvas gestures. Both drive chart.timeScale(); the RSI pane's time
+// scale is already subscribed to it (see _syncRange), so it follows automatically.
+// The right-edge axis gutter still owns vertical value-stretch (rsiAxisDrag).
+let _rsiTimePan=null, _rsiPinch=null;
+function _rsiPt(t){ const r=rsiEl.getBoundingClientRect(); return { x:t.clientX-r.left, y:t.clientY-r.top }; }
 rsiEl.addEventListener("touchstart", e=>{
-  if(rsiAlertDrag || e.touches.length!==1) return;
-  _rsiTouchMouse("mousedown", rsiEl, e.touches[0]);       // starts rsiAxisDrag iff in axis
-  if(rsiAxisDrag) e.preventDefault();                      // claim only when the axis took it
+  if(rsiAlertDrag) return;
+  if(e.touches.length===1){
+    _rsiTouchMouse("mousedown", rsiEl, e.touches[0]);     // starts rsiAxisDrag iff in axis
+    if(rsiAxisDrag){ e.preventDefault(); return; }        // axis gutter → value-stretch
+    // Plot body → start a horizontal time pan (drives the shared time scale).
+    const range=chart.timeScale().getVisibleLogicalRange();
+    if(range){ _rsiTimePan={ startX:e.touches[0].clientX, startScroll:chart.timeScale().scrollPosition() }; stopAutoSnap(); e.preventDefault(); }
+  } else if(e.touches.length===2){
+    _rsiTimePan=null;
+    const [a,b]=e.touches;
+    _rsiPinch={ d:Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY)||1,
+                range:chart.timeScale().getVisibleLogicalRange(),
+                midX:(a.clientX+b.clientX)/2 };
+    stopAutoSnap(); e.preventDefault();
+  }
 }, {passive:false});
 rsiEl.addEventListener("touchmove", e=>{
-  if(!rsiAxisDrag || !e.touches.length) return;
-  _rsiTouchMouse("mousemove", document, e.touches[0]);
-  e.preventDefault();
+  if(rsiAxisDrag && e.touches.length){ _rsiTouchMouse("mousemove", document, e.touches[0]); e.preventDefault(); return; }
+  if(_rsiPinch && e.touches.length>=2){
+    const [a,b]=e.touches;
+    const d=Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+    if(!_rsiPinch.range || !d) return;
+    const {from,to}=_rsiPinch.range, span=to-from;
+    const rect=rsiEl.getBoundingClientRect();
+    const frac=Math.min(1, Math.max(0, (_rsiPinch.midX-rect.left)/(rect.width||1)));
+    const anchor=from+span*frac;
+    const newSpan=span/(d/_rsiPinch.d);
+    chart.timeScale().setVisibleLogicalRange({ from:anchor-newSpan*frac, to:anchor+newSpan*(1-frac) });
+    redraw(); e.preventDefault();
+  } else if(_rsiTimePan && e.touches.length===1){
+    const ts=chart.timeScale();
+    const deltaBars=(e.touches[0].clientX-_rsiTimePan.startX)/currentBarSpacing();
+    let target=_rsiTimePan.startScroll-deltaBars;
+    const vr=ts.getVisibleLogicalRange();
+    if(vr){ const floor=ts.scrollPosition()-Math.max(0, vr.from);
+      if(target<floor){ target=floor; if(!_loadingOlder && !_historyExhausted) loadOlderHistory(); } }
+    ts.scrollToPosition(target, false); redraw(); e.preventDefault();
+  }
 }, {passive:false});
-function _rsiTouchEnd(){
+function _rsiTouchEnd(e){
   if(rsiAxisDrag) _rsiTouchMouse("mouseup", document, {clientX:0, clientY:0});
+  if(e && e.touches && e.touches.length===0){ _rsiTimePan=null; _rsiPinch=null; }
+  else if(_rsiPinch && e && e.touches && e.touches.length<2){ _rsiPinch=null; }
 }
 rsiEl.addEventListener("touchend", _rsiTouchEnd);
 rsiEl.addEventListener("touchcancel", _rsiTouchEnd);
@@ -9092,11 +9130,10 @@ function updateRsiAlertLines(){
   if(!alertLinesVisible) return;
   alerts.forEach(a=>{
     if(a.source!=="rsi" || a.target!=="value" || a.value==null || !isFinite(a.value)) return;
-    // The RSI pane already has WHITE 30/50/70 band lines, so the old white
-    // alertLineColor line was invisible against them. Use the accent blue at width 2
-    // + an axis pill so the alert level clearly stands out from the bands.
+    // Grey dashed line (matches the main price-pane alert line look) + axis pill.
+    // Kept off pure-white so it still reads against the RSI 30/50/70 white bands.
     try{ rsiAlertLines.push({ id:a.id, pl:rsiLine.createPriceLine({
-      price:a.value, color:a.active?"#2962FF":"#888",
+      price:a.value, color:a.active?"#b2b5be":"#888",
       lineWidth:2, lineStyle:LightweightCharts.LineStyle.Dashed,
       axisLabelVisible:true, title:"",
     }) }); }catch(e){}

@@ -201,41 +201,39 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .ov-hnav-link:hover { opacity: 1; }
 .ov-hnav-link.active { color: #fff; opacity: 1; font-weight: 600; }
 
-/* ── Home hero (hero only, dark purple). 34px tabs + ~61px nav row above it. ── */
+/* ── Home surface: nav row + hero share ONE gradient so they read continuous. ── */
+.ov-home-bg {
+  background:
+    /* soft dark-to-clear fade at the very top so the flat tab bar eases into color */
+    linear-gradient(180deg, var(--bg) 0%, rgba(19, 23, 34, 0) 120px),
+    radial-gradient(900px 500px at 50% -10%, rgba(139, 92, 246, 0.15), transparent 60%),
+    radial-gradient(700px 500px at 80% 30%, rgba(109, 40, 217, 0.11), transparent 55%),
+    var(--bg);
+}
+
+/* ── Home hero (hero only). Background comes from .ov-home-bg above. ── */
 .ov-home {
   position: relative;
   overflow: hidden;
-  min-height: calc(100vh - 34px - 61px);
+  min-height: calc(100vh - 34px - 61px - 61px);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   padding: 4rem clamp(1.25rem, 5vw, 4rem) 6rem;
-  background:
-    radial-gradient(900px 500px at 50% -10%, rgba(139, 92, 246, 0.22), transparent 60%),
-    radial-gradient(700px 500px at 80% 30%, rgba(109, 40, 217, 0.16), transparent 55%),
-    var(--bg);
 }
 .ov-home-glow {
   position: absolute;
   inset: 0;
   background: radial-gradient(
     600px 400px at 50% 40%,
-    rgba(139, 92, 246, 0.12),
+    rgba(139, 92, 246, 0.08),
     transparent 70%
   );
   pointer-events: none;
 }
-.ov-home-logo {
-  width: 150px;
-  height: auto;
-  border-radius: 28px;
-  filter: drop-shadow(0 20px 50px rgba(139, 92, 246, 0.35));
-  animation: ov-home-float 6s ease-in-out infinite;
-}
 .ov-home-brand {
-  margin-top: 22px;
   font-size: clamp(48px, 12vw, 128px);
   line-height: 1;
   font-weight: 800;
@@ -252,11 +250,6 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   letter-spacing: 0.01em;
   color: var(--muted);
 }
-@keyframes ov-home-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-12px); }
-}
-
 /* ── Home footer (© / Powered by Juturna / Privacy) ── */
 .ov-footer {
   position: relative;
@@ -291,12 +284,12 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   -webkit-text-fill-color: transparent;
   background: linear-gradient(
       90deg,
-      #7c4fd8, #9a7ae8 15%, #d4c7ff 30%, #a89af0 45%,
-      #6a5ad0 60%, #9a7ae8 75%, #d4c7ff 90%, #7c4fd8
+      #3b1e70, #5b2fa8 12%, #a78bfa 28%, #c4b5fd 34%, #7c4fd8 46%,
+      #3b1e70 60%, #7c4fd8 74%, #c4b5fd 86%, #a78bfa 92%, #3b1e70
     ) 0 0 / 300%;
   -webkit-background-clip: text;
   background-clip: text;
-  animation: ov-brand-flow 45s linear infinite, ov-brand-pulse 10s ease-in-out infinite;
+  animation: ov-brand-flow 30s linear infinite, ov-brand-pulse 8s ease-in-out infinite;
 }
 .ov-powered-by a:hover { opacity: 0.8; }
 @keyframes ov-brand-flow {

@@ -7,8 +7,10 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
   return (
     <>
       <OvTabs active="home" />
-      <HomeNav />
-      {children}
+      <div className="ov-home-bg">
+        <HomeNav />
+        {children}
+      </div>
       <footer className="ov-footer">
         <div>© {new Date().getFullYear()} OpenView</div>
         <p className="ov-powered-by">
