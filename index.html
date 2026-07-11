@@ -1789,6 +1789,10 @@ function rebuildMaSeries(){
 
 // RSI panel — styled to match TradingView (overbought fill, RSI + MA, fixed scale)
 const rsiChart = LightweightCharts.createChart(rsiEl, { ...common });
+// Kill LWC's default 20%/10% scale margins on the RSI pane — they squeezed the plot
+// into the middle of the pane with dead strips above/below. TradingView's RSI fills
+// the pane almost edge-to-edge, with the label row overlaying the plot.
+try{ rsiChart.priceScale("right").applyOptions({ scaleMargins:{ top:0.04, bottom:0.04 } }); }catch(e){}
 
 // Keep the panel pinned to a sensible RSI window so it reads like TradingView.
 // null ⇒ default 18–82 window; set by dragging the RSI right axis (like the main
@@ -1825,9 +1829,9 @@ const rsiUnder = rsiChart.addBaselineSeries({
   autoscaleInfoProvider:rsiScale,
 });
 // dashed 70 / 30 bands — TradingView tints these purple (the RSI plot color).
-const band70  = rsiChart.addLineSeries({ color:"rgba(255,255,255,0.75)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
-const band30  = rsiChart.addLineSeries({ color:"rgba(255,255,255,0.75)", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
-const band50  = rsiChart.addLineSeries({ color:"#7986cb", lineWidth:1, lineStyle:2, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
+const band70  = rsiChart.addLineSeries({ color:"rgba(255,255,255,0.75)", lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
+const band30  = rsiChart.addLineSeries({ color:"rgba(255,255,255,0.75)", lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
+const band50  = rsiChart.addLineSeries({ color:"#7986cb", lineWidth:1, lineStyle:3, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
 // RSI line (TradingView purple #7E57C2, thin) + smoothing MA (gold, thicker), added last = on top.
 const rsiLine = rsiChart.addLineSeries({ color:"#7e57c2", lineWidth:2, priceLineVisible:false, lastValueVisible:true, autoscaleInfoProvider:rsiScale });
 const rsiMa   = rsiChart.addLineSeries({ color:"#e6b400", lineWidth:2, priceLineVisible:false, lastValueVisible:true, autoscaleInfoProvider:rsiScale });
@@ -7818,9 +7822,10 @@ function plotSpec(ind){
     // TV-parity RSI: RSI + RSI-based MA + dashed 70/50/30 bands (s=lineStyle, lv=false hides
     // the bands' axis labels/price lines so only RSI + MA mark the scale, like the built-in pane).
     case "rsi": return [L(c||"#7e57c2",2),{k:"line",color:"#e6b400",w:2},
-      {k:"line",color:"rgba(255,255,255,0.75)",w:1,s:2,lv:false},
-      {k:"line",color:"#7986cb",w:1,s:2,lv:false},
-      {k:"line",color:"rgba(255,255,255,0.75)",w:1,s:2,lv:false}];
+      {k:"line",color:"rgba(255,255,255,0.75)",w:1,s:1,lv:false},
+      {k:"line",color:"#7986cb",w:1,s:3,lv:false},
+      {k:"line",color:"rgba(255,255,255,0.75)",w:1,s:1,lv:false},
+      {k:"bandfill"}];
     case "cci": case "willr": case "mom": case "roc": case "cmo": case "dpo":
     case "atr": case "stdev": case "chop": case "bbw": case "obv": case "mfi":
     case "adl": case "cmf": case "chaikin": case "pvt": case "fi": case "bop":
@@ -7884,13 +7889,12 @@ function buildIndicatorSeries(ind){
   const wrap=document.getElementById("subPanes");
   const el=document.createElement("div"); el.className="subpane";
   const label=document.createElement("div"); label.className="subLabel"; label.textContent=ind.name;
-  const eye=document.createElement("span"); eye.className="subEye"; eye.textContent=ind.hidden?"🚫":"👁"; eye.title="Hide / show"; eye.onclick=()=>toggleIndicatorHidden(ind.id);
-  // No ↑/↓ reorder buttons (owner request — see the RSI label note above).
+  // No 👁 hide / ↑↓ reorder / ⤢ maximize buttons (owner request) — the sub-pane label
+  // matches the built-in RSI pane chrome: collapse, settings, close.
   const collapse=document.createElement("span"); collapse.className="subClose"; collapse.textContent="▁"; collapse.title="Collapse / restore"; collapse.onclick=()=>togglePaneCollapse(el);
-  const maxi=document.createElement("span"); maxi.className="subClose"; maxi.textContent="⤢"; maxi.title="Maximize / restore"; maxi.onclick=()=>togglePaneMaximize(el);
   const gear=document.createElement("span"); gear.className="subClose"; gear.textContent="⚙"; gear.title="Settings"; gear.onclick=()=>openIndicatorSettings(ind.id);
   const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeIndicator(ind.id);
-  label.appendChild(eye); label.appendChild(collapse); label.appendChild(maxi); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
+  label.appendChild(collapse); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
   const grip=document.createElement("div"); grip.className="paneResize"; grip.title="Drag to resize pane"; wirePaneResize(grip,el); el.appendChild(grip);
   wrap.appendChild(el); ind.paneEl=el;
   // Right-click the sub-pane → app menu (Settings / Add alert / Remove), same as
@@ -7911,7 +7915,13 @@ function buildIndicatorSeries(ind){
   ind.syncSub =r=>_syncRange(chart.timeScale(), r);
   chart.timeScale().subscribeVisibleLogicalRangeChange(ind.syncMain);
   sc.timeScale().subscribeVisibleLogicalRangeChange(ind.syncSub);
-  ind.series=specs.map(sp=> recordData(alignSubSeries(sp.k==="hist"
+  ind.series=specs.map(sp=> recordData(alignSubSeries(
+    sp.k==="bandfill"
+    ? sc.addBaselineSeries({ baseValue:{type:"price",price:70},
+        topFillColor1:"rgba(124,87,194,0.10)", topFillColor2:"rgba(124,87,194,0.10)", topLineColor:"rgba(0,0,0,0)",
+        bottomFillColor1:"rgba(124,87,194,0.10)", bottomFillColor2:"rgba(124,87,194,0.10)", bottomLineColor:"rgba(0,0,0,0)",
+        priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false })
+    : sp.k==="hist"
     ? sc.addHistogramSeries({color:sp.color,priceLineVisible:false})
     : sc.addLineSeries({color:sp.color,lineWidth:sp.w,lineStyle:sp.s||0,
         priceLineVisible:false,   // no dotted last-value line (TV keeps only the axis pill)
@@ -7945,6 +7955,7 @@ function renderIndicator(ind){
         S[2].setData(d.map(b=>({time:b.time,value:70})));
         S[3].setData(d.map(b=>({time:b.time,value:50})));
         S[4].setData(d.map(b=>({time:b.time,value:30})));
+        if(S[5]) S[5].setData(d.map(b=>({time:b.time,value:30})));   // purple 30↔70 wash
         try{ S[0].setMarkers(pp.divergence ? rsiDivergenceMarkers(d, r.filter(p=>p.value!=null)) : []); }catch(e){}
         break; }
       case "macd": { const r=macdCalc(d,pp.fast,pp.slow,pp.signal); S[0].setData(hist(r.hist)); S[1].setData(r.macd); S[2].setData(r.signal); break; }
@@ -8201,6 +8212,7 @@ function openIndicatorSettings(id){
   }).join("") : '<div class="field" style="color:var(--muted)">No inputs for this indicator.</div>';
   // ── Style tab: per-plot color + (line) width + line style, plus precision ──
   const styleRows = specs.map((sp,i)=>{
+    if(sp.k==="bandfill") return "";   // internal band wash — not a user-stylable plot
     const st=ind.plotStyle[i];
     const isLine = sp.k!=="hist";
     const widthSel = isLine ? '<input class="pw" type="number" min="1" max="6" step="1" id="pw_'+i+'" value="'+(st.width||1)+'">' : '';
@@ -9873,7 +9885,9 @@ function renderDataWindow(){
     const params=indParamSummary(ind);
     html+='<div class="dw-sec">'+escHtml(ind.name+(params?" ("+params+")":""))+'</div>';
     const plots=(IND_META[ind.type]&&IND_META[ind.type].plots)||[];
-    ind.series.forEach((s,i)=>{ html+=row(plots[i]||ind.name+(ind.series.length>1?" "+(i+1):""), "dw_"+ind.id+"_"+i); });
+    const sp=plotSpec(ind);
+    ind.series.forEach((s,i)=>{ if(sp[i]&&sp[i].k==="bandfill") return;   // internal wash — no data row
+      html+=row(plots[i]||ind.name+(ind.series.length>1?" "+(i+1):""), "dw_"+ind.id+"_"+i); });
   });
   box.innerHTML=html;
   updateDataWindow(_dwTime);
