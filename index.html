@@ -46,12 +46,7 @@
     transition:color .12s ease, background .12s ease;}
   #ovTabs .ov-tab:hover{color:var(--text); background:var(--hover);}
   #ovTabs .ov-tab.active{background:var(--bg); height:28px;
-    border-color:var(--border); position:relative; z-index:1;
-    color:transparent; -webkit-text-fill-color:transparent;
-    background-image:linear-gradient(90deg,#4a3d59,#b0a5bd 20%,#c9bdd6 32%,#b0a5bd 44%,#4a3d59 60%,#b0a5bd 78%,#c9bdd6 90%,#4a3d59),linear-gradient(var(--bg),var(--bg));
-    background-size:300% 100%,100% 100%; background-position:0 0,0 0;
-    -webkit-background-clip:text,padding-box; background-clip:text,padding-box;
-    animation:ovTabFlow 60s linear infinite, ovTabPulse 14s ease-in-out infinite;}
+    border-color:var(--border); position:relative; z-index:1; color:var(--text);}
   @keyframes ovTabFlow{0%{background-position:0 0,0 0;}100%{background-position:300% 0,0 0;}}
   @keyframes ovTabPulse{0%,100%{filter:brightness(0.92);}50%{filter:brightness(1.15);}}
   /* When the tab bar is present (NOT embed), shrink the chart app to make room. */
@@ -5281,6 +5276,7 @@ function _rsiTouchMouse(type, target, t){
 // scale is already subscribed to it (see _syncRange), so it follows automatically.
 // The right-edge axis gutter still owns vertical value-stretch (rsiAxisDrag).
 let _rsiTimePan=null, _rsiPinch=null;
+function _rsiPt(t){ const r=rsiEl.getBoundingClientRect(); return { x:t.clientX-r.left, y:t.clientY-r.top }; }
 rsiEl.addEventListener("touchstart", e=>{
   if(rsiAlertDrag) return;
   if(e.touches.length===1){
@@ -5288,7 +5284,7 @@ rsiEl.addEventListener("touchstart", e=>{
     if(rsiAxisDrag){ e.preventDefault(); return; }        // axis gutter → value-stretch
     // Plot body → start a horizontal time pan (drives the shared time scale).
     const range=chart.timeScale().getVisibleLogicalRange();
-    if(range){ _rsiTimePan={ startX:e.touches[0].clientX, startScroll:chart.timeScale().scrollPosition() }; stopAutoSnap(); e.preventDefault(); }
+    if(range){ _rsiTimePan={ startX:e.touches[0].clientX, startY:e.touches[0].clientY, startScroll:chart.timeScale().scrollPosition(), moved:false }; stopAutoSnap(); e.preventDefault(); }
   } else if(e.touches.length===2){
     _rsiTimePan=null;
     const [a,b]=e.touches;
@@ -5312,8 +5308,10 @@ rsiEl.addEventListener("touchmove", e=>{
     chart.timeScale().setVisibleLogicalRange({ from:anchor-newSpan*frac, to:anchor+newSpan*(1-frac) });
     redraw(); e.preventDefault();
   } else if(_rsiTimePan && e.touches.length===1){
+    const t=e.touches[0];
+    if(Math.hypot(t.clientX-_rsiTimePan.startX, t.clientY-_rsiTimePan.startY)>4) _rsiTimePan.moved=true;
     const ts=chart.timeScale();
-    const deltaBars=(e.touches[0].clientX-_rsiTimePan.startX)/currentBarSpacing();
+    const deltaBars=(t.clientX-_rsiTimePan.startX)/currentBarSpacing();
     let target=_rsiTimePan.startScroll-deltaBars;
     const vr=ts.getVisibleLogicalRange();
     if(vr){ const floor=ts.scrollPosition()-Math.max(0, vr.from);
@@ -5323,6 +5321,17 @@ rsiEl.addEventListener("touchmove", e=>{
 }, {passive:false});
 function _rsiTouchEnd(e){
   if(rsiAxisDrag) _rsiTouchMouse("mouseup", document, {clientX:0, clientY:0});
+  // A stationary TAP on the plot (no pan) surfaces the ⊕ quick-add-alert button at the
+  // tapped level — touch has no hover, so this is how a phone user places an RSI alert.
+  if(_rsiTimePan && !_rsiTimePan.moved && !rsiAxisDrag && rsiCrossPlusEl && draw.tool==="cross"){
+    const t=e && e.changedTouches && e.changedTouches[0];
+    if(t){ const p=_rsiPt(t);
+      if(p.y>7 && p.y<rsiEl.clientHeight-7 && !inRsiPriceAxis(p)){
+        rsiCrossPlusEl.style.top=p.y+"px";
+        rsiCrossPlusEl.style.right=(rsiAxisW()+5)+"px";
+        rsiCrossPlusEl.style.display="flex";
+      } }
+  }
   if(e && e.touches && e.touches.length===0){ _rsiTimePan=null; _rsiPinch=null; }
   else if(_rsiPinch && e && e.touches && e.touches.length<2){ _rsiPinch=null; }
 }
@@ -9268,13 +9277,15 @@ function addQuickRsiAlert(value){
 }
 function hideRsiCrossPlus(){ if(rsiCrossPlusEl) rsiCrossPlusEl.style.display="none"; }
 if(rsiCrossPlusEl){
-  rsiCrossPlusEl.addEventListener("mousedown", e=>{
+  const _rsiPlusAdd=e=>{
     e.preventDefault(); e.stopPropagation();
     const y=parseFloat(rsiCrossPlusEl.style.top);
     const v=rsiLine.coordinateToPrice(y);
     if(v!=null) addQuickRsiAlert(Math.max(0, Math.min(100, v)));
     hideRsiCrossPlus();
-  });
+  };
+  rsiCrossPlusEl.addEventListener("mousedown", _rsiPlusAdd);
+  rsiCrossPlusEl.addEventListener("touchstart", _rsiPlusAdd, {passive:false});   // phones: tap the ⊕ to add
 }
 document.addEventListener("mousemove", e=>{
   if(rsiAlertDrag){ rsiAlertDragMove(e); return; }

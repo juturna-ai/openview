@@ -161,21 +161,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .ov-tab:hover { color: var(--text); background: var(--hover); }
 .ov-tab.active {
   background: var(--bg); height: 28px; position: relative; z-index: 1;
-  /* plum text with the same continuous brightness flow as Juturna */
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  background-image:
-    linear-gradient(
-      90deg,
-      #4a3d59, #b0a5bd 20%, #c9bdd6 32%, #b0a5bd 44%,
-      #4a3d59 60%, #b0a5bd 78%, #c9bdd6 90%, #4a3d59
-    ),
-    linear-gradient(var(--bg), var(--bg));
-  background-size: 300% 100%, 100% 100%;
-  background-position: 0 0, 0 0;
-  -webkit-background-clip: text, padding-box;
-  background-clip: text, padding-box;
-  animation: ov-brand-flow 60s linear infinite, ov-brand-pulse 14s ease-in-out infinite;
+  color: var(--text);
 }
 
 /* ── Home-tab heading nav (Home · Openview · APP · About us) ── */
@@ -221,17 +207,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .ov-hnav-link:hover { opacity: 1; }
 .ov-hnav-link.active {
   opacity: 1; font-weight: 600;
-  /* plum text with the same continuous brightness flow as Juturna */
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-  background: linear-gradient(
-      90deg,
-      #4a3d59, #b0a5bd 20%, #c9bdd6 32%, #b0a5bd 44%,
-      #4a3d59 60%, #b0a5bd 78%, #c9bdd6 90%, #4a3d59
-    ) 0 0 / 300%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation: ov-brand-flow 60s linear infinite, ov-brand-pulse 14s ease-in-out infinite;
+  color: var(--text);
 }
 
 /* Shell: tab bar + surface + footer stack to a full viewport; the surface grows so
