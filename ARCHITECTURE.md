@@ -716,3 +716,94 @@ It also static-serves the repo (so `http://127.0.0.1:8787/` opens the app same-o
 LLM drawings are ordinary shapes: they persist per symbol (`fv_draw_<sym>`), appear in the object tree, and undo with Ctrl+Z (a `snapshotDraw()` precedes every mutation). Gating: bridge runs only when `!IS_EMBED` **and** (localhost/`file://` origin, `?agent=1`, or `localStorage fv_agent="1"`); port override via `localStorage fv_agent_port`. On fetch failure it backs off 3s→30s silently, so running without the server costs nothing.
 
 Regressions: `test/regression_agent_mcp.mjs` (MCP handshake, REST, hardening, fake-page long-poll) and `test/regression_agent_bridge.mjs` (real page end-to-end: reads, add/validate/remove, user-drawing protection).
+
+---
+
+## Next.js Migration (`web/` App Router) — 2026-07-11
+
+> **Resume anchor.** If a session ends mid-migration, resume from here. Do NOT re-scaffold if `web/package.json` exists. State: migration complete + browser-verified (see "Verification" below).
+
+### Goal & the one hard constraint
+
+Wrap the site in a **Next.js 14 App Router** app under `web/`, adding marketing pages (Home / About / Contact / Portfolio) with a TradingView-style top navbar — **without changing the chart engine** and **without breaking the deployed engine that the mobile app and the multi-chart grid depend on.**
+
+The binding constraint (verified in code, not assumed):
+
+- **Mobile app** (`openviewapp/src/config.ts` → `chartEngineUrl = https://openview-opal.vercel.app`; `ChartWebView.tsx`) loads **`${base}/?embed=1&ev=&sym=&tf=`** — the **root path `/`** — and drives the engine by `injectJavaScript` **into the WebView's top frame** plus `originWhitelist=[engine origin]`. Therefore the root `/` **must serve the raw engine document** (an App-Router page that wraps the engine in an `<iframe>` would break top-frame injection and the origin whitelist).
+- **Multi-chart grid** (`index.html:10439`) sets iframe `src="index.html?embed=1&sym=&tf="` (relative) → must resolve to the engine **with query params intact**.
+
+### Decision (lowest-risk) — logged
+
+1. **Engine is served byte-for-byte from `web/public/index.html`** (copied verbatim; `cmp` clean). Its 11,213 lines of logic are **unchanged**. Assets (`assets/`, `images/`) copied to `web/public/` so `/assets/*` resolve identically.
+2. **Root `/` serves the engine** via a `next.config.js` `beforeFiles` rewrite `{'/' → '/index.html'}`. Next serves `public/index.html` **directly** at `/index.html` (200, no redirect) — strictly better than the old Vercel `/index.html → /` 308 hop; grid iframe `src="index.html?…"` now hits the engine directly with params preserved.
+3. **"Chart engine as ONE `'use client'` component"** requirement is met by `web/app/chart/ChartEngine.tsx` — a `'use client'` wrapper that mounts the engine full-viewport in an iframe and forwards the query string; it backs the in-app **`/chart`** route (navbar use). The **canonical mobile / grid / embed contract stays on the raw `/` document** (never the iframe wrapper), which is why mobile keeps working untouched.
+4. **Mobile app is NOT modified or redeployed** — lowest risk. Its URL (`/?embed=1…`) still lands on the engine. (The instruction allowed updating the mobile config in the same commit; not needed because the root contract is preserved.)
+5. **Supabase** lives only in `openviewapp` and is **not touched** — "keep Supabase identical" is satisfied trivially.
+
+### Route map (`web/app/`)
+
+| Path | Served by | Notes |
+|---|---|---|
+| `/` | `public/index.html` (rewrite) | **Chart engine, verbatim.** Mobile + grid + embed contract. |
+| `/index.html?…` | `public/index.html` (static) | Grid iframe `src`. 200 direct, params preserved. |
+| `/assets/*`, `/images/*` | `public/` | Engine icons, sounds, screenshots — same relative paths. |
+| `/home` | `app/(site)/home/page.tsx` | **Landing page.** Navbar + hero + feature cards. |
+| `/about` | `app/(site)/about/page.tsx` | Marketing copy. |
+| `/portfolio` | `app/(site)/portfolio/page.tsx` | Project cards. |
+| `/contact` | `app/(site)/contact/page.tsx` + `ContactForm.tsx` (`'use client'`) | `mailto:` form, no backend, no stored data, no secret. |
+| `/chart` | `app/chart/page.tsx` + `ChartEngine.tsx` (`'use client'`) | Full-viewport engine iframe for in-app nav (no navbar). |
+
+Layout structure: `app/layout.tsx` (root `<html><body>`), `app/(site)/layout.tsx` (adds `Navbar`). The `(site)` route group scopes the navbar to marketing pages; `/chart` sits outside it (full-viewport, no navbar). Site chrome CSS in `app/globals.css` mirrors the engine's TV colour vars. Single client-nav component `app/Navbar.tsx` (uses `usePathname` for the active link; "Open Chart" is a plain `<a href="/">` so it does a real navigation to the static engine).
+
+### Key files
+
+```
+web/
+  package.json         next 14.2.5, react 18.3.1 (pinned, minimal deps)
+  next.config.js       beforeFiles rewrite '/' -> '/index.html'
+  tsconfig.json        strict; @/* -> ./
+  vercel.json          { framework: "nextjs" }
+  .eslintrc.json       extends next/core-web-vitals (so `next lint` doesn't prompt in CI)
+  app/
+    layout.tsx         root <html><body>, favicon = /assets/freeview.*
+    globals.css        site chrome (navbar/hero/cards/form), TV colour vars
+    Navbar.tsx         'use client' — TV-style top nav
+    (site)/layout.tsx  wraps pages with <Navbar/>
+    (site)/home|about|portfolio|contact/page.tsx
+    (site)/contact/ContactForm.tsx   'use client' mailto form
+    chart/page.tsx + chart/ChartEngine.tsx   'use client' engine wrapper (/chart)
+  public/
+    index.html         ENGINE, byte-identical copy of repo-root index.html
+    assets/  images/   engine assets, verbatim
+```
+
+### Deployment (Vercel) — ⚠ one manual dashboard step
+
+The Vercel project `openview` (`prj_f2yudtwYJ8U2jqVto56AEq8itBkj`) currently deploys the repo root as a static site (`vercel.json` root serves `index.html`). To ship this migration:
+
+- **Set the project's Root Directory to `web`** in Vercel → Project → Settings → General. Vercel then builds the Next app (`web/vercel.json` framework hint) and the root `vercel.json` is ignored. This is a **dashboard setting** and cannot be expressed from the repo — it is the single manual step required for deploy. Until it is set, the old static deploy keeps working, so there is no broken half-state.
+- The repo-root `index.html` and root `vercel.json` are left in place (harmless once Root Directory moves; also the source of truth that `web/public/index.html` is copied from — keep them in sync on future engine edits, or replace the copy with a build step later).
+
+### Engine-sync note
+
+`web/public/index.html` is a **copy** of the repo-root `index.html`. Any future engine change must be applied to the root file and re-copied (`cp index.html web/public/index.html`), or the copy replaced by a Next build/prebuild step. Bump `ENGINE_VERSION` in `openviewapp/src/components/ChartWebView*.tsx` when the deployed engine changes (existing convention).
+
+### Verification
+
+Servers: original engine on `:5501` (python) vs Next app on `:5599` (`next start`), same engine bytes.
+
+- **Routing contract:** `curl` — `/` → engine 200; `/?embed=1&sym=&tf=` → engine 200; `/index.html?embed=1&…` → engine 200 with params intact (no redirect); `/assets/*` (icons + `zelda.mp3`/`route1.mp3`) 200 with correct MIME.
+- **A/B engine parity:** `test/verify_nextjs_migration.mjs` — **17/17 PASS on BOTH** 5501 and 5599 (identical), incl. 15-canvas render, embed mode (embed class applied, watchlist hidden, no page errors), grid-iframe engine render, no fatal console errors. Same result on both servers ⇒ engine behaves identically under Next.
+- **Site pages:** all of `/home /about /portfolio /contact` render navbar + heading, zero page errors; `/home` carries no engine bundle (clean isolation).
+- **`/chart` wrapper:** engine loads inside the iframe (`/?sym=ETH-USD&tf=1h`, query forwarded), 15 canvases, full TV chrome — confirmed by screenshot.
+- **Deep interactive sweep** (`test/verify_nextjs_deep.mjs`): **PARITY OK** — 5501 vs 5599 matched exactly on 16 chart types, 14 timeframes, 77 indicator entries / 8 categories, 11 draw tools, 11 watchlist rows, alerts present, Script/Pine present, 25 layout variants, 2-chart grid → 2 iframes, 0 real errors. Covers features.md §§1–13, 15–19.
+- `next build` clean (6 static routes generated, no type errors); `next lint` clean; `tsc --noEmit` clean.
+
+### Post-migration self-review (fixes applied)
+
+A code-quality/security pass over `web/app/**` produced three fixes (re-verified: 17/17 + PARITY OK still hold):
+- `chart/ChartEngine.tsx` — was `useState('/')` + effect → loaded the 704KB engine **twice** on `/chart?…`. Now lazy-inits `src` to `null` and renders the iframe only after the effect resolves the query → **single load** (verified: 1 navigation, params preserved, 15 canvases).
+- `(site)/home/page.tsx` — the `/about` link is now `next/link` (client transition + prefetch); the `/` link stays a plain `<a>` (raw engine, not a page). Redundant page-level `metadata` dropped (inherits root layout).
+- `.eslintrc.json` + `eslint`/`eslint-config-next` devDeps added so `next lint` runs non-interactively.
+
+Security review confirmed clean: no secrets/keys/creds anywhere in `web/` source; the contact `mailto:` handler `encodeURIComponent`s the fully-composed subject/body, neutralizing header/body injection; no `dangerouslySetInnerHTML`/`eval`; iframe is first-party same-origin. `web/public/index.html` verified byte-identical to root `index.html`.

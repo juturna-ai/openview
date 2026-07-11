@@ -1,0 +1,131 @@
+/* OpenView site chrome — TradingView-parity dark theme, mirrors the engine's CSS vars
+   (see index.html :root). Applies to the marketing/site pages only; the chart engine is a
+   standalone document served from public/ and carries its own styles. */
+:root {
+  --bg: #131722;
+  --panel: #1e222d;
+  --panel2: #181c27;
+  --border: #2a2e39;
+  --text: #d1d4dc;
+  --muted: #787b86;
+  --green: #26a69a;
+  --red: #ef5350;
+  --accent: #2962ff;
+  --hover: #2a2e39;
+  --nav-h: 56px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Trebuchet MS', -apple-system, 'Segoe UI', Roboto, Ubuntu, Tahoma, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* ── TV-style top navbar ── */
+.ov-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: var(--nav-h);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.ov-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.2px;
+  padding-right: 12px;
+  color: var(--text);
+}
+.ov-brand img { width: 22px; height: 22px; display: block; }
+.ov-brand .dot { color: var(--accent); }
+.ov-links { display: flex; align-items: center; gap: 2px; margin-left: 4px; }
+.ov-link {
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--muted);
+  transition: color .12s ease, background .12s ease;
+  white-space: nowrap;
+}
+.ov-link:hover { color: var(--text); background: var(--hover); }
+.ov-link.active { color: var(--text); }
+.ov-spacer { flex: 1; }
+.ov-cta {
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+}
+.ov-cta:hover { filter: brightness(1.08); }
+
+/* ── Page shell ── */
+.ov-main { min-height: calc(100vh - var(--nav-h)); }
+.ov-container { max-width: 1080px; margin: 0 auto; padding: 56px 24px; }
+
+.ov-hero { text-align: center; padding: 96px 24px 72px; }
+.ov-hero h1 { font-size: clamp(32px, 6vw, 56px); line-height: 1.05; margin-bottom: 18px; }
+.ov-hero p { font-size: clamp(15px, 2.4vw, 19px); color: var(--muted); max-width: 640px; margin: 0 auto 32px; }
+.ov-hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+.ov-btn {
+  display: inline-block;
+  padding: 12px 22px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.ov-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ov-btn:hover { filter: brightness(1.08); }
+
+.ov-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.ov-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 22px;
+}
+.ov-card h3 { font-size: 17px; margin-bottom: 8px; }
+.ov-card p { font-size: 14px; color: var(--muted); line-height: 1.55; }
+
+h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
+.ov-prose p { color: var(--muted); line-height: 1.65; margin-bottom: 14px; font-size: 15px; }
+.ov-prose a { color: var(--accent); }
+
+/* Contact form */
+.ov-form { max-width: 520px; display: flex; flex-direction: column; gap: 14px; }
+.ov-field { display: flex; flex-direction: column; gap: 6px; }
+.ov-field label { font-size: 13px; color: var(--muted); }
+.ov-field input, .ov-field textarea {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 13px;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+.ov-field textarea { min-height: 120px; resize: vertical; }
+.ov-field input:focus, .ov-field textarea:focus { outline: none; border-color: var(--accent); }
+
+/* Chart route: full-viewport engine frame */
+.ov-chart-frame { position: fixed; inset: 0; border: 0; width: 100vw; height: 100vh; }
