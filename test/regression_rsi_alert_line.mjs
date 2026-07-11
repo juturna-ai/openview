@@ -66,7 +66,20 @@ const t4 = await p.evaluate(() => {
   return gone && priceOnMain && noRsiLine;
 });
 
-console.log(JSON.stringify({ t1_created: t1, t2_rsiLine: t2, t3_visToggle: t3, t4_cleanup: t4, errs }, null, 2));
+// t5 — badge/pill text for an RSI alert uses the short indicator-first format:
+//   "RSI 14, Crossing 53.99 <SYM>, <tf>"  (indicator first, comma-separated,
+//   symbol + lowercase tf key at the end). Price alerts stay symbol-first.
+const t5 = await p.evaluate(() => {
+  const sym = symLabel(activeSymbol);
+  const rsiMsg = defaultAlertMessage({ source: 'rsi', op: 'crossing', target: 'value', value: 53.988, interval: '1h' });
+  const priceMsg = defaultAlertMessage({ source: 'price', op: 'crossing', target: 'value', value: 100, interval: null });
+  const rsiOk = rsiMsg.startsWith(sourceLabel('rsi') + ', Crossing ') &&
+                rsiMsg.includes(' ' + sym) && rsiMsg.endsWith(', 1h');
+  const priceOk = priceMsg.startsWith(sym + ' Crossing ') && !priceMsg.includes('[');
+  return { rsiMsg, priceMsg, rsiOk, priceOk };
+});
+
+console.log(JSON.stringify({ t1_created: t1, t2_rsiLine: t2, t3_visToggle: t3, t4_cleanup: t4, t5_badge: t5, errs }, null, 2));
 await b.close();
-const ok = t1 && t2 && t3 && t4 && errs.length === 0;
+const ok = t1 && t2 && t3 && t4 && t5.rsiOk && t5.priceOk && errs.length === 0;
 process.exit(ok ? 0 : 1);

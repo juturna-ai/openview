@@ -1945,6 +1945,9 @@ function syncCrosshairToPanes(time, source){
         else { chart.setCrosshairPosition(0, time, candle); updateOhlcLegend(time); }
       }catch(e){}
     }
+    // Fill the RSI pane legend for the hovered bar (setCrosshairPosition on rsiChart
+    // doesn't reliably fire its crosshairMove, so we drive the legend from here).
+    try{ updateRsiLegend(time); }catch(e){}
   } finally { _xhairSyncing = false; }
 }
 // Register a sub-pane so hovering it relays the crosshair to all other panes.
@@ -1970,6 +1973,29 @@ function unregisterPane(pchart){
 }
 // The static RSI pane is always present.
 registerPane(rsiChart, rsiLine);
+
+// RSI legend value lookup (filled on each render in renderChart). The crosshair
+// legend reads these by time — see updateRsiLegend.
+let RSI_LEGEND_MAP = new Map();
+let RSI_MA_LEGEND_MAP = new Map();
+// Fill the RSI pane's legend (RSI + RSI-MA values) for the bar at `time`.
+// time==null → reset to the latest bar's values. Called from syncCrosshairToPanes
+// so every hover (main chart OR any sub-pane) updates it, since setCrosshairPosition
+// on the RSI pane doesn't reliably fire its own crosshairMove.
+function updateRsiLegend(time){
+  const vEl = document.getElementById("rsiVal");
+  const mEl = document.getElementById("rsiMaVal");
+  if(!vEl || !mEl) return;
+  let v, m;
+  if(time != null && RSI_LEGEND_MAP.has(time)){ v = RSI_LEGEND_MAP.get(time); m = RSI_MA_LEGEND_MAP.get(time); }
+  else {
+    // latest available value
+    const rv = [...RSI_LEGEND_MAP.values()]; v = rv.length ? rv[rv.length-1] : null;
+    const mv = [...RSI_MA_LEGEND_MAP.values()]; m = mv.length ? mv[mv.length-1] : null;
+  }
+  vEl.textContent = (v==null || isNaN(v)) ? "—" : v.toFixed(2);
+  mEl.textContent = (m==null || isNaN(m)) ? "—" : m.toFixed(2);
+}
 
 function resize(){
   chart.applyOptions({ width:chartEl.clientWidth, height:chartEl.clientHeight });
@@ -2613,6 +2639,11 @@ function renderData(data, keepView){
   const rm = rsiSmoothMA(r, RSI_PARAMS.smooth, RSI_PARAMS.maType);
   const rMap = new Map(r.map(d=>[d.time, d.value]));
   const rmMap = new Map(rm.map(d=>[d.time, d.value]));
+  // Expose value-by-time so the crosshair legend can read RSI/MA at the hovered bar.
+  // (setCrosshairPosition on the RSI pane doesn't reliably fire crosshairMove, so the
+  // legend can't rely on that event — syncCrosshairToPanes reads these maps instead.)
+  RSI_LEGEND_MAP = rMap;
+  RSI_MA_LEGEND_MAP = rmMap;
   const rFull  = data.map(b=> rMap.has(b.time)  ? {time:b.time, value:rMap.get(b.time)}  : {time:b.time});
   const rmFull = data.map(b=> rmMap.has(b.time) ? {time:b.time, value:rmMap.get(b.time)} : {time:b.time});
   // Extend each RSI series with the same future whitespace so the indicator pane
@@ -2631,8 +2662,8 @@ function renderData(data, keepView){
   rsiMa.setData(withFuture(data, rmFull));
   // Calculate Divergence: mark regular bullish/bearish RSI divergences at pivots.
   try{ rsiLine.setMarkers(RSI_PARAMS.divergence ? rsiDivergenceMarkers(data, r) : []); }catch(e){}
-  if(r.length)  document.getElementById("rsiVal").textContent   = r[r.length-1].value.toFixed(2);
-  if(rm.length) document.getElementById("rsiMaVal").textContent = rm[rm.length-1].value.toFixed(2);
+  // Default legend = latest bar (crosshair hover overrides via updateRsiLegend).
+  updateRsiLegend(null);
 
   // user indicators + custom scripts + alerts (engine defined later in file; guard for first paint)
   if(typeof renderAllIndicators==="function") renderAllIndicators();
@@ -2935,12 +2966,9 @@ if(IS_EMBED){
   // Any interaction inside this panel → tell the host to mark it selected.
   document.addEventListener("pointerdown", ()=>{ try{ parent.postMessage({fvx:"focus"}, "*"); }catch(e){} }, true);
 }
-rsiChart.subscribeCrosshairMove(p=>{
-  const v = p.seriesData.get(rsiLine);
-  const m = p.seriesData.get(rsiMa);
-  if(v) document.getElementById("rsiVal").textContent   = v.value.toFixed(2);
-  if(m) document.getElementById("rsiMaVal").textContent = m.value.toFixed(2);
-});
+// Direct hover over the RSI pane also updates its legend (in addition to the
+// syncCrosshairToPanes path, which covers hovering other panes).
+rsiChart.subscribeCrosshairMove(p=>{ updateRsiLegend(p && p.time); });
 
 // ── Watchlist ──
 const rowMap = {};
@@ -6054,7 +6082,7 @@ function rsiCollapse(){
   else rsiSetH(_rsiPrevH);
 }
 function hideRsiPane(){ rsiWrapEl.style.display="none"; try{ localStorage.setItem("fv_rsi_on","0"); }catch(e){} setTimeout(()=>{ try{ layoutPanes(); resize(); sizeCanvas(); alignPriceAxes(); }catch(e){} },0); }
-function showRsiPane(){ rsiWrapEl.style.display="";    try{ localStorage.setItem("fv_rsi_on","1"); }catch(e){} setTimeout(()=>{ try{ layoutPanes(); resize(); sizeCanvas(); alignPriceAxes(); }catch(e){} },0); }
+function showRsiPane(){ rsiWrapEl.style.display="";    try{ localStorage.setItem("fv_rsi_on","1"); }catch(e){} setTimeout(()=>{ try{ layoutPanes(); resize(); sizeCanvas(); alignPriceAxes(); updateRsiAlertLines(); }catch(e){} },0); }
 // Swap a pane with its neighbor above (dir −1) or below (dir +1) inside #subPanes —
 // TradingView's "Move pane up/down". The date axis re-derives from DOM order via
 // allPaneCharts()/updateTimeAxisVisibility.
@@ -9293,13 +9321,20 @@ function alertTargetValue(a){ return a.target==="value" ? a.value : alertSourceV
 function opLabel(op){ return ({crossing:"Crossing", crossUp:"Crossing Up", crossDown:"Crossing Down", gt:"Greater Than", lt:"Less Than"})[op]||op; }
 
 function defaultAlertMessage(a){
-  // Plain price alerts omit the "Price" label — the symbol already implies it.
-  const lhs=a.source==="price" ? "" : ` ${sourceLabel(a.source)}`;
   const rhs=a.target==="value" ? fmt(a.value) : sourceLabel(a.target);
-  const iv=a.interval && TF[a.interval] ? ` [${TF[a.interval].label}]` : "";
   // symLabel drops venue prefixes per leg (BINANCE:NEARUSDT/BINANCE:INJUSDT →
   // NEARUSDT/INJUSDT) — the pill/notification names the asset, not the exchange.
-  return `${symLabel(activeSymbol)}${lhs}${iv} ${opLabel(a.op)} ${rhs}`;
+  const sym=symLabel(activeSymbol);
+  // Lowercase raw tf key (e.g. "1h"), not the [1H] bracket form.
+  const iv=a.interval ? `, ${a.interval}` : "";
+  // Indicator alerts (RSI/MACD/…) lead with the indicator, short-form:
+  //   "RSI 14, Crossing 38.55 BTCUSDT, 1h"
+  // Plain price alerts keep symbol-first (the symbol already implies "price"):
+  //   "BTCUSDT Crossing 38.55"
+  if(a.source!=="price"){
+    return `${sourceLabel(a.source)}, ${opLabel(a.op)} ${rhs} ${sym}${iv}`;
+  }
+  return `${sym} ${opLabel(a.op)} ${rhs}`;
 }
 
 function removeAlert(id){ const i=alerts.findIndex(a=>a.id===id); if(i>=0){ alerts.splice(i,1); saveAlerts(); redraw(); renderAlertsPanel(); } }
