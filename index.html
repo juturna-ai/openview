@@ -21,6 +21,13 @@
     --accent:#2962ff; --hover:#e9edf4;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
+  /* Theme every native scrollbar (dialogs, menus, lists) — defaults are light and clash. */
+  *{scrollbar-width:thin; scrollbar-color:var(--border) var(--bg);}
+  ::-webkit-scrollbar{width:8px; height:8px; background:var(--bg);}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--muted);}
+  ::-webkit-scrollbar-corner{background:var(--bg);}
   html,body{height:100%; font-family:'Trebuchet MS',-apple-system,'Segoe UI',Roboto,Ubuntu,Tahoma,Arial,sans-serif; background:var(--bg); color:var(--text); overflow:hidden;}
   #app{display:flex; height:100vh; width:100vw;}
   /* Embed mode (grid panel): hide the watchlist so the panel is pure chart */
@@ -1828,6 +1835,38 @@ const rsiUnder = rsiChart.addBaselineSeries({
   priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false,
   autoscaleInfoProvider:rsiScale,
 });
+// Overbought / oversold fills (TradingView-style): the area between the RSI line and
+// the 70 band tints GREEN when RSI > 70, and between the line and 30 tints RED when
+// RSI < 30. Baseline series fed the RSI values: rsiOB anchored at 70 paints only its
+// TOP fill (RSI above 70); rsiOS anchored at 30 paints only its BOTTOM fill (below 30).
+// The opposite fill of each is transparent so nothing shows in the neutral 30–70 zone.
+// Added before rsiLine so the line/MA draw on top.
+// NOTE: the ACTIVE edge line (topLineColor for rsiOB, bottomLineColor for rsiOS) must
+// be non-transparent — in lightweight-charts 4.1.3 a fully-transparent baseline line
+// suppresses its fill entirely. A faint tint of the fill color keeps the look clean
+// while letting the fill render.
+// TradingView-toned fills with a gradual fade. TradingView's green #089981 / red
+// #f23645. For a baseline series, *Color1 is the gradient stop nearest the RSI line
+// (the extreme) and *Color2 is nearest the baseValue (the 70/30 band): fade from a
+// stronger tint at the extreme down to fully transparent at the band, so the overlay
+// fades gradually into the neutral zone.
+// Gradient mapping (verified empirically): for a baseline series, *Color1 is the stop
+// at the EXTREME end (farthest from baseValue) and *Color2 is at the BAND end (the
+// 70/30 level). We want it STRONG at the band and fading toward the RSI line, so the
+// band-end stop (…Color2) is the strong tint and the extreme-end stop (…Color1) fades
+// out. Tones = TradingView green #089981 / red #f23645.
+const rsiOB = rsiChart.addBaselineSeries({
+  baseValue:{ type:"price", price:70 }, lineWidth:2,
+  topFillColor1:"rgba(8,153,129,0.05)", topFillColor2:"rgba(8,153,129,0.6)", topLineColor:"rgba(8,153,129,0.9)",
+  bottomFillColor1:"rgba(0,0,0,0)", bottomFillColor2:"rgba(0,0,0,0)", bottomLineColor:"rgba(0,0,0,0)",
+  priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale,
+});
+const rsiOS = rsiChart.addBaselineSeries({
+  baseValue:{ type:"price", price:30 }, lineWidth:2,
+  topFillColor1:"rgba(0,0,0,0)", topFillColor2:"rgba(0,0,0,0)", topLineColor:"rgba(0,0,0,0)",
+  bottomFillColor1:"rgba(242,54,69,0.05)", bottomFillColor2:"rgba(242,54,69,0.6)", bottomLineColor:"rgba(242,54,69,0.9)",
+  priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale,
+});
 // dashed 70 / 30 bands — TradingView tints these purple (the RSI plot color).
 const band70  = rsiChart.addLineSeries({ color:"rgba(255,255,255,0.75)", lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
 const band30  = rsiChart.addLineSeries({ color:"rgba(255,255,255,0.75)", lineWidth:1, lineStyle:1, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false, autoscaleInfoProvider:rsiScale });
@@ -2336,24 +2375,35 @@ async function loadOlderHistory(){
   if(lastData.length >= MAX_BARS){ _historyExhausted=true; return; }  // 50k-bar ceiling reached
   _loadingOlder=true;
   const sym=activeSymbol, tf=activeTF, oldest=lastData[0].time;
-  const startToken=loadToken;   // if a symbol/TF switch happens mid-fetch, this stale prepend must abort
   const tfMeta=TF[tf]||TF["1d"];
   try{
     let older=[];
+    // Fetch depth is venue-aware so the prepend lands FAST. Binance/Bybit return
+    // 1000 bars/page, so 2 pages = 2000 older bars — plenty per swipe and it lands
+    // in ~half the round-trips. Coinbase caps at 300/page, so it needs more pages
+    // to add a meaningful chunk. Repeated triggers (fired by the pan clamp when the
+    // user keeps dragging into the wall) deepen further on demand.
+    const _firstLeg = sym.includes("/") ? sym.split("/")[0] : sym;
+    const _pageBig = resolveLeg(_firstLeg).exchange.id === "COINBASE";
+    const _pages = _pageBig ? 4 : 2;
     if(sym.includes("/")){
       const [a,b]=sym.split("/");
-      const [pa,pb]=await Promise.all([ fetchOlderPages(a,tf,oldest,4), fetchOlderPages(b,tf,oldest,4) ]);
+      const [pa,pb]=await Promise.all([ fetchOlderPages(a,tf,oldest,_pages), fetchOlderPages(b,tf,oldest,_pages) ]);
       if(pa.length && pb.length) older=makeRatio(finalizeBars(pa,tfMeta), finalizeBars(pb,tfMeta));
     } else {
-      const raw=await fetchOlderPages(sym,tf,oldest,4);
+      const raw=await fetchOlderPages(sym,tf,oldest,_pages);
       if(raw.length) older=finalizeBars(raw,tfMeta);
     }
     // keep only bars strictly older than what we already have
     older=older.filter(b=>b.time<oldest);
     if(!older.length){ _historyExhausted=true; return; }
-    // user switched symbol/TF mid-fetch — token bumped by the new loadChart. Abort
-    // so we never prepend the previous TF's bars onto the new chart (the "glitch").
-    if(startToken!==loadToken || sym!==activeSymbol || tf!==activeTF) return;
+    // user switched symbol/TF mid-fetch — abort so we never prepend the previous
+    // TF's bars onto the new chart (the "glitch"). Deliberately NOT keyed on
+    // loadToken: the silent 20s poll also bumps the token (it calls loadChart with
+    // keepView), and aborting on that silently discarded ~1-in-4 scroll-back
+    // prepends mid-fetch — the user hit the history wall, waited, and nothing
+    // loaded ("loading slow"). The sym/tf comparison alone catches real switches.
+    if(sym!==activeSymbol || tf!==activeTF) return;
     // don't prepend past the 50k ceiling — trim the older batch if it would overflow
     const room = MAX_BARS - lastData.length;
     if(older.length > room){ older = older.slice(older.length - room); _historyExhausted=true; }
@@ -2366,9 +2416,12 @@ async function loadOlderHistory(){
   }catch(e){ /* transient; will retry on next pan */ }
   finally{ _loadingOlder=false; }
 }
-// Trigger when the left edge of the view gets within ~30 bars of loaded history.
+// Trigger while the left edge is still ~200 bars away from loaded history, so the
+// (multi-second, on slow networks) older-history fetch starts BEFORE the user pans
+// into the wall — the batch is usually prepended by the time they reach the edge,
+// so scrolling back feels continuous instead of "hit a wall, wait, then it loads".
 chart.timeScale().subscribeVisibleLogicalRangeChange(r=>{
-  if(r && r.from < 30 && !_loadingOlder && !_historyExhausted) loadOlderHistory();
+  if(r && r.from < 200 && !_loadingOlder && !_historyExhausted) loadOlderHistory();
 });
 
 // Build synthetic A/B ratio (spread) by aligning candles on matching timestamps
@@ -2547,6 +2600,9 @@ function renderData(data, keepView){
   // baseValue 70 fills the whole region regardless of the RSI value.
   rsiOver.setData(withFutureConst(data, data.map(b=>({time:b.time, value:30})), 30));
   rsiUnder.setData(withFuture(data, rFull));           // transparent no-op
+  // Overbought/oversold fills track the RSI line itself (green above 70, red below 30).
+  rsiOB.setData(withFuture(data, rFull));
+  rsiOS.setData(withFuture(data, rFull));
   band70.setData(withFutureConst(data, data.map(b=>({time:b.time, value:70})), 70));
   band50.setData(withFutureConst(data, data.map(b=>({time:b.time, value:50})), 50));
   band30.setData(withFutureConst(data, data.map(b=>({time:b.time, value:30})), 30));
@@ -2704,6 +2760,17 @@ async function loadChart(symbol, tf, keepView){
   // to latest — the cache paint already snapped, and the user may have panned since.
   const paintFinal = (data)=>{
     if(!fresh() || !data.length) return;
+    // Preserve lazily-deepened history on a background refresh. loadOlderHistory()
+    // may have prepended thousands of older bars as the user scrolled back; a fresh
+    // fetch only reaches the DEFAULT depth, so replacing lastData wholesale would
+    // discard those older bars, shrink the series, and strand the user's view off
+    // the (now shorter) left end — the "it bounces back to the start" bug. Instead,
+    // splice the fresh recent bars onto the deeper older tail we already hold.
+    if(keepView && lastData.length > data.length && data.length){
+      const freshOldest = data[0].time;
+      const olderTail = lastData.filter(b=>b.time < freshOldest);   // bars older than the fresh fetch
+      if(olderTail.length) data = olderTail.concat(data);
+    }
     renderData(data, paintedFromCache ? true : keepView);
   };
   try{
@@ -4883,8 +4950,29 @@ function doPan(p){
   const ts=chart.timeScale();
   // — horizontal: scroll the time scale by whole-bar deltas —
   const spacing = currentBarSpacing();                       // px per bar
-  const deltaBars = (p.x - panState.startX) / spacing;        // drag-left → scroll back
-  ts.scrollToPosition(panState.startScroll - deltaBars, false);
+  const deltaBars = (p.x - panState.startX) / spacing;        // drag-right → scroll back
+  let targetScroll = panState.startScroll - deltaBars;
+  // Clamp the back-scroll so the oldest LOADED bar can't be dragged past the left
+  // edge into empty negative-index space (which blanks the chart, then "bounces"
+  // when a lazy older-history prepend snaps it back). A fast swipe can jump `from`
+  // by >1000 bars in one gesture — far past the from<200 loadOlderHistory trigger —
+  // so without this clamp the fetch can't keep up and the view strands in the void.
+  // Bound so the visible range's left edge (`from`) stays at ≥0: the extra bars we
+  // can still scroll back = (current from). scrollPosition moves 1:1 with `from`,
+  // so subtract that headroom from startScroll to get the floor. Kick off a deepen
+  // when we hit the wall so continued dragging keeps pulling in history.
+  // Don't let `from` go below 0. `from` and scrollPosition move 1:1, so the floor
+  // for the target scroll is (currentScroll − currentFrom): scrolling back by that
+  // much lands `from` exactly on 0 (oldest bar at the left edge).
+  const vr = ts.getVisibleLogicalRange();
+  if(vr){
+    const floor = ts.scrollPosition() - Math.max(0, vr.from);
+    if(targetScroll < floor){
+      targetScroll = floor;
+      if(!_loadingOlder && !_historyExhausted) loadOlderHistory();   // pull more so the wall recedes
+    }
+  }
+  ts.scrollToPosition(targetScroll, false);
   // — vertical: translate the price range 1:1 with the cursor (unbounded) —
   if(!panState.startRange){                                   // late-bind if press was too early
     if(capturePanPrice()) panState.startY = p.y;             // re-anchor so there's no jump
@@ -5390,7 +5478,15 @@ dcanvas.addEventListener("wheel", e=>{
   // Shift (or horizontal-dominant trackpad) → pan instead of zoom.
   if(e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)){
     const delta = (e.shiftKey ? e.deltaY : e.deltaX);
-    const shift = (delta / 100) * span * 0.1;       // gentle horizontal pan
+    let shift = (delta / 100) * span * 0.1;         // gentle horizontal pan
+    // Same left-edge clamp as doPan: a fast trackpad swipe can push `from` far
+    // past the oldest loaded bar into empty negative space (blank chart, then a
+    // "bounce" when the lazy prepend lands). Floor `from` at 0 and kick off a
+    // deepen when the wall is hit so continued scrolling keeps pulling history.
+    if(from + shift < 0){
+      shift = -from;
+      if(!_loadingOlder && !_historyExhausted) loadOlderHistory();
+    }
     ts.setVisibleLogicalRange({ from: from + shift, to: to + shift });
     redraw();
     return;
@@ -8280,6 +8376,9 @@ function applyRsiStyle(){
   RSI_STYLE_KEYS.forEach((k,i)=>{ const st=RSI_PARAMS.style[k], s=S[i]; if(!s||!st) return;
     try{ s.applyOptions({ color:st.color, lineWidth:st.width||1, lineStyle:st.ls||0, visible:st.on!==false }); }catch(e){}
   });
+  // Overbought/oversold fills follow the RSI line's own visibility.
+  try{ const rsiOn = (RSI_PARAMS.style.rsi||{}).on!==false;
+    rsiOB.applyOptions({ visible:rsiOn }); rsiOS.applyOptions({ visible:rsiOn }); }catch(e){}
 }
 function openRsiSettings(){
   const before=JSON.parse(JSON.stringify(RSI_PARAMS));

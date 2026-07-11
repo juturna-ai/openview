@@ -328,3 +328,28 @@ idle behavior is silence.
   grip covers both.
 - **`pkill -f <pattern>` can match the invoking shell's own command line** (exit 144 mid-
   script) — put cleanup pkill in its own command or use a PID file.
+
+- **Reproduce the EXACT user scenario, incl. venue and gesture direction.** The
+  "chart bounces to the start" bug: I first fixed a real-but-secondary issue (20s
+  refresh discarding deepened history) using BTC-USD/Coinbase + programmatic
+  `setVisibleLogicalRange`, and it "passed" — but the user was on Binance/NEARUSDT
+  dragging with a real mouse. The true bug only shows with a **real drag** (the
+  `scrollToPosition`-based `doPan` path, not `setVisibleLogicalRange`) dragging
+  RIGHT (=back in time): a fast swipe scrolls `from` past 0 into empty negative
+  space → chart blanks → lazy prepend snaps it back = the "bounce". Fix was a
+  left-edge clamp in `doPan` (floor `from` at 0), not the refresh merge.
+- **Playwright mouse-drag repro gotchas:** (1) the plot canvas is narrower than the
+  window — the right sidebar/price axis eat space; check `#draw` getBoundingClientRect
+  and start drags clear of the axis, or the mousedown never hits `startPan` and
+  nothing pans. (2) Drag DIRECTION matters: dragging the cursor right scrolls back
+  in time; left scrolls forward into future whitespace. Getting it backwards makes
+  a working chart look "stranded" when it's just normal right-side whitespace.
+
+- **Answer direct questions FIRST, in one plain sentence, before any other content.**
+  User asked "did you deploy?" — the answer ("No, changes are local-only; the live
+  site still has the bug") was buried under fix narration and they had to ask twice,
+  angrily. A yes/no question about deployment state is urgent context for THEM;
+  lead with it, bold it, then continue the work.
+- **When a fix "doesn't work" for the user, first confirm WHERE they tested.**
+  Local-only changes can't fix the deployed site (openview.site). Before re-opening
+  an investigation, ask/verify which environment produced the repeat report.
