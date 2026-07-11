@@ -17,15 +17,22 @@ export default function HomeNav() {
   const pathname = usePathname();
   return (
     <nav className="ov-hnav">
-      {LINKS.map((l) => (
-        <Link
-          key={l.href}
-          href={l.href}
-          className={'ov-hnav-link' + (pathname === l.href ? ' active' : '')}
-        >
-          {l.label}
-        </Link>
-      ))}
+      <Link href="/home" className="ov-hnav-brand">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/assets/freeview.png" alt="OpenView" />
+        <span>OpenView</span>
+      </Link>
+      <div className="ov-hnav-links">
+        {LINKS.map((l) => (
+          <Link
+            key={l.href}
+            href={l.href}
+            className={'ov-hnav-link' + (pathname === l.href ? ' active' : '')}
+          >
+            {l.label}
+          </Link>
+        ))}
+      </div>
     </nav>
   );
 }

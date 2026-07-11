@@ -9,6 +9,18 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
       <OvTabs active="home" />
       <HomeNav />
       {children}
+      <footer className="ov-footer">
+        <div>© {new Date().getFullYear()} OpenView</div>
+        <p className="ov-powered-by">
+          Powered by{' '}
+          <a href="https://juturna.io/" target="_blank" rel="noopener noreferrer">
+            Juturna
+          </a>
+        </p>
+        <div className="ov-footer-links">
+          <a href="/home/privacy">Privacy</a>
+        </div>
+      </footer>
     </>
   );
 }

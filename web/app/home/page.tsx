@@ -6,9 +6,11 @@ export const metadata: Metadata = { title: 'OpenView' };
 export default function HomePage() {
   return (
     <main className="ov-home">
-      <section className="ov-home-hero">
-        <h1>OpenView</h1>
-      </section>
+      <div className="ov-home-glow" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/assets/freeview.png" alt="OpenView" className="ov-home-logo" />
+      <h1 className="ov-home-brand">OpenView</h1>
+      <p className="ov-home-tagline">the charting app</p>
     </main>
   );
 }

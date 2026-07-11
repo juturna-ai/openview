@@ -1,3 +1,8 @@
+## Dev Server — Port 3333 ONLY
+- The web app dev server MUST ALWAYS run on port 3333. Never use any other port under any circumstance.
+- Run it from `web/` with `npm run dev` (the `dev` script is pinned to `-p 3333`).
+- If port 3333 is in use, stop the process occupying it — do NOT fall back to another port.
+
 ## Communication style
 - Don't narrate what you're about to do. Just do it.
 - Don't explain reasoning unless I ask for it or unless a decision is genuinely ambiguous.

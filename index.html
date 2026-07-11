@@ -269,6 +269,15 @@
     pointer-events:none; box-shadow:0 2px 8px #0006;}
   #rsiAlertPill .trash{cursor:pointer; opacity:.8; pointer-events:auto;}
   #rsiAlertPill .trash:hover{opacity:1;}
+  /* Crosshair ⊕ quick-add-alert button for the RSI pane (mirrors the main pane's on-crosshair
+     ⊕). Rides the cursor's y at the right edge; click → add an RSI alert at that level. It's an
+     HTML element (not a canvas) because the RSI sub-pane has no overlay canvas — same approach
+     as #rsiAlertPill above. Positioned relative to #rsiWrap, like the pill. */
+  #rsiCrossPlus{position:absolute; z-index:7; display:none; transform:translateY(-50%);
+    align-items:center; justify-content:center; width:16px; height:16px;
+    background:#1e222d; border:1px solid #9aa0aa; color:#d1d4dc; border-radius:50%;
+    font-size:13px; line-height:1; cursor:pointer; pointer-events:auto; box-shadow:0 2px 8px #0006;}
+  #rsiCrossPlus:hover{border-color:#d1d4dc; color:#fff;}
 
   #watchlist{width:var(--wl-w,300px); background:var(--bg); border-left:1px solid var(--border);
     display:flex; flex-direction:column; overflow:hidden; position:relative;}
@@ -980,6 +989,7 @@
       <div id="rsiLabel"><span id="rsiName">RSI 14 close</span> <b id="rsiVal" style="color:#7e57c2">—</b> <b id="rsiMaVal" style="color:#e0a82e">—</b></div>
       <div id="rsi"></div>
       <div id="rsiAlertPill"><span class="txt"></span><span class="trash">🗑</span></div>
+      <div id="rsiCrossPlus" title="Add RSI alert here">+</div>
     </div>
     <div id="subPanes"></div>
     <!-- Bottom bar (TradingView): date-range shortcuts left, timezone + scale toggles right -->
@@ -5684,7 +5694,10 @@ dcanvas.addEventListener("mouseleave", ()=>{
   updateIndLegendValues(null);           // clear indicator hover readouts
   updateDataWindow(null);                // Data window falls back to the latest bar
   if(lastData.length){ updateOhlcLegend(lastData[lastData.length-1].time); }  // back to latest bar
-  if(draw.hover||draw.alertHover){ draw.hover=null; draw.alertHover=null; redraw(); }
+  if(draw.hover||draw.alertHover){ draw.hover=null; draw.alertHover=null; }
+  redraw();   // always repaint so the crosshair ⊕ (and any hover state) clears when the
+              // cursor leaves the plot (e.g. moving down into the RSI/indicator pane) —
+              // drawCrossPlus() returns early with draw.mouse=null, so this erases it.
 });
 
 // ── Touch bridge (phones / the mobile app's WebView) ────────────────────────
@@ -9079,10 +9092,13 @@ function updateRsiAlertLines(){
   if(!alertLinesVisible) return;
   alerts.forEach(a=>{
     if(a.source!=="rsi" || a.target!=="value" || a.value==null || !isFinite(a.value)) return;
+    // The RSI pane already has WHITE 30/50/70 band lines, so the old white
+    // alertLineColor line was invisible against them. Use the accent blue at width 2
+    // + an axis pill so the alert level clearly stands out from the bands.
     try{ rsiAlertLines.push({ id:a.id, pl:rsiLine.createPriceLine({
-      price:a.value, color:a.active?alertLineColor:"#888",
-      lineWidth:1, lineStyle:LightweightCharts.LineStyle.Dashed,
-      axisLabelVisible:false, title:"",   // no axis pill — hover info lives in the on-line pill
+      price:a.value, color:a.active?"#2962FF":"#888",
+      lineWidth:2, lineStyle:LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible:true, title:"",
     }) }); }catch(e){}
   });
 }
@@ -9163,14 +9179,55 @@ rsiEl.addEventListener("contextmenu", e=>{
   e.preventDefault(); e.stopPropagation();
   showAlertMenu(id, e.clientX, e.clientY);
 }, true);
+// ── RSI crosshair ⊕ (quick-add alert) — mirrors the main pane's drawCrossPlus/addQuickAlert
+// but for the RSI pane. The pane has no overlay canvas, so this is an HTML button (like
+// #rsiAlertPill) that rides the cursor's y at the right edge; clicking adds a source:"rsi"
+// alert at the hovered level. saveAlerts() already redraws the native RSI line via
+// updateRsiAlertLines(), so no extra wiring is needed.
+const rsiCrossPlusEl=document.getElementById("rsiCrossPlus");
+function addQuickRsiAlert(value){
+  if(value==null || !isFinite(value)) return;
+  const a={ id:"a"+(alertUid++), source:"rsi", op:"crossing", target:"value", value:roundAlertAuto(value),
+    trigger:"every", expiry:null, message:"",
+    notify:{...ALERT_DEFAULT_NOTIFY}, sound:{...ALERT_DEFAULT_SOUND}, active:true, _last:null, interval:activeTF };
+  alerts.push(a); saveAlerts(); renderAlertsPanel(); checkAlerts();
+  toast("RSI alert added at "+fmt(a.value));
+}
+function hideRsiCrossPlus(){ if(rsiCrossPlusEl) rsiCrossPlusEl.style.display="none"; }
+if(rsiCrossPlusEl){
+  rsiCrossPlusEl.addEventListener("mousedown", e=>{
+    e.preventDefault(); e.stopPropagation();
+    const y=parseFloat(rsiCrossPlusEl.style.top);
+    const v=rsiLine.coordinateToPrice(y);
+    if(v!=null) addQuickRsiAlert(Math.max(0, Math.min(100, v)));
+    hideRsiCrossPlus();
+  });
+}
 document.addEventListener("mousemove", e=>{
   if(rsiAlertDrag){ rsiAlertDragMove(e); return; }
   // hover hint + pill over a line (skip while axis-stretching; axis gutter excluded)
-  if(rsiAxisDrag) return;
+  if(rsiAxisDrag){ hideRsiCrossPlus(); return; }
   const id=rsiAlertHit(rsiPointerPt(e));
   rsiEl.classList.toggle("alert-hover", !!id);
   if(id) showRsiAlertPill(id); else if(_rsiPillId) hideRsiAlertPill();
+  // ⊕ quick-alert button: show while the crosshair tool is active and the cursor is inside
+  // the RSI plot (not the axis gutter) and not over an existing alert line (the pill wins).
+  if(rsiCrossPlusEl){
+    const p=rsiPointerPt(e);
+    // Dead-zone the top/bottom edges: the pane-resize grip (.paneResize, ~7px tall) rides the
+    // top border, so a ⊕ near y≈0 would sit ON the divider. Require the cursor to be clearly
+    // inside the plot — the ⊕ disappears crossing the intersection and reappears past it.
+    const EDGE=7;
+    const inPane=p.x>=0 && p.x<=rsiEl.clientWidth && p.y>=EDGE && p.y<=rsiEl.clientHeight-EDGE;
+    const show=draw.tool==="cross" && inPane && !inRsiPriceAxis(p) && !id && !rsiAlertDrag && !rsiAxisDrag;
+    if(show){
+      rsiCrossPlusEl.style.top=p.y+"px";
+      rsiCrossPlusEl.style.right=(rsiAxisW()+5)+"px";
+      rsiCrossPlusEl.style.display="flex";
+    } else hideRsiCrossPlus();
+  }
 });
+if(rsiEl) rsiEl.addEventListener("mouseleave", hideRsiCrossPlus);
 document.addEventListener("touchmove", rsiAlertDragMove, {passive:false});
 document.addEventListener("mouseup", rsiAlertDragEnd);
 document.addEventListener("touchend", rsiAlertDragEnd);
