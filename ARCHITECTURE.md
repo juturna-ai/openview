@@ -329,7 +329,7 @@ The **RSI sub-pane** gets the same axis stretch independently. It's a separate L
 
 ### Catalog — `IND_CATALOG`
 
-~76 entries, each with `{type, name, cat, pane, params}`. Categories: Moving Averages, Oscillators, Momentum, Trend, Volatility, Volume, Bill Williams, Other. `pane` is either `"main"` (overlay) or `"sub"` (separate pane below `#subPanes`). "Wave 5" added the full TradingView-technicals parity set — McGinley, KAMA, Chande Kroll Stop, Linear Regression Channel, TSI, KST, RVI, SMI, Woodies CCI, Connors RSI, Ease of Movement, Klinger, Net Volume, Volume Oscillator, TWAP, Bollinger %B, Historical Volatility, Mass Index, Ulcer Index, Bull Bear Power, MA Ribbon, 52-Week High/Low. Adding an indicator = 4 edits: `IND_CATALOG` entry + `plotSpec` case (series descriptors) + `renderIndicator` case (calc → setData) + a calc function.
+~76 entries, each with `{type, name, cat, pane, params}`. Categories: Moving Averages, Oscillators, Momentum, Trend, Volatility, Volume, Bill Williams, Other. `pane` is either `"main"` (overlay) or `"sub"` (separate pane below `#subPanes`). "Wave 5" added the full TradingView-technicals parity set — McGinley, KAMA, Chande Kroll Stop, Linear Regression Channel, TSI, KST, RVI, SMI, Woodies CCI, Connors RSI, Ease of Movement, Klinger, Net Volume, Volume Oscillator, TWAP, Bollinger %B, Historical Volatility, Mass Index, Ulcer Index, Bull Bear Power, MA Ribbon, 52-Week High/Low. Adding an indicator = 5 edits: `IND_CATALOG` entry + `plotSpec` case (series descriptors) + `renderIndicator` case (calc → setData) + a calc function + an `IND_INFO` entry (the ⓘ explainer text).
 
 ### Lifecycle
 
@@ -351,7 +351,7 @@ Calc helpers return shorter arrays (they start at `i = period - 1`). A sub-pane 
 
 ### Hardwired indicators
 
-MAs (default: seven EMAs 7/25/99/150/200/300/400) are held in the mutable `MAS` array (`{p, color, w, on, type, src, ls}`) and rendered directly in `renderData` via `renderMaLegend` → `maLine`. `maLine(data, m)` picks the source column (`src`: close/open/high/low/hl2/hlc3/ohlc4) and MA kind (`type`: sma/ema/wma/rma via `smaA`/`emaA`/`wmaA`/`rmaA`). They are **editable**: the `#maLegend` row ends with a ⚙ gear (`#maGear`) opening `openMaSettings` — a dialog to change each MA's type, period, source, color, width, line style, toggle visibility, add/remove, and Reset to defaults (`DEFAULT_MAS`). Add/remove rebuilds the line series via `rebuildMaSeries` (`maSeriesOpts` shares the option shape); edits persist to `localStorage["fv_mas"]` (`saveMas`). The legend label reflects the type (e.g. `EMA25`, `SMMA99`) via `maTag`. RSI(14) is rendered via `rsiSeries` / `maOfSeries` into the built-in `#rsiWrap` pane (not part of `indicators[]`). The pane is HOSTED inside `#subPanes` so it can be reordered; its label carries ↑/↓ move-pane, ▁ collapse, ⚙ settings, × close (no maximize) (persisted `fv_rsi_on`; the chart's right-click menu gains "Show RSI pane" while closed) — and a `.paneResize` grip on its top border drags the pane taller/shorter (70px … 60% of window), resizing the LWC chart live.
+MAs (default: seven EMAs 7/25/99/150/200/300/400) are held in the mutable `MAS` array (`{p, color, w, on, type, src, ls}`) and rendered directly in `renderData` via `renderMaLegend` → `maLine`. `maLine(data, m)` picks the source column (`src`: close/open/high/low/hl2/hlc3/ohlc4) and MA kind (`type`: sma/ema/wma/rma via `smaA`/`emaA`/`wmaA`/`rmaA`). They are **editable**: the `#maLegend` row ends with a ⚙ gear (`#maGear`) opening `openMaSettings` — a dialog to change each MA's type, period, source, color, width, line style, toggle visibility, add/remove, and Reset to defaults (`DEFAULT_MAS`). Add/remove rebuilds the line series via `rebuildMaSeries` (`maSeriesOpts` shares the option shape); edits persist to `localStorage["fv_mas"]` (`saveMas`). The legend label reflects the type (e.g. `EMA25`, `SMMA99`) via `maTag`. RSI(14) is rendered via `rsiSeries` / `maOfSeries` into the built-in `#rsiWrap` pane (not part of `indicators[]`). The pane is HOSTED inside `#subPanes` so it can be reordered; its label carries ⓘ info, ▁ collapse, ⚙ settings, × close (no maximize) (persisted `fv_rsi_on`; the chart's right-click menu gains "Show RSI pane" while closed) — and a `.paneResize` grip on its top border drags the pane taller/shorter (70px … 60% of window), resizing the LWC chart live.
 
 ### Indicators dialog — `toggleIndicatorsMenu`
 
@@ -369,6 +369,19 @@ A tabbed dialog (**Inputs / Style / Visibility**), driven by two data sources:
 - **`ensurePlotState(ind)`** seeds `plotStyle`/`plotHidden` from `plotSpec` defaults (width rounded to an integer 1–6) the first time, and grows the arrays if the plot count changes (e.g. ribbon `count`).
 - **`applyIndicatorStyle(ind)`** applies the stored style/visibility/precision onto the live LWC series; called after every `renderIndicator` (which only `setData`s, never recreates series) and on `addIndicator`.
 - Persistence: `saveIndicators()` serializes `plotStyle`, `plotHidden`, `precision` alongside `params`/`hidden`; `loadIndicators` restores them through `addIndicator` opts. Legacy single `color` param stays synced to `plotStyle[0].color` so the legend swatch matches. See `test/regression_ind_settings.mjs`.
+
+### Indicator information — `openIndicatorInfo(type, name)` + `IND_INFO`
+
+An ⓘ button on every indicator opens a read-only explainer dialog, so a user can find out what an indicator actually does without leaving the chart.
+
+- **`IND_INFO[type]`** — hand-authored prose keyed by `IND_CATALOG` type, one entry per indicator (all ~77 covered; a missing type still yields a usable dialog). Each entry is `{what, how, use}`, rendered as the three sections **What it is** / **How to read it** / **What it's for**. The dialog header also shows the catalog category and whether the indicator draws on the price chart or in a separate pane.
+- **Emphasis** — the prose uses `*asterisks*` for emphasis. `openIndicatorInfo` HTML-escapes the text **first**, then converts `*…*` to `<em>`, so the only markup ever injected is the `<em>` tags it added itself.
+- **Entry points** — the button is wired in three places, all calling `openIndicatorInfo`: the generic sub-pane label (`buildIndicatorSeries`), the on-chart overlay legend row (`renderIndLegend`), and the built-in RSI pane label (`wireRsiPaneControls`, which passes the `"rsi"` type since that pane isn't an `indicators[]` entry).
+- **Rendering** — the button is a `.infoBtn` span containing a plain ASCII `i`, with the circle drawn in CSS. The `ⓘ` character (U+24D8) is **not** in the app's Trebuchet MS font stack and renders as a tofu box, so it must not be used as a glyph.
+- The dialog reuses the shared `#settingsDlg` element (as every other dialog here does) with an added `.info-dlg` class for its wider, prose-oriented layout; `closeDlg()` strips `info-dlg` so a subsequent settings dialog doesn't inherit it.
+- **No backdrop, and draggable** — unlike every other dialog, the info panel does **not** open `#dlgBackdrop`, so the chart behind it stays fully visible and usable while it's open. It's dragged by its header instead (`makeDialogDraggable`). Two consequences that must be preserved:
+  - The dialog is centred with `transform:translate(-50%,-50%)`, which cannot coexist with explicit coords — so the first drag bakes the current box into `left`/`top` and sets `transform:none`. `closeDlg()` clears all three inline styles so the next dialog re-centres.
+  - With no backdrop there is nothing shielding the chart, so events landing on the dialog would otherwise *also* drive the chart's pan/zoom/crosshair handlers (dragging the dialog panned the chart underneath). `makeDialogDraggable` installs a one-time event shield on the dialog element that `stopPropagation()`s `pointerdown`/`mousedown`/`wheel`/`touchstart`/`dblclick`/`contextmenu`. Any future backdrop-less dialog needs the same shield.
 
 ---
 
@@ -479,7 +492,8 @@ For `rsi`-vs-`value` alerts, `updateRsiAlertLines()` creates native lightweight-
 | `ov_notes` | `Note[]` — the notes board (see §15). Sorted pinned-first, then most-recently-updated. | `addNote()` / `updateNote()` / `deleteNote()` in `app/home/journal/notes.ts` | `loadNotes()` (same file) |
 | `ov_holdings` | `Holding[]` — wallet portfolio (see §16). Fields are Reach's snake_case (`asset_type`, `avg_buy_price`) so holdings stay portable with the desktop app. | `addHolding()` / `updateHolding()` / `deleteHolding()` in `app/home/wallet/holdings.ts` | `loadHoldings()` (same file) |
 | `ov_portfolio_snapshots` | `Snapshot[]` (`{t, value}`) — portfolio-value time series backing the History chart. Appended on each successful price poll, throttled to one per 5 min, capped at 26k points. Reach stores these in SQLite; with no server DB they live here, which is why the chart shows "Collecting data" until two polls land. | `recordSnapshot()` in `app/home/wallet/holdings.ts` | `loadSnapshots()` (same file) |
-| `ov_tracked_wallets` | `TrackedWallet[]` (`{id, address, chain, label?}`) — on-chain addresses watched by the Wallet Tracker (see §16). Seeded with Reach's 20 known whale/exchange wallets **only when the key has never been written** (`raw === null`); an explicitly-stored `[]` is honoured as empty, so a user who clears the list doesn't get all 20 back on reload. | `saveTracked()` in `app/home/wallet/chains.ts` | `loadTracked()` / `defaultWallets()` (same file) |
+| `ov_tracked_wallets` | `TrackedWallet[]` (`{id, address, chain, label?}`) — on-chain addresses watched by the Wallet Tracker (see §16). Seeded with the 173 known whale/exchange wallets in `DEFAULT_WALLETS` (~20 per chain, all 10 chains) **only when the key has never been written** (`raw === null`); an explicitly-stored `[]` is honoured as empty, so a user who clears the list doesn't get them all back on reload. When the seed set itself changes, `SEED_VERSION` drives a migration that swaps stale seeds for current ones while preserving user-added rows (§16). | `saveTracked()` in `app/home/wallet/chains.ts` | `loadTracked()` / `defaultWallets()` (same file) |
+| `ov_tracked_seed_version` | `number` — which generation of `DEFAULT_WALLETS` the stored list was seeded from. Absent/`1` = Reach's original 20; `2` = the 173-wallet set. Lets an existing user pick up a new seed set without losing wallets they added themselves. | `saveTracked()` (same file) | `loadTracked()` (same file) |
 
 *(Not every key above is exhaustive — chart-settings/tool-favorite/template keys also exist; this table covers the durable app state a reader is most likely to look up.)*
 
@@ -758,15 +772,17 @@ The binding constraint (verified in code, not assumed):
 | `/home` | `app/home/page.tsx` | **Landing page.** Hero-only "OpenView". |
 | `/home/openview` | `app/home/openview/page.tsx` | Platform description (what OpenView is). |
 | `/home/app` | `app/home/app/page.tsx` | The phone app. |
+| `/home/docs` | `app/home/docs/page.tsx` | **Docs — AI assistant (MCP + API).** Full setup guide for the LLM bridge: quick start, MCP tool table, REST endpoints, config, security. Mirrors `mcp/README.md` — keep both in sync when the bridge API changes. The chart's Help panel links here rather than restating it. |
 | `/home/about` | `app/home/about/page.tsx` | Who we are. |
 | `/home/journal` | `app/home/journal/page.tsx` + `JournalShell.tsx` (`'use client'`) | **Trade journal dashboard** (folder-tab "Journal"): sidebar + Calendar/Notes. See §15. |
-| `/home/wallet` | `app/home/wallet/page.tsx` + `WalletShell.tsx` (`'use client'`) | **Wallet dashboard** (folder-tab "Wallet"): sidebar + Wallet / Gainers & Losers / Wallet Tracker. See §16. |
+| `/home/wallet` | `app/home/wallet/page.tsx` + `WalletShell.tsx` (`'use client'`) | **Wallet dashboard** (folder-tab "Wallet"): sidebar + Wallet / Leaderboards / Gainers & Losers / Wallet Tracker. See §16. |
 | `/api/market/prices` | `app/api/market/prices/route.ts` | POST holdings → `{symbol: {price, change24h}}`. Server-side price proxy (§16). |
-| `/api/market/movers` | `app/api/market/movers/route.ts` | GET metals + currencies + stocks/ETFs ranked by 24h move (§16). |
 | `/api/market/cmc` | `app/api/market/cmc/route.ts` | GET CoinMarketCap listing + spotlight + Fear & Greed — powers the market page's 6 crypto tabs (§16). No API key; see §16. |
+| `/api/market/screener` | `app/api/market/screener/route.ts` | GET `{stocks, etfs, commodities}` — the non-crypto Leaderboards universes (§16). Keyless: Nasdaq's screener returns 500 market-cap-ranked US stocks in **one** request; ETFs (40, curated) and commodity futures (16) are priced per-symbol off Yahoo. The size column is filled from Yahoo's crumb-gated `quoteSummary` — **AUM** for ETFs, **notional value** (open interest × price × contract size) for commodities, which have no market cap. |
+| `/api/market/asset` | `app/api/market/asset/route.ts` (+ `descriptions.ts`, `tokenized.ts`) | GET `?cls=crypto\|stocks\|etfs\|commodities&symbol=…\|id=…&range=24H\|7D\|1M\|1Y\|ALL&mktPage=N` → one **asset detail** payload (quote, price series, stats, links, description, markets) for the page a leaderboard row opens into (§16.1). Keyless; normalises all four classes onto a single shape. **Every** class carries a description (crypto→CMC, stocks→Nasdaq, commodities→Wikipedia, ETFs→hardcoded); crypto carries a markets table, and a commodity with a tokenized proxy (gold→XAUt) carries a real CEX/DEX one for **the token** (§16.2). |
 | `/api/wallet-tracker` | `app/api/wallet-tracker/route.ts` | POST `{action: balance\|tokens\|prices}` — on-chain lookups across 10 chains (§16). |
 
-`/home/*` share `app/home/layout.tsx` → dark folder-tab bar (`OvTabs`, tabs: Home · Openview · Journal · Wallet) + heading nav (`app/home/HomeNav.tsx`: Home · Openview · APP · About us). `OvTabs` is a client component that derives the active tab from `usePathname()`. The raw engine tab bars (`index.html`, `web/public/index.html` `#ovTabs`) mirror the same tabs (Journal/Wallet link to `/home/journal`, `/home/wallet`). The nav "Openview" is the **description** page (`/home/openview`), NOT the chart — the chart is the folder-tab "OpenView" → `/`. Old `(site)` navbar pages (`/about`, `/portfolio`, `/contact`) are unrelated leftovers.
+`/home/*` share `app/home/layout.tsx` → dark folder-tab bar (`OvTabs`, tabs: Home · Openview · Journal · Wallet) + heading nav (`app/home/HomeNav.tsx`: Home · Openview · APP · Docs · About us). `OvTabs` is a client component that derives the active tab from `usePathname()`. The raw engine tab bars (`index.html`, `web/public/index.html` `#ovTabs`) mirror the same tabs (Journal/Wallet link to `/home/journal`, `/home/wallet`). The nav "Openview" is the **description** page (`/home/openview`), NOT the chart — the chart is the folder-tab "OpenView" → `/`. Old `(site)` navbar pages (`/about`, `/portfolio`, `/contact`) are unrelated leftovers.
 | `/about` | `app/(site)/about/page.tsx` | Marketing copy. |
 | `/portfolio` | `app/(site)/portfolio/page.tsx` | Project cards. |
 | `/contact` | `app/(site)/contact/page.tsx` + `ContactForm.tsx` (`'use client'`) | `mailto:` form, no backend, no stored data, no secret. |
@@ -966,9 +982,13 @@ NEXT_DIST_DIR=.next-prod npx next build   # builds without touching the running 
 
 ## 16. Wallet — Portfolio, Movers, On-chain Tracker (`/home/wallet`)
 
-A three-view dashboard ported from the **Reach** desktop app, replacing the old "Coming soon" placeholder. Reuses the Journal's shell (`.journal-shell` / `.journal-sidebar` / `.nav-item`) so both dashboards read as one product. Sidebar: **Add Asset** button · Wallet · Gainers & Losers · Wallet Tracker · live clock.
+A four-view dashboard ported from the **Reach** desktop app, replacing the old "Coming soon" placeholder. Reuses the Journal's shell (`.journal-shell` / `.journal-sidebar` / `.nav-item`) so both dashboards read as one product. Sidebar: **Add Asset** button · Wallet · Leaderboards · Gainers & Losers · Wallet Tracker · live clock.
 
-`/home/wallet` costs **13.8 kB** (101 kB First Load). Movers + Tracker are `next/dynamic` code-split — neither is needed for the wallet's first paint.
+**Leaderboards and Gainers & Losers are the same component** (`MoversView`), rendered under two sidebar destinations via a `mode` prop. `mode="leaderboards"` renders the board standalone — no market tab row, since it's a sidebar destination in its own right; `mode="market"` renders the tab row **minus** Leaderboards, so the two never offer competing entry points to the same view. The shell keys the two instances separately (`key="lb"` / `key="mkt"`) so switching between them remounts rather than dragging the other's tab state across.
+
+`/home/wallet` costs **15.6 kB** (103 kB First Load). Movers, Tracker and **AssetDetail** are `next/dynamic` code-split — none is needed for the wallet's first paint, and the detail page isn't reachable until a row is clicked.
+
+Every leaderboard row is **clickable**, opening an asset detail page — see §16.1.
 
 ### The porting problem: Reach is Electron
 
@@ -1007,6 +1027,91 @@ therefore fails soft — a dead endpoint yields an empty list, never a throw —
 fetched independently so one failure can't blank the others, results are cached 30 s (the client
 polls at the same cadence), and a total wipeout is never cached.
 
+### 16.1 Asset detail — what a leaderboard row opens into
+
+Every row on **every** board is clickable — the four Leaderboards classes (crypto / stocks / ETFs / commodities), Gainers & Losers, Trending, Most Visited, Recently Added and Community Sentiment. A click swaps the board for `AssetDetailView`: header quote, price chart with 24H/7D/1M/1Y/ALL range toggles, a stats grid, external links, a **description (every class — see below)**, and a markets panel.
+
+The panel **replaces** the board rather than routing away from it. `WalletShell` holds the selected asset in state and hides the board with `display:none` rather than unmounting it, so **Back** restores the exact page, sort and 30 s-refreshed data the user left — an unmount would drop them onto a reloading table. `AssetDetailView` is `next/dynamic` code-split: nobody sees it until they click, so its chart code shouldn't ship with the shell.
+
+**One route, four classes.** `/api/market/asset` normalises everything onto a single payload, so the view renders from one shape rather than four. The stats grid is **data-driven** — the route decides which tiles exist for a given asset and the UI renders exactly those, in order. A commodity has no market cap and no sector, so those tiles simply never arrive; nothing is faked to square the grid.
+
+| Class | Sources (all keyless) | Stats |
+|---|---|---|
+| **crypto** | CMC `data-api/v3/cryptocurrency/detail` + `…/detail/chart` | 11 — market cap, FDV, dominance, supply (circ/total/max), 24h range, ATH (dated) / ATL, plus website / whitepaper / explorer / source links and the description |
+| **stocks** | Yahoo `v8/chart` (series + quote) + Nasdaq `quote/{sym}/summary` (the fundamentals Yahoo gates behind a crumb) | up to 13 — market cap, volume, avg volume, day + 52 w ranges, dividend yield, 1 y target, sector, industry, exchange |
+| **etfs** | same as stocks (`assetclass=etf`) | same, minus the tiles Nasdaq omits for funds |
+| **commodities** | Yahoo only | 7 — a futures contract has no market cap, sector or dividend, so those are absent by design |
+
+#### Descriptions — one source per class (`app/api/market/asset/descriptions.ts`)
+
+Every class now has an **About** section, and each gets it from a different place because that is what actually exists behind a keyless endpoint. The invariant the module enforces: **a description is either about that exact asset, or it is absent.** A miss returns `''` and the section doesn't render.
+
+| Class | Source | Why not something else |
+|---|---|---|
+| **crypto** | CMC's `detail` payload (already fetched) | — |
+| **stocks** | Nasdaq `company/{sym}/company-profile` — a real per-company description | Live fetch, fails soft to `''` |
+| **commodities** | Wikipedia REST, by **hardcoded article title** (16 of them, each opened and checked) | Search is unusable here — see below |
+| **etfs** | **Hardcoded** in the module, matching the screener's 40-fund list | Nasdaq's profile API rejects the ETF asset class outright (`"Unsupported Asset Class"`) |
+
+⚠ **A failed description is never cached — `Description` is tri-state.** This was a real, observed bug: on a cold start Wikipedia timed out, gold's empty payload went into the 60 s cache, and **every viewer got a gold page with no About section for a full minute** after Wikipedia had already recovered. The root cause was that `''` meant two different things. It now means exactly one:
+
+| Value | Meaning | Cached? |
+|---|---|---|
+| `'…text…'` | the copy | ✅ |
+| `''` | the source **answered** and has no copy for this symbol (an unlisted ETF, an unmapped commodity, a Nasdaq 200 with a null profile, a disambiguation page) — **permanent** | ✅ (re-fetching it every 60 s would be pure waste) |
+| `null` | the fetch **failed** (timeout, 5xx, malformed body) — **transient** | ❌ the handler skips the cache write, so the next request retries |
+
+`null` is flattened to `''` before the response leaves the route, so the wire format is always a string and the UI never sees it. Covered by `assetDetail.logic.test.mjs` plus a direct harness against the compiled module (stubbed timeout / 5xx / healthy / disambiguation / unmapped).
+
+⚠ **Wikipedia *search* was rejected as a description source, and this is the whole reason the maps are hardcoded.** The search API never says "I don't cover this" — it returns the nearest keyword match with full confidence. Querying `"Schwab US Dividend Equity ETF"` hands back the **generic "Exchange-traded fund" article**; `"iShares Core MSCI EAFE ETF"` hands back the **iShares brand page**. Rendered under an *About SCHD* heading, that is a confident description of the wrong thing — strictly worse than no description, because the reader has no way to detect it. Commodity articles are therefore **pinned by symbol** (`CL → West_Texas_Intermediate`, not the generic "Crude oil" — Brent is a separate row on the same board), and the fetch rejects anything that isn't a `type: "standard"` page, which catches redirects to disambiguation stubs. The cost is that a new ETF lands with no description until someone writes one; that is the intended failure mode.
+
+**Three bugs this surfaced, all covered by `app/home/wallet/assetDetail.logic.test.mjs` (19 tests):**
+
+1. **Yahoo's `chartPreviousClose` is range-scoped, not daily.** It's the close preceding the *requested range* — on a 1Y chart, the price a year ago. The first cut derived `change24h` from it, so the "24h" change silently scaled with whichever chart window was open: **Gold read +1368 %** on the ALL range, AAPL +9.9 % on 1M. Fixed by fetching a **separate, fixed 5d/1d quote** (`yahooQuote`) purely for the previous close, so 24h change and Previous Close mean the same thing on every range. 5d rather than 2d because a holiday weekend can leave a 2-day window holding a single session.
+2. **The chart line was coloured by `change24h`, not by the window on screen.** Those disagree constantly — Bitcoin is down 2 % on the day inside a decade that is up 100,000,000 % — so an ALL-range chart soaring off the top of the plot was painted **red**. The line now takes its colour from `last >= first` of the *displayed* series; the header pill keeps reporting the 24h change. They are allowed to disagree, and on ALL they correctly do.
+
+**Share classes — three spellings, three upstreams.** The same security is written differently by each source, and each rejects the other two:
+
+| Upstream | Wants | Rejects the others with |
+|---|---|---|
+| Nasdaq **screener** (where the row originates) | `BRK/B` | — |
+| Yahoo **chart** | `BRK-B` | 404 on the slash → the row was a dead click (502) |
+| Nasdaq **company-profile** | `BRK.B` | `"no data"` on the dash → chart rendered, **description silently empty** |
+
+`yahooTicker()` does the dash; `nasdaqTicker()` (in `descriptions.ts`) does the dot. Both were real bugs, caught by hitting the live endpoints rather than by inspection — the profile one only appeared once descriptions were added, because a dash returns a *valid, empty* response rather than an error. (The icon layer normalises the same way — `baseTicker()` in `marketIcons.ts`.)
+
+**Failure behaviour.** Each upstream fails soft and independently: a dead Nasdaq costs a few stat tiles, not the page. Bad input is rejected with a 400 before it reaches an upstream URL (crypto must supply a numeric CMC id; the rest must match `/^[A-Z0-9.\-/]{1,12}$/`), and an upstream error returns a bare `502` — never the error string, which can carry the URL we called. Payloads are cached 60 s per `(class, symbol, range)`, in a **bounded** map (200 entries, oldest evicted) so a long session can't grow it without limit.
+
+**Chart rendering.** An inline SVG line, not a charting library — one series with a hover readout doesn't justify the bundle. It draws in a fixed 1000 × 260 user space and scales via `viewBox`, so no resize observer and no layout measurement. Two edge cases would otherwise produce a blank line, and both are tested: a **flat series** (a stablecoin pinned at $1.00 has zero span, and dividing by it puts every `y` at `NaN` — hence the `|| Math.abs(hi) * 0.01 || 1` fallback), and Yahoo's **null-padded gaps** for holidays and halted sessions, which are dropped rather than drawn down to zero.
+
+**Everything that isn't the line is DOM, not SVG** — axis labels, the crosshair, the hover dot and the tooltip all live outside the `<svg>`, positioned in percent. `preserveAspectRatio="none"` scales the viewBox **non-uniformly** (measured: 1.036× horizontally, 1.000× vertically), so anything inside it is stretched along with the geometry: text would be smeared sideways, and a `<circle>` rendered as a visibly squashed **ellipse**. `vectorEffect="non-scaling-stroke"` does *not* save it — that spares the stroke, never the shape. Percent-positioned DOM sits above the stretch, so the dot measures a true 10 × 10 px at every point on the line. The overlay shares an `.ad-chart-plot` wrapper with the SVG so its percentages resolve against exactly the drawn area — measured against the card instead, its asymmetric padding (62 px on the right, for the y-axis labels) would shift every hover point sideways. The tooltip **follows the cursor** and flips to its left past the halfway mark so it can't overflow the card.
+
+### 16.2 Markets — where you can actually buy the asset
+
+Crypto and everything else get **different answers, because the two cases genuinely differ.** This is the one place a copy-CMC instinct would have shipped fabricated data.
+
+**Crypto → a real markets table.** CMC's keyless `data-api/v3/cryptocurrency/market-pairs/latest` returns the venues actually trading the coin: exchange (with its logo, off CMC's exchange CDN), pair, price, ±2 % depth, 24 h volume, volume share, and a **deep link straight into that exchange's trade screen** — which is the entire point of the panel. Ranked by `cmc_rank_advanced`, CMC's liquidity-aware order, so deep trustworthy pairs lead rather than whichever venue self-reports the biggest number. Top 20 of (for BTC) 2,146 pairs, filterable All / CEX / DEX. Keyed by **`slug`**, not id — the one CMC endpoint that insists on it, so the call chains off the `detail` promise (which carries the slug) rather than launching with it; it still overlaps the chart fetch, so the request costs two round-trips, not three.
+
+Rows CMC itself flags as **outliers** (`outlierDetected` / `priceExcluded`) are dropped — it excludes them from the coin's own headline price, so showing them would contradict the number in the page header. A `volumeExcluded` pair keeps its price but reports **`—`** for volume share, not `0 %`, which would read as "no trading".
+
+**Stocks / ETFs / commodities → "Where to buy", deliberately NOT a markets table.** These assets have no market-pairs to tabulate: AAPL lists on exactly one venue (NasdaqGS), SPY on NYSEArca, WTI on NY Mercantile, and **every broker fills against the same consolidated quote**. No keyless source publishes per-broker price, depth or volume — so a table with those columns would be *invented*. What the panel shows instead is what's true: the **real listing venue** (from Yahoo's chart meta) plus links to brokers that carry the class. The broker list is **generic per class, not a per-symbol availability check**, and the panel says so in as many words — commodities point at futures brokers, since a cash-equity broker won't sell you a COMEX contract. The listing venue moved *out* of the stats grid and into this panel, where it answers a question rather than sitting as one more anonymous tile.
+
+#### The one real CEX/DEX table a non-crypto asset gets (`app/api/market/asset/tokenized.ts`)
+
+The ask was "add the CEX/DEX markets table to commodities/metals/stocks/ETFs too". Taken literally that is **unbuildable without fabricating data** — a crude-oil future does not trade on Binance, "CEX"/"DEX" are crypto-native venue types, and per the paragraph above Yahoo reports exactly *one* exchange per instrument. Every column of that table (price, ±2 % depth, 24 h volume, volume share) would have to be made up.
+
+But there is a version of the request that is real: some of these assets have a **tokenized proxy** — an ERC-20 redeemable for the underlying, which genuinely trades on centralised *and* decentralised exchanges, and for which **CMC publishes a genuine market-pairs table**. So the same `MarketsTable` component renders, fed by the same `cryptoMarkets()` fetch (the token *is* a CMC-listed crypto asset — same endpoint, same outlier filtering, same liquidity ordering).
+
+| Commodity | Token | Verified live |
+|---|---|---|
+| **Gold (XAU)** | **XAUt** (Tether Gold) — 1 token = 1 troy oz in a Swiss vault | 201 pairs, **both `cex` and `dex`** (Binance, OKX, Bybit… + a PAXG/XAUt pool on Uniswap v3) |
+
+**Coverage is deliberately thin, and the map is allow-list only.** Gold is currently the only entry. Silver's Kinesis token (KAG) resolves on CMC but has **zero** market pairs, so silver is *absent* rather than present-with-an-empty-table — a token with no live pairs returns `null`, because an empty table would read as "no venues trade this". Tokenized US equities (the xStocks family) are not on CMC's keyless API at all, which is why the map is keyed by commodity symbol and no stock or ETF can have an entry. PAXG was the runner-up for gold and lost on liquidity (164 pairs, almost entirely CEX); **one token per commodity** keeps every row honestly attributable to a single named instrument.
+
+⚠ **The table sits *below* Where-to-buy, never instead of it, and leads with a disclosure** (`.ad-token-note`, styled loud rather than as fine print). The rows are real prices — for a **different instrument** than the one charted at the top of the page, with its own issuer and counterparty risk. The futures contract and the token are two ways to get the same exposure, and a reader who skims the caveat and concludes they can reach the COMEX contract through Binance has been misled. Hence: both panels, and the disclosure names the token, its backing, and the fact that it is not the contract above.
+
+⚠ `range=max` on Yahoo returns **monthly** bars whatever interval you ask for, so ALL requests `1mo` rather than pretending otherwise. 168 monthly bars covers Apple back to its 1984 listing.
+
 ### Hardening added on the way out of Electron
 
 A local desktop app can trust its own input; a public web route cannot. The routes add what Reach had no need for:
@@ -1021,18 +1126,25 @@ A local desktop app can trust its own input; a public web route cannot. The rout
 | File | Role |
 |---|---|
 | `web/app/home/wallet/page.tsx` | Server component; renders `<WalletShell/>`. |
-| `web/app/home/wallet/WalletShell.tsx` | `'use client'` — owns the active view; code-splits Movers/Tracker. |
-| `web/app/home/wallet/Sidebar.tsx` | `'use client'` — Add Asset button, 3-item nav, live clock; resizable + collapsible via `useSidebarResize` (§15). |
+| `web/app/home/wallet/WalletShell.tsx` | `'use client'` — owns the active view **and the selected asset**; code-splits Movers/Tracker/AssetDetail. Hides the board with `display:none` while a detail page is open so **Back** restores its page, sort and polled data (§16.1). |
+| `web/app/home/wallet/AssetDetailView.tsx` | `'use client'` — the asset detail page every leaderboard row opens into: header quote, inline-SVG price chart (24H/7D/1M/1Y/ALL), data-driven stats grid, links, **description (all four classes)**, and the markets panel — a real CEX/DEX table for crypto and for a tokenized commodity proxy, or the Where-to-buy broker panel otherwise (§16.1–16.2). |
+| `web/app/api/market/asset/descriptions.ts` | The About copy, one source per class — Nasdaq profile (stocks, live), pinned Wikipedia articles (16 commodities), a hand-written map (40 ETFs). Enforces *"about this exact asset, or absent"*; a miss returns `''`. Also owns `nasdaqTicker()` (the `BRK.B` dot form). (§16.1) |
+| `web/app/api/market/asset/tokenized.ts` | Allow-list of commodities with a tokenized proxy that has **live** CMC market pairs — gold → XAUt today. The only way a non-crypto asset gets a real CEX/DEX table. (§16.2) |
+| `web/app/home/wallet/Sidebar.tsx` | `'use client'` — Add Asset button, 4-item nav (Wallet · Leaderboards · Gainers & Losers · Wallet Tracker), live clock; resizable + collapsible via `useSidebarResize` (§15). |
 | `web/app/home/wallet/WalletView.tsx` | `'use client'` — 4 stat cards, History chart, Allocation donut, assets table. |
 | `web/app/home/wallet/AddAssetModal.tsx` | `'use client'` — 4 category tabs, search, asset grid, amount / avg-buy-price. |
 | `web/app/home/wallet/MoversView.tsx` | `'use client'` — the 8-tab market page (see below). |
-| `web/app/home/wallet/CoinIcon.tsx` | `'use client'` — CMC coin logo, falls back to a coloured initial on 404. |
+| `web/app/home/wallet/CoinIcon.tsx` | `'use client'` — CMC coin logo (crypto rows carry a `thumb` URL), falls back to a coloured initial on 404. |
+| `web/app/home/wallet/MarketIcon.tsx` | `'use client'` — leaderboard avatar for the **non-crypto** classes (stocks / ETFs / commodities), which arrive from `/api/market/screener` with no logo URL. Walks the `iconChain()` fallback list, degrading to a coloured initial only if every step errors. |
+| `web/app/home/wallet/marketIcons.ts` | Icon resolution for those three classes: the stock/ETF logo CDNs, base-ticker normalisation, and the 16 inline-SVG commodity discs. See below. |
 | `web/app/home/wallet/movers.logic.test.mjs` | Node test for the market page's derivations (sort, sentiment, pool, formatters). |
 | `web/app/home/wallet/WalletTrackerView.tsx` | `'use client'` — address form, wallet cards, token-detail overlay. |
 | `web/app/home/wallet/assets.ts` | Asset catalog (~200 crypto / 50 stocks / 4 metals / 10 currencies) + logo/colour/glyph resolution + shared formatters. |
 | `web/public/metals/*.gif` | Reach's animated metal coin sprites (gold / silver / platinum / palladium), 32×32. |
 | `web/app/home/wallet/holdings.ts` | `ov_holdings` + `ov_portfolio_snapshots` persistence. |
-| `web/app/home/wallet/chains.ts` | 10-chain config, `detectChain()`, `ov_tracked_wallets` persistence. |
+| `web/app/home/wallet/chains.ts` | 10-chain config, `detectChain()`, `poolMap()` (bounded-concurrency fetch), `filterByChain()` / `chainCounts()`, the 173 seeded `DEFAULT_WALLETS`, `ov_tracked_wallets` persistence + `SEED_VERSION` migration. |
+| `web/app/home/wallet/chainIcons.ts` | Inline-SVG artwork for all 10 chains as data-URIs — no network, no CDN (see §16 notes). |
+| `web/app/home/wallet/ChainIcon.tsx` | `'use client'` — renders a chain's SVG mark, degrading to the coloured letter badge for any chain without artwork. |
 | `web/app/home/wallet/AssetIcon.tsx` / `icons.tsx` | Asset avatar w/ fallback chain; inlined Lucide glyphs. |
 
 **No new dependencies.** As in the Journal: both charts are hand-rolled inline SVG (Reach uses no chart lib either), and the Lucide glyphs are inlined as SVG paths.
@@ -1046,7 +1158,15 @@ Reach also appends a `?t=${Date.now()}` cache-buster so every GIF instance start
 - **History chart** needs a time series. Reach keeps snapshots in SQLite; with no server DB they go to `localStorage` on each price poll. The chart therefore shows Reach's own **"Collecting data"** empty state until two snapshots exist — expected on first load, not a bug.
 - **Token cap.** Blockscout's `token-balances` is unbounded: a long-lived address (Vitalik's) returns **~3 MB / 6.6k tokens in ~6 s**, mostly worthless airdrop spam. Two consequences, both handled: the fetch needs a **25 s** timeout (the default 8 s silently clipped it and yielded an empty list — a real bug caught in testing), and the response is **sorted by value and capped at 100**. The `totalUsd` is summed over *all* tokens before the cap, and the UI states "Showing the 100 most valuable of N" — a truncated list must never read as complete.
 - **Solana/Tron token USD values are 0** — no per-token rate feed exists on those paths (Reach has the same gap). The UI omits the value rather than printing a misleading `$0.00`.
-- **Whale defaults seeded.** The tracker ships with Reach's 20 known whale/exchange wallets (Vitalik, Binance cold/hot, Ethereum Foundation, Alameda, …), restorable any time via **"Load Known Wallets"** (which keeps user-added addresses). Seeding happens only when `ov_tracked_wallets` has *never* been written — unlike Reach, which re-seeds whenever the stored array is empty and therefore makes an empty tracker unreachable. All 20 verified resolving live.
+- **Whale defaults seeded — 173 wallets, ~20 per chain.** The tracker no longer ships Reach's 20 Ethereum-heavy addresses; `DEFAULT_WALLETS` now covers **every one of the 10 chains** with roughly its 20 largest publicly-identified wallets (exchange hot/cold wallets, bridges, L2 sequencer/fee vaults, foundations, market makers, known exploiters), ordered by chain then by USD value. Restorable any time via **"Load Known Wallets"** (which keeps user-added addresses). Seeding happens only when `ov_tracked_wallets` has *never* been written — unlike Reach, which re-seeds whenever the stored array is empty and therefore makes an empty tracker unreachable.
+  - **Every address was verified against `/api/wallet-tracker` before being committed**: it must pass that chain's address validator *and* return a non-zero native balance. This bar is not optional — a wrong address **fails silently**, rendering a normal-looking card that reads `$0.00` rather than an error (exactly the failure mode of Reach's bogus Tron address). ~10 researched candidates were dropped for returning zero.
+  - Chains below 20 (Polygon 16, Solana 13, Tron 19, Avalanche 14, NEAR 11) have **fewer than 20 addresses that are both publicly identified and hold a meaningful native balance**. Padding them would have meant inventing addresses, so they ship short.
+- **Balance fetches are pooled, not fired all at once.** 173 wallets × a refresh every 60 s would mean 173 concurrent requests through the route to keyless public RPCs — enough to get rate-limited (and Tron is *already* serialised server-side at ~1.1 s/call). `poolMap()` in `chains.ts` caps in-flight balance lookups at `BALANCE_CONCURRENCY = 6`, and results are merged into state **as each lands** rather than in one batch, so cards fill in progressively instead of the whole list waiting on the slowest chain.
+- **Chain filter.** A row of pills above the list (All Chains + one per chain that has wallets, each with its icon and a count) filters the rendered wallets. It is deliberately **separate from the add-form's chain dropdown**: that dropdown picks the network a *newly added* address belongs to and auto-detects from what's typed, so wiring the two together would mean pasting a `0x…` address silently changed which chain you were looking at. Only the list is filtered — the headline total and the chain pills stay whole-portfolio, since a filtered total that drops reads as "my money vanished" rather than "I'm viewing a subset". A pill only appears for a chain that has wallets, and if the selected chain's last wallet is removed the filter falls back to All rather than stranding the user on an empty list. Logic lives in `filterByChain()` / `chainCounts()` (`chains.ts`), unit-tested in `walletFilter.logic.test.mjs`.
+- **Fetch order follows the filter.** Since a full pass is ~100s, a late chain (Solana/Tron/NEAR) would otherwise render a screenful of `0.00000000 SOL / $0.00` for a minute after being selected — indistinguishable from broken data. The visible wallets are fetched first, the rest after; every wallet is still fetched, so the total stays whole. Caveat: `fetchAll`'s in-flight guard drops a re-prioritisation if a pass is already running, so switching filters *mid-pass* doesn't jump the queue. That's deliberate — cancelling and restarting on every filter click would re-request everything already fetched and hammer the same rate-limited endpoints the guard exists to protect.
+- **Seed migration (`SEED_VERSION`).** The seed set changed from Reach's 20 to 173, and `loadTracked()` only ever seeded when the key had *never* been written — so an existing user would have been stuck on the old 20 forever. `loadTracked()` now compares a stored `ov_tracked_seed_version` against `SEED_VERSION` and, when stale, swaps the old seeds for the current set. It is careful with user data: rows the user added themselves (identified by *not* having a `default-N` id) are preserved verbatim, and a deliberately-emptied tracker **stays empty** rather than having 173 wallets reappear underneath it. `loadTracked()` is a **pure read** — it must not stamp the version, because React StrictMode double-invokes the mount effect and an earlier version that wrote during the read had its second call skip the migration and hand back the stale list it had just replaced (caught in the browser, pinned in `seedMigration.logic.test.mjs`). `saveTracked()` owns the stamp.
+- **Chain icons are inline SVG** (`chainIcons.ts` → `ChainIcon.tsx`), not remote logos — same rule the commodity artwork follows (§ leaderboard icons): a chain logo is *identity*, and a wrong-but-confident one mislabels which network a balance is on. Data-URIs mean no network, no CDN dependency, and nothing to mismatch; a chain with no artwork degrades to the coloured letter badge it replaced. Used on the wallet cards, the chain dropdown, the summary pills, and the detail panel.
+- **Polygon was silently priced at `$0.00`** — a pre-existing bug found while verifying the seed list. CoinGecko retired the `matic-network` id in the MATIC→POL migration and now answers it with an *empty object*, so every Polygon wallet rendered a real native balance next to a `$0.00` value. Fixed to `polygon-ecosystem-token` in **both** `route.ts` (`CHAINS[].cgId`) and `chains.ts` (`Chain.cgId`) — the two must agree, since the client looks the price up under the id the route asked for.
 
 ### Reach's endpoint config had rotted — rebuilt
 
@@ -1061,18 +1181,107 @@ Reach was written against keyless endpoints that have since started demanding au
 | `TLyqzVGLV1srkB7dToTAEQgDSFPg9BB3in` ("Justin Sun", Tron) | `A valid account address is required` — fails base58 checksum, invalid even in isolation | Replaced with Binance's Tron cold wallet (`TWd4Wr…`, ~2.01 B TRX) |
 - **Not ported:** Reach's drag-to-reorder stat cards / swap-charts gestures.
 
-### The market page (`MoversView`) — 8 tabs
+### The market page (`MoversView`) — Leaderboards + a 5-tab market row
 
-Reach's six CoinMarketCap tabs, ported, **plus two of our own** (Metals, Stocks & ETFs) that Reach
-has no equivalent for:
+All crypto, all off CoinMarketCap. Two of Reach's original tabs are gone and one has moved:
 
-| Tab | Source | Derivation |
+- **Leaderboards** is a **left-sidebar destination**, not a tab — it renders standalone, without the
+  tab row, and covers all four asset classes (see below).
+- **Metals** and **Stocks & ETFs** were **removed**, and the `/api/market/movers` route that fed them
+  was **deleted** with them. They were our own additions (Reach had no equivalent) and covered a
+  hand-picked handful of symbols — 4 metals and 12 stocks + 4 ETFs. The Leaderboards' Stocks / ETFs /
+  Commodities boards supersede them outright (500 stocks, 40 ETFs, 15 commodities including all four
+  of those metals), so keeping both would have meant two competing answers to the same question. It
+  also retired that route's hand-maintained SEC share counts, which needed re-checking a couple of
+  times a year.
+
+The remaining five make up the market tab row (`MARKET_TABS`):
+
+| View | Source | Derivation |
 |---|---|---|
-| Leaderboards | `/api/market/cmc` `coins` | top 30 by market cap |
+| **Leaderboards** *(sidebar, not a tab)* | `/api/market/cmc` `coins` (Crypto) · `/api/market/screener` (Stocks / ETFs / Commodities) | Four asset-class sub-tabs. **Paginated 100 a page** (Crypto and Stocks run to 500 rows = 5 pages; ETFs 40 and Commodities 16 fit one page, so the paginator hides itself). Crypto is ordered by **`cmcRank`, not raw market cap** — CMC omits stablecoins / wrapped assets / LP tokens from its ranking, so e.g. USDY carries a top-100 cap but a rank of 200+; ordering by cap dragged those onto page 1 while the `#` column still printed their real rank. Column sorts are **per-page**: the page is sliced first, then sorted, so a sort never pulls a row in from another page. The `#` column is sortable and prints the row's board rank (never a 1..100 row counter, which would misreport rank under a sort) |
 | Gainers & Losers | ↑ same list | filtered to `volume > 50k`, capped by the pool dropdown (Top 100 / Top 500 / All), split on the timeframe's change field (1h / 24h / 7d / 30d) |
 | Trending · Most Visited · Recently Added | CMC `spotlight` | rendered as returned |
 | Community Sentiment | ↑ `coins` + Fear & Greed | Most Bullish / Most Bearish = top 15 by `volume × change24h` (a **momentum** score — a big move on real volume outranks a bigger move on none). Per-row bar = `clamp(50 + change24h × 2, 0, 100)`, a per-coin reading, *not* a share of the list |
-| **Metals** · **Stocks & ETFs** | `/api/market/movers` | Yahoo `v8/finance/chart` — the same endpoint already used for metals futures also serves equities and ETFs (price + `chartPreviousClose` + volume), so these needed **no new provider and no key** |
+
+**The Leaderboards screener (`/api/market/screener`).** The crypto board gets 500 ranked coins from a
+single CMC call; this route is the equivalent for the other three classes, and each needed a different
+answer because **no one keyless provider ranks all three**:
+
+| Class | Source | Why |
+|---|---|---|
+| Stocks (500) | Nasdaq's own screener, `api.nasdaq.com/api/screener/stocks?...&country=united_states` | One request returns 500 rows **already sorted by market cap**, keyless — the only bulk source found that does. Needs a browser `User-Agent` or it rejects the call. Yahoo's `v7/finance/quote` is dead for this (`Invalid Crumb`), and Yahoo's screener paginates incorrectly (`offset` is ignored; `start` returns a jumbled set). **Carries no volume field**, so the Volume column is a dash for stocks — that's upstream, not a bug. |
+| ETFs (40) | curated list → Yahoo `v8/finance/chart` per symbol (+ `quoteSummary` for AUM) | No keyless source *ranks* ETFs by AUM: Nasdaq's ETF screener has **no AUM, cap or volume field at all** and no working sort (it comes back alphabetical). AUM rankings barely move week to week, so the universe is hardcoded and ranked by **volume** instead. Yahoo, unlike Nasdaq, does report volume. |
+| Commodities (16) | Yahoo `v8/finance/chart` per symbol (+ `quoteSummary` for open interest) | No commodity screener exists on either provider. Only ~16 symbols, so per-symbol fetching is cheap. Ranked by volume. Names are hardcoded: the contract's own `shortName` reads "Gold Aug 26", and `CT=F` (cotton) returns none at all. |
+
+Both upstreams are undocumented and can change without notice (Yahoo already locked down
+`v7/finance/quote`), so every source fails soft — an empty list, never a throw — and the payload is
+cached 60s so the client's 30s poll doesn't hammer them. The screener is fetched **only while the
+Leaderboards tab is open**, in its own effect, so the other seven tabs don't pay for it.
+
+**The size column (`marketCap`) — one column, three different quantities.** The chart endpoint used
+for prices carries no size field, so ETFs and commodities used to render a dash here. The numbers do
+exist on Yahoo's **`quoteSummary`**, which is crumb-gated (the same lockdown that killed
+`v7/finance/quote`): pull a cookie from `fc.yahoo.com`, trade it for a crumb at `v1/test/getcrumb`,
+then pass the crumb on every call. `getCrumb()` does that handshake once and caches it 10 min.
+
+| Class | Column reads | Source |
+|---|---|---|
+| Stocks | Market cap (price × shares outstanding) | Nasdaq screener |
+| ETFs | **AUM** — the fund's net assets | `quoteSummary.totalAssets` |
+| Commodities | **Notional value** — open interest × price × contract size | `quoteSummary.openInterest` + a hardcoded contract-size table |
+
+A futures contract **has no market cap**, and that isn't an upstream gap to route around: a future is
+an *agreement*, not an ownership stake, so there is no share count to multiply by price (Yahoo duly
+returns both `marketCap` and `totalAssets` empty for `GC=F`). What it does have is open interest —
+contracts currently open — which × price × the exchange contract size gives **notional value**, the
+dollar value of all open contracts. That is the futures market's honest analogue of "how big is
+this", and being in dollars it sorts and compares against the ETF AUM and stock caps in the same
+column. The header therefore relabels itself per class (`MCAP_LABEL`): *Market Cap* / *AUM* /
+*Notional*, so a notional value is never misread as a market cap.
+
+Two traps in the notional math, both of which would print a confidently-wrong dollar figure:
+
+1. **Contract size is per-commodity** (gold 100 oz, crude 1,000 bbl, corn 5,000 bu…) and is an
+   exchange spec, not market data — hence the hardcoded table in `COMMODITIES`.
+2. **Yahoo quotes some futures in cents, not dollars** — the grains (¢/bushel) and the softs +
+   cattle (¢/lb). Those carry `cents: true` and get a ÷100; without it their notional comes out
+   **100× too large**.
+
+**Rate limiting.** This layer needs a size for 56 symbols (40 ETFs + 16 futures). Firing them
+concurrently got ~a third throttled into nulls — indistinguishable from "upstream has no data", but
+they weren't: every one returned its number when retried alone. So `fetchSummary()` runs behind a
+4-in-flight semaphore with one retry, and a 401/403 drops the cached crumb so the next call
+re-handshakes. Result: **ETFs 40/40, commodities 15/16, stocks 500/500.** The lone dash is `CT=F`
+(cotton), a genuine upstream 404 — the same symbol that already returns no `shortName`.
+
+**Leaderboard row icons (`marketIcons.ts` / `MarketIcon.tsx`).** Crypto rows carry a CMC logo URL on
+the row itself (`thumb` → `CoinIcon`). The screener classes carry **none** — `/api/market/screener`
+returns a ticker and nothing else — so before this they all fell through to a coloured letter chip.
+`MarketIcon` resolves an icon from the ticker instead. Each class needs a different strategy, and one
+of them is a correctness constraint rather than a preference:
+
+| Class | Strategy |
+|---|---|
+| Stocks (500) · ETFs (40) | Ticker-keyed logo CDNs, walked as a chain: **Parqet** → **FinancialModelingPrep**. Keyed by *ticker*, not a hand-written domain map — with 500 Nasdaq rows a curated map would cover the megacaps and leave the long tail bare. An unknown ticker returns a **zero-byte body**, which fires the `<img>` `onError` and advances the chain, so a miss degrades instead of painting a placeholder. |
+| Commodities (16) | **Hand-drawn inline-SVG discs, no network.** A futures root collides with a real equity ticker far too often, and the CDNs answer with the *company's* logo rather than a miss: `CL` is Colgate-Palmolive (not Crude Oil), `KC` is Kraft-Heinz (not Coffee), `LE` is Lennar (not Live Cattle); `SB` and `BZ` likewise. A miss degrades to a letter chip and is merely ugly — **a wrong-but-confident logo is a bug**, so commodities never touch a stock CDN. |
+
+**Base-ticker normalisation.** The last ~3% of the Nasdaq screener isn't random: it's share classes,
+preferreds, units and when-issued lines (`BRK/B`, `HBANZ`, `SMCIP`, `GOOGM`, `STRF`…). Each is a
+derivative of a company that *does* have a logo, so `baseTicker()` maps it to its underlying
+(`BRK/B`→`BRK-B`, `HBANZ`→`HBAN`, `STRF`→`MSTR`) and the chain retries there. Two guards keep this
+from becoming the very mislabelling bug it exists to avoid:
+
+1. It runs **only after both CDNs miss on the exact ticker** — so a ticker that already resolves is
+   never rewritten. This is what stops `CMCSA` (Comcast) becoming `CMCS`, or `FCNCA` (First Citizens)
+   becoming `FCNC` — both *are* matched by the suffix rule, but neither ever reaches it.
+2. The suffix strip is length-guarded (5+ chars), so ordinary 1–4 letter tickers can't be truncated
+   into another company (`AAPL`→`AAP`). The handful whose base is shorter than that, or isn't a
+   substring at all, are listed explicitly in `BASE_ALIASES`.
+
+Net result: **556/556 leaderboard rows across all four classes render a real icon — zero letter
+chips.** (Verified by resolving every live ticker through `iconChain()` against both CDNs.) The
+lettered chip remains as the last resort, so a dead CDN degrades rather than blanking the column.
 
 **Reach bug fixed in the port.** Reach's Community Sentiment table renders sortable column headers,
 but its body maps `list` instead of `sortList(list)` — so clicking "Price" updates sort state and
