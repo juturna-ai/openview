@@ -30,7 +30,7 @@ export default function OvTabs({ active }: { active?: 'home' | 'openview' | 'jou
       <Link href="/home/wallet" className={'ov-tab' + (current === 'wallet' ? ' active' : '')}>Wallet</Link>
       <Link href="/home" className="ov-tabs-brand">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/assets/freeview.png" alt="Openview" />
+        <img src="/assets/openview.png" alt="Openview" />
         <span>Openview</span>
       </Link>
     </div>

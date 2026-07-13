@@ -12,9 +12,9 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/assets/freeview.ico', type: 'image/x-icon' },
-      { url: '/assets/freeview.png', type: 'image/png', sizes: '256x256' },
+      { url: '/assets/openview.png', type: 'image/png', sizes: '256x256' },
     ],
-    apple: '/assets/freeview.png',
+    apple: '/assets/openview.png',
   },
   // Self-referential canonical. Do NOT hardcode `url` here: a fixed og:url on every page
   // makes /home advertise `openview.site` as its canonical entity, so Facebook resolves a

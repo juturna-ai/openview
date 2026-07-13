@@ -777,7 +777,11 @@ Two places declare the tags, because **two different documents serve pages**:
 
 Note the interaction with the root redirect (see `next.config.js`): a bare `openview.site/` **307s to `/home`**, and crawlers follow that redirect — so in practice the card a shared root link renders comes from `/home` (i.e. from `app/layout.tsx`), not from the engine. The engine's own tags only apply on `/?embed=1&…`, which is an iframe contract nobody shares socially; they exist for completeness.
 
-Gotcha: Facebook and WhatsApp cache scrape results aggressively. After changing the banner or the tags, re-scrape via Facebook's Sharing Debugger (developers.facebook.com/tools/debug) — otherwise the old (empty) preview persists for days.
+Gotcha: Facebook and WhatsApp cache scrape results aggressively. After changing the banner or the tags, re-scrape via Facebook's Sharing Debugger (developers.facebook.com/tools/debug) — otherwise the old (empty) preview persists for days. `og:url` is **self-referential** (derived per-route from `metadataBase`, never hardcoded to the bare domain): a fixed `og:url` makes every page advertise `openview.site` as its canonical entity, so a shared `/home` link resolves against a different FB cache key than the debugger re-scrapes and the composer keeps serving a stale attachment.
+
+WhatsApp constraints (per Meta's link-previews doc): image ≥300px wide, aspect ratio ≤4:1, file <600KB — `banner.png` (1428×798, 1.79:1, 230KB) clears all three. WhatsApp reuses `og:image` (there is no square-image tag) and may center-crop it for the thumbnail, so **keep vital content inside the centre square** of any future banner.
+
+**Brand icon:** `assets/openview.png` (256×256), formerly `freeview.png` — renamed to match the Openview brand. Referenced by both `index.html` files (favicon, apple-touch-icon, tab-bar brand logo), `app/Navbar.tsx`, `app/OvTabs.tsx`, and `app/layout.tsx`. The favicon `.ico` is still `freeview.ico` (unchanged), and the screenshot download filename is still `freeview-<symbol>-<tf>.png`.
 
 ### Key files
 
@@ -789,7 +793,8 @@ web/
   vercel.json          { framework: "nextjs" }
   .eslintrc.json       extends next/core-web-vitals (so `next lint` doesn't prompt in CI)
   app/
-    layout.tsx         root <html><body>, favicon = /assets/freeview.*
+    layout.tsx         root <html><body>, favicon = /assets/freeview.ico + /assets/openview.png,
+                       OG/Twitter link-preview tags (banner.png), self-referential canonical
     globals.css        site chrome (navbar/hero/cards/form), TV colour vars
     Navbar.tsx         'use client' — TV-style top nav
     (site)/layout.tsx  wraps pages with <Navbar/>
