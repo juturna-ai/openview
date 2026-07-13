@@ -24,6 +24,17 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Dark scrollbars everywhere. Without these the browser paints its default light scrollbar, which
+   reads as a bright white bar against the dark theme (most visible on the tracker's chain dropdown
+   and any overflowing table). Mirrors the same block in public/index.html so the site and the chart
+   engine scroll alike. `color-scheme` + `scrollbar-color` cover Firefox, which ignores ::-webkit-*. */
+html { color-scheme: dark; scrollbar-color: var(--border) var(--bg); }
+::-webkit-scrollbar { width: 8px; height: 8px; background: var(--bg); }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+::-webkit-scrollbar-corner { background: var(--bg); }
+
 html, body {
   height: 100%;
   background: var(--bg);
@@ -118,6 +129,53 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .ov-prose p { color: var(--muted); line-height: 1.65; margin-bottom: 14px; font-size: 15px; }
 .ov-prose a { color: #715587; }
 
+/* ── Docs page (/home/docs): code, steps, tables ── */
+.ov-docs .ov-h3 { font-size: 18px; margin: 32px 0 12px; color: var(--text); }
+.ov-docs strong { color: var(--text); font-weight: 600; }
+.ov-code {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--text);
+  word-break: break-word;
+}
+.ov-pre {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 10px 0;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.ov-pre code { background: none; border: 0; padding: 0; font: inherit; color: inherit; }
+.ov-steps { list-style: decimal; padding-left: 20px; margin: 0 0 14px; }
+.ov-steps > li {
+  color: var(--muted);
+  line-height: 1.65;
+  font-size: 15px;
+  margin-bottom: 16px;
+  padding-left: 4px;
+}
+.ov-table-wrap { overflow-x: auto; margin: 10px 0 14px; }
+.ov-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ov-table th, .ov-table td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  line-height: 1.55;
+  vertical-align: top;
+}
+.ov-table th { color: var(--text); font-weight: 600; font-size: 13px; }
+.ov-table td:first-child { white-space: nowrap; }
+
 /* Contact form */
 .ov-form { max-width: 520px; display: flex; flex-direction: column; gap: 14px; }
 .ov-field { display: flex; flex-direction: column; gap: 6px; }
@@ -138,6 +196,9 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .ov-chart-frame { position: fixed; inset: 0; border: 0; width: 100vw; height: 100vh; }
 
 /* ── Folder-tab bar (Home ↔ OpenView) — mirrors index.html #ovTabs exactly ── */
+/* The bar and its inactive tabs sit on the page background rather than the lighter --panel2/--panel,
+   so the chrome reads as one shade with the content below it. The active tab still separates itself
+   via its border, extra height, and accent text — not a fill. */
 .ov-tabs {
   position: relative;
   display: flex;
@@ -145,7 +206,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   gap: 2px;
   height: 34px;
   padding: 0 8px;
-  background: var(--panel2);
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
   user-select: none;
 }
@@ -157,7 +218,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   font-size: 13px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
-  background: var(--panel);
+  background: transparent;
   border: 1px solid var(--border);
   border-bottom: none;
   border-radius: 8px 8px 0 0;
@@ -842,7 +903,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--panel);
-  color: #8b6fd4;
+  color: #715587;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
@@ -851,7 +912,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .sidebar-collapse-btn:hover {
   background: var(--hover);
   border-color: var(--reach-accent-gradient);
-  color: #a78bfa;
+  color: #8b6fd4;
 }
 /* Centered in the rail once the sidebar is a 64px column. */
 .journal-sidebar.collapsed .sidebar-collapse-btn {
@@ -1030,11 +1091,22 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   transition: filter 0.15s ease;
 }
 .btn-new-note:hover { filter: brightness(1.08); }
-.notes-toolbar { margin-bottom: 20px; }
+/* Search box + New Note button share one row. `.search-box` keeps its own max-width, so the button
+   sits directly beside it rather than being pushed to the far edge. */
+.notes-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
 .search-box {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Grow to the 360px cap inside the flex toolbar; without a basis it would collapse to its
+     content width and leave the New Note button floating next to a stub of an input. */
+  flex: 1 1 auto;
   max-width: 360px;
   padding: 8px 14px;
   border: 1px solid var(--border);
@@ -1077,15 +1149,29 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden; /* Clips the accent bar to the rounded top corners. */
   cursor: pointer;
   transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
 }
+/* A note's color is a top accent bar rather than a full fill, so the card keeps the dark panel
+   background and every default text token stays legible. --note-accent is set inline per card. */
+.note-card.has-accent::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--note-accent);
+}
+/* The bar sits flush with the top edge, so the content needs to clear it. */
+.note-card.has-accent { padding-top: 18px; }
 .note-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   border-color: var(--muted);
 }
-.note-card.has-color { border: none; }
 .note-pin-indicator { position: absolute; top: 10px; right: 12px; color: var(--muted); opacity: 0.6; }
 .note-card-title { font-size: 14px; font-weight: 600; line-height: 1.3; margin: 0 0 8px; }
 .note-card-content {
@@ -1107,8 +1193,6 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   font-size: 11px;
   color: var(--muted);
 }
-.note-card.has-color .note-card-footer { border-top-color: rgba(255, 255, 255, 0.15); }
-.note-card.has-color.light-bg .note-card-footer { border-top-color: rgba(0, 0, 0, 0.1); }
 .note-card-date { font-weight: 500; }
 .note-card-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s ease; }
 .note-card:hover .note-card-actions { opacity: 1; }
@@ -1313,6 +1397,12 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   flex-direction: column;
   width: 560px;
   max-width: 90vw;
+  /* Without a floor the box shrank to its content (~190px for a one-line note), so a short note got
+     a cramped dialog. The floor gives every note the same tall body; `.note-view-content` is the
+     flex:1 child, so the extra height lands on the text, not the header/footer.
+     min-height wins over max-height in flexbox, hence the vh cap here too — on a short viewport the
+     box must still fit rather than overflow it. */
+  min-height: min(480px, 80vh);
   max-height: 80vh;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -1349,6 +1439,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .note-view-empty { font-style: italic; }
 .note-view-footer {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
@@ -1357,6 +1448,49 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   font-size: 11px;
   color: var(--muted);
 }
+/* The viewer is a floating panel, not a modal — no overlay, so the board behind stays live and
+   clickable. It positions itself from JS (left/top), which is also what makes it draggable. */
+.note-view-floating {
+  position: fixed;
+  z-index: 1000;
+}
+/* Header doubles as the drag handle. `user-select: none` stops a drag from smearing a text
+   selection across the title; the buttons inside re-enable their own cursor. */
+.note-view-drag {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.note-view-drag:active { cursor: grabbing; }
+.note-view-drag button { cursor: pointer; }
+
+/* Timestamps sit together on the left so space-between can push the actions to the right. */
+.note-view-dates {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.note-view-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+/* Both inherit the footer's 11px otherwise, which reads as a caption rather than a button. */
+.btn-view-edit,
+.btn-view-delete {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+.btn-view-delete { color: var(--red); }
+.btn-view-delete:hover { background: rgba(239, 83, 80, 0.12); }
+/* Armed (first click landed): fills in, so "one more click destroys this" is unmissable. */
+.btn-view-delete.armed {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.btn-view-delete.armed:hover { background: var(--red); filter: brightness(1.08); }
 .calendar-context-menu button.danger { color: var(--red); }
 .calendar-context-menu button.danger:hover { background: rgba(239, 83, 80, 0.12); }
 
@@ -1412,6 +1546,8 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
+/* Transparent, not --panel: the dashboard cards sit on the page background so the whole surface
+   reads as one shade. The border alone defines them. Matches .gl-section-block on the market page. */
 .wallet-stat-card {
   display: flex;
   flex-direction: column;
@@ -1420,7 +1556,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   min-height: 104px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--panel);
+  background: transparent;
 }
 .wallet-stat-label {
   font-size: 11px;
@@ -1457,7 +1593,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 16px 18px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--panel);
+  background: transparent;
 }
 .wallet-section-title {
   display: flex;
@@ -1872,10 +2008,12 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .spinning { animation: glSpin 0.9s linear infinite; }
 @keyframes glSpin { to { transform: rotate(360deg); } }
 .gl-sections { display: flex; flex-direction: column; gap: 16px; }
+/* Transparent, not --panel: the cards sit directly on the page background so the market page reads
+   as one surface, like the rest of the site. The border alone gives them their shape. */
 .gl-section-block {
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--panel);
+  background: transparent;
   overflow: hidden;
 }
 .gl-section-header {
@@ -1915,6 +2053,10 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .gl-sortable { cursor: pointer; user-select: none; }
 .gl-sortable:hover { color: var(--text); }
 .gl-sortable svg { display: inline-block; vertical-align: middle; margin-left: 3px; opacity: 0.6; }
+/* The column currently sorting. Without this the arrows look identical on all seven headers and
+   there's no way to tell which one is actually in effect. */
+.ad-sorted { color: var(--text); }
+.ad-sorted svg { opacity: 1; color: var(--accent); }
 .gl-cmc-row td {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
@@ -1945,6 +2087,74 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .gl-td-empty { padding: 28px 16px !important; color: var(--muted); text-align: center !important; }
 .gl-page-loading { padding: 40px 0; color: var(--muted); font-size: 13px; text-align: center; }
 .gl-page-disclaimer { margin: 0; color: var(--muted); font-size: 11px; }
+
+/* ── Leaderboard asset-class switcher (Crypto / Stocks / ETFs / Commodities) ── */
+/* Pills rather than underlined tabs, so this reads as a level *below* the main .gl-tabs row. */
+.gl-class-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.gl-class-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.gl-class-tab:hover { background: var(--hover); color: var(--text); }
+.gl-class-tab.active {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.14);
+  color: #3b82f6;
+}
+
+/* ── Leaderboard pagination (100 per page, up to 500) ── */
+.gl-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 4px 0;
+}
+.gl-pagination-range { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.gl-pagination-pages { display: flex; align-items: center; gap: 4px; }
+.gl-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.gl-page-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.gl-page-btn.active {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.14);
+  color: #3b82f6;
+}
+.gl-page-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ── Market page tabs (Leaderboards / Gainers & Losers / … / Metals / Stocks) ── */
 /* Scrolls horizontally rather than wrapping — eight tabs won't fit a narrow column, and a wrapped
@@ -2036,7 +2246,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 16px 20px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--panel);
+  background: transparent;
 }
 .gl-fg-label { color: var(--muted); font-size: 12px; font-weight: 600; margin-bottom: 6px; }
 .gl-fg-value { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
@@ -2054,6 +2264,345 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   color: var(--muted);
   font-size: 11px;
 }
+
+/* ══ Asset detail (what a leaderboard row opens into) ══ */
+
+/* Clickable rows. The cursor and hover tint are the whole affordance — a chevron in every row would
+   add 500 glyphs to a leaderboard page to say what the pointer already says. */
+.gl-cmc-row-link { cursor: pointer; }
+.gl-cmc-row-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.ad-page { gap: 18px; }
+.ad-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 5px 10px 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: #715587;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.ad-back:hover { background: var(--hover); color: #8b6fd4; }
+
+.ad-header { display: flex; align-items: center; gap: 14px; }
+.ad-title { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ad-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ad-name { margin: 0; font-size: 24px; font-weight: 700; color: var(--text); }
+.ad-symbol { color: var(--muted); font-size: 13px; font-weight: 600; }
+.ad-rank {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.ad-price-row { display: flex; align-items: center; gap: 10px; }
+.ad-price { font-size: 26px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+
+.ad-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ad-ranges { display: flex; gap: 4px; }
+.ad-loading { color: var(--muted); font-size: 12px; }
+
+/* The SVG stretches to the container; the axis labels are ordinary DOM around it, since text inside
+   a non-uniformly-scaled viewBox would be stretched horizontally with the geometry. */
+.ad-chart {
+  position: relative;
+  padding: 8px 62px 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+/* The SVG and the hover overlay share this box, so the overlay's `left: N%` resolves against exactly
+   the area the viewBox drew into. Positioned against .ad-chart instead, the card's asymmetric padding
+   (62px on the right, for the y-axis labels) would shift every hover point sideways. */
+.ad-chart-plot { position: relative; }
+.ad-chart-svg { display: block; width: 100%; height: 260px; }
+.ad-chart-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 4; }
+
+/* The hover layer is DOM, not SVG — see the note in AssetDetailView. Percent coordinates sit above
+   the viewBox's non-uniform scale, so the dot stays round instead of rendering as an ellipse. All of
+   it is pointer-events:none so it can't steal the hover from the SVG underneath. */
+.ad-chart-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed var(--muted);
+  pointer-events: none;
+}
+.ad-chart-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  /* Half the box, so the dot centres on the point rather than hanging off it. */
+  margin: -5px 0 0 -5px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Rides the cursor. `translateY(-50%)` keeps it vertically centred on the point; the horizontal
+   offset puts it clear of the crosshair, and .flip swings it to the other side once the cursor is
+   past halfway so it can't run off the card. */
+.ad-chart-tip {
+  position: absolute;
+  z-index: 2;
+  transform: translate(14px, -50%);
+  min-width: 168px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel2);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.ad-chart-tip.flip { transform: translate(calc(-100% - 14px), -50%); }
+.ad-tip-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 7px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ad-tip-time { color: var(--muted); font-weight: 500; }
+.ad-tip-row { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ad-tip-swatch { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.ad-tip-label { color: var(--muted); font-size: 12px; }
+.ad-tip-value { color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
+.ad-chart-yaxis {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  bottom: 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.ad-chart-xaxis {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.ad-chart-empty {
+  padding: 60px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* auto-fill, not auto-fit: a class with only five stats should leave the trailing columns empty
+   rather than stretch five tiles across the full width. */
+.ad-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+/* The range tabs (24H/7D/…) and the CEX/DEX filter sit on --bg like every other surface here. Scoped
+   to .ad-page on purpose: .gl-class-tab is shared with Gainers & Losers, which keeps the raised look.
+   Only the idle pill is restyled — .active still gets its accent fill from the base rule. */
+.ad-page .gl-class-tab:not(.active) { background: var(--bg); }
+
+/* Every card on this page sits on --bg, matching the dashboard's flat panels rather than the raised
+   --panel surface the cards used to use. */
+.ad-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+}
+.ad-stat-label { color: var(--muted); font-size: 11px; font-weight: 600; }
+.ad-stat-value {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.ad-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.ad-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.ad-link:hover { background: var(--hover); color: var(--text); }
+
+/* Markets (crypto) / Where to buy (everything else) — same card, two different answers. */
+.ad-markets {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.ad-markets-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ad-markets-head .ad-about-title { margin-bottom: 0; }
+.ad-markets .gl-cmc-row:hover { background: transparent; }
+/* Exchange and Pair are two separate columns. They must NOT reuse .gl-td-name — that cell is
+   `display: flex` for the leaderboard's icon-plus-name layout, which here stacked the pair beneath
+   the exchange instead of leaving it in its own column. */
+.ad-th-exch, .ad-td-exch { text-align: left !important; }
+.ad-td-exch {
+  /* Logo + name on one line, with room between them. */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 600;
+}
+.ad-th-pair, .ad-td-pair { text-align: left !important; }
+.ad-pair-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.ad-pair-link:hover { text-decoration: underline; }
+.ad-th-depth, .ad-td-depth { text-align: right; }
+.ad-th-volpct, .ad-td-volpct {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+/* Depth is two numbers in one cell; the pill keeps them reading as a single pair. */
+.ad-depth-pill {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--hover);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ad-markets-note { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+
+/* The tokenized-proxy disclosure. Sits between the panel title and the table, and is deliberately
+   loud enough to read *before* the numbers below it: those rows are real prices for a token that is
+   not the futures contract charted at the top of the page, and a reader who skims past that has
+   been misled. Hence the left rule and the raised background rather than muted fine print. */
+.ad-token-note {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--accent, #3861fb);
+  border-radius: 0 6px 6px 0;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ad-token-note strong { color: var(--text); font-weight: 600; }
+
+/* Footer: the "showing X–Y of Z" line on the left, page buttons on the right. Wraps to two rows on
+   a narrow card rather than squeezing the pager. */
+.ad-markets-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ad-markets-foot .ad-markets-note { flex: 1 1 220px; }
+
+/* The table dims while the next page is in flight. It stays in the DOM at full height, so the card
+   doesn't collapse and the pager doesn't jump out from under the cursor mid-click. */
+.ad-busy { opacity: 0.45; pointer-events: none; transition: opacity 0.12s ease; }
+
+.ad-pager { display: flex; align-items: center; gap: 4px; }
+.ad-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.ad-page-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.ad-page-btn.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.ad-page-btn:disabled { opacity: 0.4; cursor: default; }
+.ad-page-gap { padding: 0 2px; color: var(--muted); font-size: 12px; }
+.ad-venue { display: flex; flex-direction: column; gap: 3px; margin-bottom: 12px; }
+.ad-venue-name { color: var(--text); font-size: 15px; font-weight: 700; }
+.ad-venue-ccy { color: var(--muted); font-weight: 500; }
+
+.ad-about {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.ad-about-title { margin: 0 0 10px; font-size: 16px; font-weight: 700; color: var(--text); }
+.ad-about-p { margin: 0 0 10px; color: var(--text); font-size: 13px; line-height: 1.6; }
+.ad-about-p:last-of-type { margin-bottom: 0; }
+.ad-about-toggle {
+  margin-top: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ad-about-toggle:hover { text-decoration: underline; }
 
 /* ══ Wallet Tracker ══ */
 .wt-page { display: flex; flex-direction: column; gap: 16px; }
@@ -2079,6 +2628,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wt-title-row { display: flex; flex-direction: column; gap: 4px; }
 .wt-title { margin: 0; font-size: 22px; font-weight: 700; color: var(--text); }
 .wt-subtitle { margin: 0; font-size: 13px; color: var(--muted); }
+/* Transparent, not --panel: sits on the page background like the wallet/market cards. */
 .wt-summary {
   display: flex;
   align-items: center;
@@ -2088,7 +2638,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 16px 18px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--panel);
+  background: transparent;
 }
 .wt-summary-main { display: flex; flex-direction: column; gap: 4px; }
 .wt-summary-label {
@@ -2130,6 +2680,8 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   cursor: pointer;
 }
 .wt-chain-trigger:hover { background: var(--hover); }
+/* --bg, not transparent: this is a floating popover, so it needs an opaque fill or the wallet rows
+   underneath show through it. --bg keeps it dark and on-theme while staying opaque. */
 .wt-chain-menu {
   position: absolute;
   top: calc(100% + 4px);
@@ -2141,7 +2693,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 4px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--bg);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 .wt-chain-option {
@@ -2193,7 +2745,50 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 }
 .wt-add-btn:hover:not(:disabled) { filter: brightness(1.08); }
 .wt-add-error { margin: 0; color: var(--red); font-size: 12px; }
+/* Chain filter pills. Wrap rather than scroll — with 10 chains a horizontal scroller would hide
+   half of them behind a gesture. */
+.wt-filter-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.wt-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.wt-filter-pill:hover { background: var(--hover); color: var(--text); }
+.wt-filter-pill.active { background: var(--hover); color: var(--text); border-color: var(--muted); }
+/* The count is secondary to the chain name — recede it, and keep it legible on the active pill. */
+.wt-filter-count { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
+.wt-filter-pill.active .wt-filter-count { color: var(--text); }
+
+/* Column headers for the wallet list. Grid + gap + horizontal padding must stay identical to
+   .wt-wallet-card below, or the labels drift off the columns they name. */
+.wt-list-head {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wt-list-head-num { text-align: right; }
+/* Matches the width of .wt-card-actions: three 28px buttons with 4px gaps. */
+.wt-list-head-actions { width: 92px; text-align: right; }
 .wt-wallet-list { display: flex; flex-direction: column; gap: 8px; }
+/* Transparent base; the row still lights up on hover via --hover below. */
 .wt-wallet-card {
   display: grid;
   grid-template-columns: 2fr 1.2fr 1fr auto;
@@ -2202,7 +2797,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 13px 16px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--panel);
+  background: transparent;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
@@ -2216,10 +2811,13 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   height: 32px;
   flex-shrink: 0;
   border-radius: 50%;
+  overflow: hidden;
   color: #fff;
   font-size: 14px;
   font-weight: 700;
 }
+/* The chain artwork is a full-bleed disc — fill the badge rather than sitting inside it. */
+.wt-chain-badge-img { width: 100%; height: 100%; display: block; }
 .wt-card-chain-info { display: flex; flex-direction: column; min-width: 0; }
 .wt-card-chain-name { font-size: 13px; font-weight: 600; color: var(--text); }
 .wt-card-addr { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
@@ -2387,6 +2985,9 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   .wallet-trow { min-width: 720px; }
   .wt-wallet-card { grid-template-columns: 1fr auto; row-gap: 10px; }
   .wt-card-balance, .wt-card-price { align-items: flex-start; }
+  /* The card reflows to a stacked 2-column layout here, so the 4-column header no longer names
+     anything — it would just be four labels pointing at the wrong cells. Drop it. */
+  .wt-list-head { display: none; }
   .wt-add-form { flex-wrap: wrap; }
   .wt-addr-input { flex-basis: 100%; order: 3; }
 }

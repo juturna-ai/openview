@@ -1,12 +1,18 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Icon } from './icons';
 import {
   addNote,
   deleteNote,
   formatNoteDate,
-  isLightColor,
   loadNotes,
   NOTE_COLORS,
   updateNote,
@@ -113,7 +119,10 @@ export default function NotesView() {
   const otherNotes = filtered.filter((n) => !n.pinned);
 
   const cardProps = {
-    onEdit: handleEdit,
+    // A card click opens the read-only viewer, not the editor — clicking a note to read it must not
+    // put you in a form where a stray keystroke edits it. Editing is a deliberate act: the viewer's
+    // Edit button, or the right-click menu.
+    onOpen: setViewing,
     onDelete: (id: number) => setNotes(deleteNote(id)),
     onTogglePin: (n: Note) => setNotes(updateNote(n.id, { pinned: !n.pinned })),
     onContextMenu: (e: React.MouseEvent, n: Note) => {
@@ -122,28 +131,14 @@ export default function NotesView() {
     },
   };
 
-  // Inside a colored form the text/borders must flip to stay legible.
-  const onLight = isLightColor(color);
-  const formStyle = color
-    ? { backgroundColor: color, color: onLight ? '#1a1a2e' : '#fff' }
-    : undefined;
-  const fieldStyle = color
-    ? { color: 'inherit', borderColor: onLight ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)' }
-    : undefined;
+  // Same treatment as the cards and the viewer: the picked color previews as a top accent bar, not a
+  // fill, so the form keeps its dark panel and the inputs need no contrast overrides.
+  const formStyle = color ? ({ '--note-accent': color } as React.CSSProperties) : undefined;
 
   return (
     <div className="notes-container">
       <div className="notes-header">
         <h2>Notes</h2>
-        <button
-          className="btn-new-note"
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
-        >
-          <Icon name="plus" size={16} /> New Note
-        </button>
       </div>
 
       <div className="notes-toolbar">
@@ -157,6 +152,15 @@ export default function NotesView() {
             aria-label="Search notes"
           />
         </div>
+        <button
+          className="btn-new-note"
+          onClick={() => {
+            resetForm();
+            setShowForm(true);
+          }}
+        >
+          <Icon name="plus" size={16} /> New Note
+        </button>
       </div>
 
       {showForm && (
@@ -166,7 +170,7 @@ export default function NotesView() {
             if (e.target === e.currentTarget) resetForm();
           }}
         >
-          <div className="note-form" style={formStyle}>
+          <div className={'note-form' + (color ? ' has-accent' : '')} style={formStyle}>
             <div className="note-form-header">
               <h3>{editing ? 'Edit Note' : 'New Note'}</h3>
               <button className="btn-icon" onClick={resetForm} aria-label="Close">
@@ -180,7 +184,6 @@ export default function NotesView() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoFocus
-              style={fieldStyle}
             />
             <textarea
               className="note-form-content"
@@ -188,7 +191,6 @@ export default function NotesView() {
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={6}
-              style={fieldStyle}
             />
             <div className="note-form-footer">
               <div className="note-color-picker">
@@ -307,59 +309,170 @@ export default function NotesView() {
         </div>
       )}
 
-      {viewing && <NoteViewer note={viewing} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <NoteViewer
+          note={viewing}
+          onClose={() => setViewing(null)}
+          onEdit={(n) => {
+            setViewing(null);
+            handleEdit(n);
+          }}
+          onDelete={(n) => {
+            setNotes(deleteNote(n.id));
+            setViewing(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/** Read-only note viewer — the full note, nothing editable. */
-function NoteViewer({ note, onClose }: { note: Note; onClose: () => void }) {
-  const onLight = isLightColor(note.color);
-  const style = note.color
-    ? { backgroundColor: note.color, color: onLight ? '#1a1a2e' : '#fff' }
-    : undefined;
-  // On a colored card the default muted/border tokens vanish, so derive them from the background.
-  const muted = note.color ? (onLight ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.75)') : undefined;
-  const rule = note.color
-    ? onLight
-      ? 'rgba(0,0,0,0.12)'
-      : 'rgba(255,255,255,0.18)'
-    : undefined;
+/** Read-only note viewer — the full note, nothing editable. Edit is an explicit button, not a click. */
+function NoteViewer({
+  note,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  note: Note;
+  onClose: () => void;
+  onEdit: (n: Note) => void;
+  onDelete: (n: Note) => void;
+}) {
+  // Delete is irreversible and sits one pixel from Edit, so it arms on the first click and only
+  // deletes on the second. A misclick costs a click, not the note.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // The viewer is a floating panel, not a modal: no backdrop, so the board behind stays clickable
+  // and scrollable while a note is open. Position is viewport coords of the top-left corner; null
+  // until first measured, at which point it's centred (see the layout effect below).
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
+
+  /** Keep the panel fully on screen — used on first placement and on every drag frame. */
+  const clamp = useCallback((x: number, y: number) => {
+    const el = panelRef.current;
+    const w = el?.offsetWidth ?? 0;
+    const h = el?.offsetHeight ?? 0;
+    return {
+      x: Math.max(0, Math.min(x, window.innerWidth - w)),
+      y: Math.max(0, Math.min(y, window.innerHeight - h)),
+    };
+  }, []);
+
+  // Centre on open. Layout effect so it paints centred rather than flashing at 0,0 first. Keyed on
+  // note.id: opening a different note re-centres rather than inheriting the last one's position.
+  useLayoutEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    setPos(
+      clamp(
+        (window.innerWidth - el.offsetWidth) / 2,
+        (window.innerHeight - el.offsetHeight) / 2,
+      ),
+    );
+  }, [note.id, clamp]);
+
+  // Drag: listeners live on window, not the header, so yanking the pointer faster than React can
+  // re-render doesn't drop the drag. Started by the header's onPointerDown.
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const d = drag.current;
+      if (!d) return;
+      setPos(clamp(e.clientX - d.dx, e.clientY - d.dy));
+    };
+    const onUp = () => {
+      drag.current = null;
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [clamp]);
+
+  // A resized window can strand the panel off-screen.
+  useEffect(() => {
+    const onResize = () => setPos((p) => (p ? clamp(p.x, p.y) : p));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [clamp]);
+
+  const startDrag = (e: React.PointerEvent) => {
+    // Only a plain left-press on the header chrome itself — never the close button, and never a
+    // text selection inside the title.
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button')) return;
+    const el = panelRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    drag.current = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    e.preventDefault(); // Suppress the text-selection drag.
+  };
+
+  // Same treatment as the cards: the note's color is a top accent bar, not a fill. The panel keeps
+  // its dark background, so the default text/muted/border tokens all stay legible and no light-vs-
+  // dark contrast flipping is needed.
+  const hasColor = !!note.color;
 
   return (
+    // No overlay wrapper: the panel is positioned directly, so nothing covers the page behind it.
+    // Hidden until measured, otherwise it paints once at 0,0 before the centring effect runs.
     <div
-      className="note-form-overlay"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      ref={panelRef}
+      className={'note-view note-view-floating' + (hasColor ? ' has-accent' : '')}
+      style={
+        {
+          left: pos?.x ?? 0,
+          top: pos?.y ?? 0,
+          visibility: pos ? 'visible' : 'hidden',
+          ...(hasColor ? { '--note-accent': note.color } : {}),
+        } as React.CSSProperties
+      }
     >
-      <div className="note-view" style={style}>
-        <div className="note-view-header" style={rule ? { borderBottomColor: rule } : undefined}>
-          <h3>{note.title || 'Untitled'}</h3>
-          <div className="note-view-header-right">
-            {note.pinned && (
-              <span className="note-view-pin" style={{ color: muted }} title="Pinned">
-                <Icon name="pin" size={14} />
-              </span>
-            )}
-            <button className="btn-icon" onClick={onClose} aria-label="Close">
-              <Icon name="x" size={18} />
-            </button>
-          </div>
+      <div className="note-view-header note-view-drag" onPointerDown={startDrag}>
+        <h3>{note.title || 'Untitled'}</h3>
+        <div className="note-view-header-right">
+          {note.pinned && (
+            <span className="note-view-pin" title="Pinned">
+              <Icon name="pin" size={14} />
+            </span>
+          )}
+          <button className="btn-icon" onClick={onClose} aria-label="Close">
+            <Icon name="x" size={18} />
+          </button>
         </div>
+      </div>
 
-        {/* Full content, untruncated — the card clips at 150 chars, this doesn't. */}
-        {note.content ? (
-          <div className="note-view-content">{note.content}</div>
-        ) : (
-          <div className="note-view-content note-view-empty" style={{ color: muted }}>
-            No content
-          </div>
-        )}
+      {/* Full content, untruncated — the card clips at 150 chars, this doesn't. */}
+      {note.content ? (
+        <div className="note-view-content">{note.content}</div>
+      ) : (
+        <div className="note-view-content note-view-empty">No content</div>
+      )}
 
-        <div className="note-view-footer" style={rule ? { borderTopColor: rule, color: muted } : { color: muted }}>
+      <div className="note-view-footer">
+        <div className="note-view-dates">
           <span>Created {formatNoteDate(note.created_at)}</span>
           <span>Updated {formatNoteDate(note.updated_at)}</span>
+        </div>
+        <div className="note-view-actions">
+          {/* The only way into the editor from here — editing stays deliberate. */}
+          <button className="btn-secondary btn-view-edit" onClick={() => onEdit(note)}>
+            Edit
+          </button>
+          <button
+            className={'btn-secondary btn-view-delete' + (confirmDelete ? ' armed' : '')}
+            onClick={() => (confirmDelete ? onDelete(note) : setConfirmDelete(true))}
+            onBlur={() => setConfirmDelete(false)}
+            title={confirmDelete ? 'Click again to delete' : 'Delete note'}
+          >
+            {confirmDelete ? 'Sure?' : 'Delete'}
+          </button>
         </div>
       </div>
     </div>
@@ -368,44 +481,45 @@ function NoteViewer({ note, onClose }: { note: Note; onClose: () => void }) {
 
 interface CardProps {
   note: Note;
-  onEdit: (n: Note) => void;
+  /** Opens the read-only viewer. Editing is reached from there, or the right-click menu. */
+  onOpen: (n: Note) => void;
   onDelete: (id: number) => void;
   onTogglePin: (n: Note) => void;
   onContextMenu: (e: React.MouseEvent, n: Note) => void;
 }
 
-function NoteCard({ note, onEdit, onDelete, onTogglePin, onContextMenu }: CardProps) {
+function NoteCard({ note, onOpen, onDelete, onTogglePin, onContextMenu }: CardProps) {
   const hasColor = !!note.color;
-  const lightBg = hasColor && isLightColor(note.color);
-  const muted = hasColor ? (lightBg ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)') : undefined;
 
+  // The color is a top accent bar, not a fill: the card keeps the normal dark panel background, so
+  // the default text/muted/border tokens stay legible and none of the old light-vs-dark contrast
+  // flipping is needed. The bar is a CSS var so one declaration drives it.
   return (
     <div
-      className={'note-card' + (hasColor ? ' has-color' : '') + (lightBg ? ' light-bg' : '')}
-      style={hasColor ? { backgroundColor: note.color!, color: lightBg ? '#1a1a2e' : '#fff' } : undefined}
-      onClick={() => onEdit(note)}
+      className={'note-card' + (hasColor ? ' has-accent' : '')}
+      style={hasColor ? ({ '--note-accent': note.color } as React.CSSProperties) : undefined}
+      onClick={() => onOpen(note)}
       onContextMenu={(e) => onContextMenu(e, note)}
     >
       {note.pinned && (
-        <span className="note-pin-indicator" style={{ color: muted }}>
+        <span className="note-pin-indicator">
           <Icon name="pin" size={12} />
         </span>
       )}
       {note.title && <h4 className="note-card-title">{note.title}</h4>}
       {note.content && (
-        <p className="note-card-content" style={{ color: muted }}>
+        <p className="note-card-content">
           {note.content.length > 150 ? note.content.slice(0, 150) + '...' : note.content}
         </p>
       )}
-      <div className="note-card-footer" style={{ color: muted }}>
+      <div className="note-card-footer">
         <span className="note-card-date">{formatNoteDate(note.updated_at)}</span>
-        {/* Card click opens the editor, so the action buttons must not bubble. */}
+        {/* Card click opens the viewer, so the action buttons must not bubble. */}
         <div className="note-card-actions" onClick={(e) => e.stopPropagation()}>
           <button
             className="note-action-btn"
             onClick={() => onTogglePin(note)}
             title={note.pinned ? 'Unpin' : 'Pin'}
-            style={hasColor ? { color: muted } : undefined}
           >
             <Icon name={note.pinned ? 'pin-off' : 'pin'} size={13} />
           </button>
@@ -413,7 +527,6 @@ function NoteCard({ note, onEdit, onDelete, onTogglePin, onContextMenu }: CardPr
             className="note-action-btn note-action-delete"
             onClick={() => onDelete(note.id)}
             title="Delete"
-            style={hasColor ? { color: lightBg ? '#a03030' : '#ffaaaa' } : undefined}
           >
             <Icon name="trash" size={13} />
           </button>
