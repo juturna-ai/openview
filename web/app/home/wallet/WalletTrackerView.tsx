@@ -2,18 +2,24 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ALL_CHAINS,
   CHAINS,
   type Chain,
+  chainCounts,
+  DEFAULT_WALLETS,
   defaultWallets,
   detectChain,
+  filterByChain,
   fmtBal,
   fmtUsdVal,
   getChain,
   loadTracked,
+  poolMap,
   saveTracked,
   type TrackedWallet,
   truncAddr,
 } from './chains';
+import ChainIcon from './ChainIcon';
 import { Icon } from './icons';
 
 // On-chain wallet tracker — ported from Reach's WalletTrackerView.jsx.
@@ -22,8 +28,9 @@ import { Icon } from './icons';
 // token breakdown. All chain calls go through /api/wallet-tracker (public RPCs send no CORS headers,
 // and external calls belong server-side regardless).
 //
-// Seeded on first visit with Reach's 20 known whale/exchange wallets, restorable via "Load Known
-// Wallets". See loadTracked() for why a deliberately-emptied list stays empty.
+// Seeded on first visit with the known whale/exchange wallets in DEFAULT_WALLETS — the ~20 biggest
+// verified public addresses on each chain — restorable via "Load Known Wallets". See loadTracked()
+// for why a deliberately-emptied list stays empty.
 
 interface Balance {
   balance: number;
@@ -44,7 +51,24 @@ interface PriceEntry {
   usd_24h_change?: number;
 }
 
-const REFRESH_MS = 60_000;
+/**
+ * A full pass over the 173 seeded wallets takes ~100s, not because of the pool below but because the
+ * route serialises Tron at ~1.1s/call (TRON_MIN_GAP_MS) — 19 Tron wallets alone are a ~21s floor, and
+ * they land last. Measured: ~143/173 priced by 15s, the tail trickling in to ~100s.
+ *
+ * So the refresh interval has to clear the worst-case pass. At Reach's 60s the next refresh would
+ * start while the previous one was still draining, stacking overlapping request waves onto the same
+ * rate-limited endpoints — the pile-up gets worse, not better, the longer the tab is open.
+ */
+const REFRESH_MS = 150_000;
+
+/**
+ * Balance lookups in flight at once. The route fans each one out to a keyless public RPC, and the
+ * seeded list is 173 wallets — unbounded parallelism (the original code's Promise.all over the whole
+ * list) trips rate limits on publicnode and Solana's public RPC. Six is a measured compromise: it
+ * gets the great majority of cards priced within ~15s without tripping the limits.
+ */
+const BALANCE_CONCURRENCY = 6;
 
 export default function WalletTrackerView() {
   const [wallets, setWallets] = useState<TrackedWallet[]>([]);
@@ -52,6 +76,11 @@ export default function WalletTrackerView() {
   const [prices, setPrices] = useState<Record<string, PriceEntry>>({});
   const [loading, setLoading] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+
+  // Which chain's wallets the list is showing. Independent of `chain` below: that one picks the
+  // network a *newly added* address belongs to (and auto-detects from what's typed), so tying the
+  // two together would make typing a 0x address silently change what you're looking at.
+  const [chainFilter, setChainFilter] = useState<string>(ALL_CHAINS);
 
   const [addr, setAddr] = useState('');
   const [chain, setChain] = useState('ethereum');
@@ -100,47 +129,48 @@ export default function WalletTrackerView() {
 
   const key = (w: TrackedWallet) => `${w.chain}:${w.address}`;
 
+  // A pass can outlive its interval (Tron's serialisation alone is a ~21s floor), and a second pass
+  // starting on top of the first would stack request waves onto the same rate-limited endpoints —
+  // making the pile-up worse the longer the tab stays open. One pass at a time; a tick that arrives
+  // while one is running is dropped, not queued, since the next tick will refetch anyway.
+  const inFlight = useRef(false);
+
   const fetchAll = useCallback(async (list: TrackedWallet[]) => {
-    if (list.length === 0) return;
+    if (list.length === 0 || inFlight.current) return;
+    inFlight.current = true;
     setLoading(true);
     try {
-      const [priceRes, ...balRes] = await Promise.all([
-        fetch('/api/wallet-tracker', {
+      const priceRes = await fetch('/api/wallet-tracker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'prices' }),
+      })
+        .then((r) => (r.ok ? r.json() : {}))
+        .catch(() => ({}));
+      setPrices(priceRes as Record<string, PriceEntry>);
+
+      // 173 seeded wallets. Firing them all at once (the original behaviour) buries the keyless
+      // public RPCs behind /api/wallet-tracker and they start rejecting, so the requests go through
+      // a worker pool instead. Results are merged in as each lands rather than in one batch at the
+      // end — cards fill in progressively (~143 of 173 within 15s) instead of the whole list sitting
+      // empty until the slowest chain (Tron, serialised server-side at ~1.1s/call) finishes.
+      await poolMap(list, BALANCE_CONCURRENCY, async (w) => {
+        const bal: Balance = await fetch('/api/wallet-tracker', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'prices' }),
+          body: JSON.stringify({ action: 'balance', address: w.address, chain: w.chain }),
         })
-          .then((r) => (r.ok ? r.json() : {}))
-          .catch(() => ({})),
-        ...list.map((w) =>
-          fetch('/api/wallet-tracker', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'balance', address: w.address, chain: w.chain }),
-          })
-            .then((r) => (r.ok ? r.json() : { balance: 0 }))
-            .catch(() => ({ balance: 0 })),
-        ),
-      ]);
-
-      setPrices(priceRes as Record<string, PriceEntry>);
-      const next: Record<string, Balance> = {};
-      list.forEach((w, i) => {
-        next[`${w.chain}:${w.address}`] = balRes[i] as Balance;
+          .then((r) => (r.ok ? r.json() : { balance: 0 }))
+          .catch(() => ({ balance: 0 }));
+        setBalances((prev) => ({ ...prev, [`${w.chain}:${w.address}`]: bal }));
       });
-      setBalances(next);
+
       setUpdatedAt(new Date());
     } finally {
+      inFlight.current = false;
       setLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    if (wallets.length === 0) return;
-    void fetchAll(wallets);
-    const id = setInterval(() => void fetchAll(wallets), REFRESH_MS);
-    return () => clearInterval(id);
-  }, [wallets, fetchAll]);
 
   const usdOf = (w: TrackedWallet): number => {
     const cfg = getChain(w.chain);
@@ -149,7 +179,51 @@ export default function WalletTrackerView() {
     return bal * (prices[cfg.cgId]?.usd ?? 0);
   };
 
+  // The total and the chain pills stay whole-portfolio: filtering the *view* shouldn't make the
+  // headline value drop, which would read as "my money vanished" rather than "I'm looking at a
+  // subset". Balances are likewise fetched for every wallet, not just the visible ones.
   const totalUsd = wallets.reduce((s, w) => s + usdOf(w), 0);
+
+  // Only the rendered list is filtered.
+  const visible = useMemo(() => filterByChain(wallets, chainFilter), [wallets, chainFilter]);
+  const counts = useMemo(() => chainCounts(wallets), [wallets]);
+
+  // A filter pill per chain that actually has wallets — an "Avalanche (0)" pill leading to an empty
+  // list is a dead end. If the selected chain's last wallet is removed, fall back to All so the user
+  // is never stranded staring at an empty tracker.
+  const filterChains = useMemo(
+    () => CHAINS.filter((c) => (counts.get(c.id) ?? 0) > 0),
+    [counts],
+  );
+  useEffect(() => {
+    if (chainFilter !== ALL_CHAINS && (counts.get(chainFilter) ?? 0) === 0) {
+      setChainFilter(ALL_CHAINS);
+    }
+  }, [counts, chainFilter]);
+
+  // Fetch order: what's on screen first, the rest after. A full pass is ~100s (Tron is serialised
+  // server-side), so a chain sitting late in the list — Solana, Tron, NEAR — would otherwise show a
+  // screen of "0.00000000 SOL / $0.00" for a minute after being selected, which reads as broken data
+  // rather than as pending. Every wallet is still fetched, so the headline total stays whole; only
+  // the order changes.
+  //
+  // Caveat: fetchAll's in-flight guard drops this if a pass is already running, so switching filters
+  // mid-pass doesn't jump the queue — those balances just arrive when the running pass reaches them.
+  // Deliberate: cancelling and restarting the pass on every filter click would re-request everything
+  // already fetched and hammer the same rate-limited endpoints, which is the failure this guard
+  // exists to prevent. Prioritisation is a nice-to-have; not melting the RPCs is not.
+  const fetchOrder = useMemo(() => {
+    if (chainFilter === ALL_CHAINS) return wallets;
+    const onScreen = new Set(visible.map((w) => w.id));
+    return [...visible, ...wallets.filter((w) => !onScreen.has(w.id))];
+  }, [wallets, visible, chainFilter]);
+
+  useEffect(() => {
+    if (fetchOrder.length === 0) return;
+    void fetchAll(fetchOrder);
+    const id = setInterval(() => void fetchAll(fetchOrder), REFRESH_MS);
+    return () => clearInterval(id);
+  }, [fetchOrder, fetchAll]);
 
   // Roll the per-wallet values up by chain for the summary pills.
   const chainTotals = useMemo(() => {
@@ -190,7 +264,7 @@ export default function WalletTrackerView() {
     setWallets((prev) => prev.filter((x) => x.id !== w.id));
   };
 
-  /** Restores the 20 seeded whales, keeping any addresses the user added themselves. */
+  /** Restores the seeded whales, keeping any addresses the user added themselves. */
   const handleLoadDefaults = () => {
     setWallets((prev) => {
       const defaults = defaultWallets();
@@ -246,14 +320,15 @@ export default function WalletTrackerView() {
         <div className="wt-title-row">
           <h1 className="wt-title">Wallet Tracker</h1>
           <p className="wt-subtitle">
-            Watch any on-chain address across 10 networks — balance, value and token holdings.
+            Watch any on-chain address across {CHAINS.length} networks — balance, value and token
+            holdings. Seeded with the {DEFAULT_WALLETS.length} biggest known wallets on every chain.
           </p>
         </div>
         <div className="wt-header-actions">
           <button
             className="wt-defaults-btn"
             onClick={handleLoadDefaults}
-            title="Load 20 known whale wallets"
+            title={`Load ${DEFAULT_WALLETS.length} known whale wallets`}
           >
             <Icon name="wallet" size={14} /> Load Known Wallets
           </button>
@@ -277,7 +352,7 @@ export default function WalletTrackerView() {
           <div className="wt-summary-chains">
             {chainTotals.map((t) => (
               <span key={t.chain.id} className="wt-chain-pill">
-                <span className="wt-chain-dot" style={{ backgroundColor: t.chain.color }} />
+                <ChainIcon chain={t.chain} size={16} />
                 {t.chain.label}
                 <span className="wt-chain-val">{fmtUsdVal(t.usd)}</span>
               </span>
@@ -289,7 +364,7 @@ export default function WalletTrackerView() {
       <div className="wt-add-form">
         <div className="wt-chain-select" ref={menuRef}>
           <button className="wt-chain-trigger" onClick={() => setMenuOpen((o) => !o)}>
-            <span className="wt-chain-dot" style={{ backgroundColor: selectedChain?.color }} />
+            {selectedChain && <ChainIcon chain={selectedChain} size={18} />}
             {selectedChain?.label}
             <Icon name="chevron-down" size={14} />
           </button>
@@ -305,7 +380,7 @@ export default function WalletTrackerView() {
                     setMenuOpen(false);
                   }}
                 >
-                  <span className="wt-chain-dot" style={{ backgroundColor: c.color }} />
+                  <ChainIcon chain={c} size={18} />
                   {c.label}
                   <span className="wt-chain-sym">{c.symbol}</span>
                 </button>
@@ -334,6 +409,44 @@ export default function WalletTrackerView() {
 
       {addError && <p className="wt-add-error">{addError}</p>}
 
+      {/* Chain filter. Distinct from the add-form's chain picker above: this narrows what's listed,
+          that one says which network a new address is on. */}
+      {wallets.length > 0 && (
+        <div className="wt-filter-row" role="group" aria-label="Filter wallets by chain">
+          <button
+            className={'wt-filter-pill' + (chainFilter === ALL_CHAINS ? ' active' : '')}
+            onClick={() => setChainFilter(ALL_CHAINS)}
+            aria-pressed={chainFilter === ALL_CHAINS}
+          >
+            All Chains
+            <span className="wt-filter-count">{wallets.length}</span>
+          </button>
+          {filterChains.map((c) => (
+            <button
+              key={c.id}
+              className={'wt-filter-pill' + (chainFilter === c.id ? ' active' : '')}
+              onClick={() => setChainFilter(c.id)}
+              aria-pressed={chainFilter === c.id}
+            >
+              <ChainIcon chain={c} size={16} />
+              {c.label}
+              <span className="wt-filter-count">{counts.get(c.id)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Column headers. Mirrors .wt-wallet-card's grid exactly, so the labels sit over the columns
+          they describe. Hidden when the list is empty — there'd be nothing under them. */}
+      {visible.length > 0 && (
+        <div className="wt-list-head" aria-hidden="true">
+          <span>Wallet</span>
+          <span className="wt-list-head-num">Balance</span>
+          <span className="wt-list-head-num">Price / 24h</span>
+          <span className="wt-list-head-actions">Actions</span>
+        </div>
+      )}
+
       <div className="wt-wallet-list">
         {wallets.length === 0 ? (
           <div className="wt-empty">
@@ -350,7 +463,7 @@ export default function WalletTrackerView() {
             </button>
           </div>
         ) : (
-          wallets.map((w) => {
+          visible.map((w) => {
             const cfg = getChain(w.chain);
             if (!cfg) return null;
             const bal = balances[key(w)]?.balance ?? 0;
@@ -369,9 +482,7 @@ export default function WalletTrackerView() {
                 }}
               >
                 <div className="wt-card-chain">
-                  <span className="wt-chain-badge" style={{ backgroundColor: cfg.color }}>
-                    {cfg.label.charAt(0)}
-                  </span>
+                  <ChainIcon chain={cfg} size={32} />
                   <span className="wt-card-chain-info">
                     {/* Seeded whales are named; user-added addresses fall back to the chain name. */}
                     <span className="wt-card-chain-name">{w.label || cfg.label}</span>
@@ -455,9 +566,7 @@ export default function WalletTrackerView() {
               >
                 <Icon name="arrow-left" size={18} />
               </button>
-              <span className="wt-chain-badge" style={{ backgroundColor: detailChain.color }}>
-                {detailChain.label.charAt(0)}
-              </span>
+              <ChainIcon chain={detailChain} size={32} />
               <span className="wt-detail-info">
                 <span className="wt-detail-name">{detail.label || detailChain.label}</span>
                 <span className="wt-detail-addr">{truncAddr(detail.address)}</span>

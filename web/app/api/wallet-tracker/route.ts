@@ -30,7 +30,10 @@ interface ChainCfg {
 const CHAINS: Record<string, ChainCfg> = {
   ethereum: { rpc: 'https://ethereum-rpc.publicnode.com', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
   bsc: { rpc: 'https://bsc-rpc.publicnode.com', type: 'evm', decimals: 18, cgId: 'binancecoin', native: 'BNB' },
-  polygon: { rpc: 'https://polygon-bor-rpc.publicnode.com', type: 'evm', decimals: 18, cgId: 'matic-network', native: 'POL' },
+  // 'polygon-ecosystem-token' (POL), not the old 'matic-network' — CoinGecko retired the MATIC id in
+  // the POL migration and now answers it with an empty object, which silently priced every Polygon
+  // wallet at $0.00 while its native balance still rendered.
+  polygon: { rpc: 'https://polygon-bor-rpc.publicnode.com', type: 'evm', decimals: 18, cgId: 'polygon-ecosystem-token', native: 'POL' },
   arbitrum: { rpc: 'https://arbitrum-one-rpc.publicnode.com', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
   optimism: { rpc: 'https://optimism-rpc.publicnode.com', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
   base: { rpc: 'https://base-rpc.publicnode.com', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
