@@ -788,12 +788,28 @@ web/
     assets/  images/   engine assets, verbatim
 ```
 
-### Deployment (Vercel) — ⚠ one manual dashboard step
+### Deployment (Vercel)
 
-The Vercel project `openview` (`prj_f2yudtwYJ8U2jqVto56AEq8itBkj`) currently deploys the repo root as a static site (`vercel.json` root serves `index.html`). To ship this migration:
+The Vercel project `openview` (`prj_f2yudtwYJ8U2jqVto56AEq8itBkj`) has **Root Directory = `web`** (confirmed via `vercel project inspect openview`). Consequences that are easy to get wrong:
 
-- **Set the project's Root Directory to `web`** in Vercel → Project → Settings → General. Vercel then builds the Next app (`web/vercel.json` framework hint) and the root `vercel.json` is ignored. This is a **dashboard setting** and cannot be expressed from the repo — it is the single manual step required for deploy. Until it is set, the old static deploy keeps working, so there is no broken half-state.
-- The repo-root `index.html` and root `vercel.json` are left in place (harmless once Root Directory moves; also the source of truth that `web/public/index.html` is copied from — keep them in sync on future engine edits, or replace the copy with a build step later).
+- **`web/vercel.json` is the live config. The repo-root `vercel.json` is dead** — Vercel reads `vercel.json` from the Root Directory, so the root file (the pre-migration static config: `cleanUrls`, `/` → `/index.html`) is never read. Anything added there — crons, headers, rewrites — is **silently ignored**. Put deploy config in `web/vercel.json`.
+- The repo-root `index.html` is still the source of truth that `web/public/index.html` is copied from — keep them in sync on engine edits (see Engine-sync note).
+
+### Keep-alive cron (Supabase free-tier anti-pause)
+
+Supabase pauses a free-tier project after **7 days with no database activity**. A Vercel cron performs a real daily read so the timer never elapses.
+
+| Piece | Where |
+|---|---|
+| Route | `web/app/api/keep-alive/route.ts` — App Router, `runtime = 'edge'`, `dynamic = 'force-dynamic'` |
+| Cron | `web/vercel.json` → `crons: [{ path: "/api/keep-alive", schedule: "0 9 * * *" }]` |
+| Table | `public.keep_alive` — one `note text` column, one row; RLS on, policy `keep_alive_select_anon` grants SELECT to `anon`/`authenticated` |
+
+- **Real read, not a stub.** The route issues `GET {SUPABASE_URL}/rest/v1/keep_alive?select=note&limit=1` with the **anon key only** (never `service_role`) — plain `fetch` against PostgREST, i.e. the same request `@supabase/supabase-js` would make, without adding the client dependency to a deliberately minimal app. A route that merely returned `{ok:true}` would keep the cron green while the DB still got paused; **zero rows also returns 500**, so a deleted row or broken RLS policy surfaces instead of reporting a false success.
+- **Auth.** Vercel injects `Authorization: Bearer $CRON_SECRET` when it fires a cron. If `CRON_SECRET` is set, a mismatched/absent header → **401**; if it is unset, the route stays open (cron still works) rather than failing deploys before the env var is added.
+- **Hobby-plan limit: once per day, max.** More frequent schedules fail the deployment. Cron times are **UTC-only** and approximate on Hobby (fires within the hour).
+- **Requires two env vars in Vercel** (Project → Settings → Environment Variables): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. These were **not present in the repo** at the time this was added (no `.env*` file exists) — without them the route returns 500 and the DB still pauses. Plus `CRON_SECRET` (any long random string) to lock the endpoint.
+- **Framework Preset must be Next.js.** `vercel project inspect` reported Preset **"Other"** with Output Directory `public` — a static-site config that does not run App Router API routes. It must be Next.js (or auto-detected) or the cron will 404.
 
 ### Engine-sync note
 
