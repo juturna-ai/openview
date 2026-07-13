@@ -1,15 +1,17 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import AssetIcon from './AssetIcon';
+import type { AssetRef } from './AssetDetailView';
 import CoinIcon from './CoinIcon';
+import MarketIcon from './MarketIcon';
 import { Icon } from './icons';
 
 // Market page — ported from Reach's GainersLosers.jsx.
 //
-// Reach's six tabs are crypto, all sourced from CoinMarketCap via /api/market/cmc (see that route
-// for why it needs no API key). Two further tabs — Metals and Stocks/ETFs — are ours, sourced from
-// /api/market/movers (Yahoo + Frankfurter); Reach has no equivalent.
+// Two boards live here, picked by the `mode` prop and reached from two separate sidebar entries:
+// Leaderboards (crypto / stocks / ETFs / commodities, off /api/market/cmc + /api/market/screener)
+// and the market tab row (Gainers & Losers, Trending, Most Visited, Recently Added, Community
+// Sentiment — all crypto, all off /api/market/cmc; see that route for why it needs no API key).
 //
 // One deliberate divergence from Reach: its Community Sentiment table wires up sortable column
 // headers but then renders `list.map(...)` instead of `sortList(list).map(...)`, so clicking them
@@ -36,14 +38,53 @@ interface FearGreed {
   classification: string;
 }
 
-interface MoverRow {
+/** A leaderboard row from /api/market/screener — stocks, ETFs or commodities. */
+interface ScreenerRow {
   symbol: string;
   name: string;
-  assetType: 'metal' | 'currency' | 'stock';
-  price: number;
-  change24h: number;
+  price: number | null;
+  change24h: number | null;
+  marketCap: number | null;
   volume: number | null;
 }
+
+/**
+ * One leaderboard row, whatever the asset class. Crypto rows are Coins; stocks/ETFs/commodities are
+ * ScreenerRows widened to match, so a single table renderer serves all four.
+ *
+ * `cmcRank` carries the board position (for crypto it really is CMC's rank; for the rest it's the
+ * row's index in the server-ranked list). `thumb` is empty for non-crypto — those fall back to the
+ * lettered avatar rather than a CMC logo URL.
+ */
+interface LeaderRow {
+  key: string;
+  symbol: string;
+  name: string;
+  cmcRank: number | null;
+  price: number | null;
+  change24h: number | null;
+  marketCap: number | null;
+  volume: number | null;
+  thumb: string;
+}
+
+/** The four asset classes the Leaderboards tab can show. */
+type AssetClass = 'crypto' | 'stocks' | 'etfs' | 'commodities';
+
+const ASSET_CLASSES: { key: AssetClass; label: string; icon: string }[] = [
+  { key: 'crypto', label: 'Crypto', icon: 'bitcoin' },
+  { key: 'stocks', label: 'Stocks', icon: 'trending-up' },
+  { key: 'etfs', label: 'ETFs', icon: 'layers' },
+  { key: 'commodities', label: 'Commodities', icon: 'coins' },
+];
+
+/** Subtitle per class — the heading has to say what's actually ranked. */
+const ASSET_SUBTITLES: Record<AssetClass, string> = {
+  crypto: 'Top cryptocurrencies ranked by market capitalization',
+  stocks: 'Top US-listed stocks ranked by market capitalization',
+  etfs: 'Major ETFs ranked by trading volume',
+  commodities: 'Commodity futures ranked by trading volume',
+};
 
 type TabKey =
   | 'leaderboards'
@@ -51,22 +92,19 @@ type TabKey =
   | 'trending'
   | 'mostvisited'
   | 'recentlyadded'
-  | 'sentiment'
-  | 'metals'
-  | 'stocks';
+  | 'sentiment';
 
 type ChangeKey = 'change1h' | 'change24h' | 'change7d' | 'change30d';
-type SortKey = 'price' | 'volume' | 'marketCap' | ChangeKey;
+type SortKey = 'cmcRank' | 'price' | 'volume' | 'marketCap' | ChangeKey;
 
-const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: 'leaderboards', label: 'Leaderboards', icon: 'trophy' },
+// The market tab row. Leaderboards is deliberately absent — it's a left-sidebar destination of its
+// own now, so listing it here too would give it two competing entry points.
+const MARKET_TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'gainerslosers', label: 'Gainers & Losers', icon: 'bar-chart' },
   { key: 'trending', label: 'Trending', icon: 'flame' },
   { key: 'mostvisited', label: 'Most Visited', icon: 'eye' },
   { key: 'recentlyadded', label: 'Recently Added', icon: 'clock' },
   { key: 'sentiment', label: 'Community Sentiment', icon: 'users' },
-  { key: 'metals', label: 'Metals', icon: 'coins' },
-  { key: 'stocks', label: 'Stocks & ETFs', icon: 'trending-up' },
 ];
 
 const HEADINGS: Record<TabKey, { title: string; subtitle: string }> = {
@@ -94,14 +132,6 @@ const HEADINGS: Record<TabKey, { title: string; subtitle: string }> = {
     title: 'Community Sentiment',
     subtitle: 'Cryptocurrencies with the highest community activity and trading interest',
   },
-  metals: {
-    title: 'Precious Metals',
-    subtitle: 'Gold, silver, platinum and palladium futures, ranked by daily move — via Yahoo Finance',
-  },
-  stocks: {
-    title: 'Stocks & ETFs',
-    subtitle: 'Major equities and index ETFs, ranked by daily move — via Yahoo Finance',
-  },
 };
 
 const TIMEFRAMES: { key: string; label: string; changeKey: ChangeKey }[] = [
@@ -123,6 +153,10 @@ const ALL_POOL_LIMIT = 1000;
 /** Reach drops illiquid coins before ranking — without it the boards fill with dead microcaps. */
 const MIN_VOLUME = 50_000;
 
+/** Leaderboards paginate 100 coins a page up to 500, so every fetch must return at least that many. */
+const LEADERBOARD_PAGE_SIZE = 100;
+const LEADERBOARD_MAX = 500;
+
 /* ── Formatters (ported verbatim from Reach) ── */
 
 const fmtPrice = (p: number | null): string => {
@@ -139,6 +173,19 @@ const fmtVol = (v: number | null): string => {
   if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
   if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
   return `$${v.toFixed(0)}`;
+};
+
+/**
+ * The size column means a different thing per class, so it says so rather than calling all three
+ * "Market Cap". An ETF's size is its AUM; a futures contract has no market cap at all (no ownership
+ * stake, so no share count to price) and carries notional value — open interest × price × contract
+ * size — instead. All three are dollars, so the column still sorts and compares cleanly.
+ */
+const MCAP_LABEL: Record<AssetClass, string> = {
+  crypto: 'Market Cap',
+  stocks: 'Market Cap',
+  etfs: 'AUM',
+  commodities: 'Notional',
 };
 
 const fmtMcap = (v: number | null): string => {
@@ -163,19 +210,43 @@ function ChangePill({ pct }: { pct: number | null }) {
   );
 }
 
-export default function MoversView() {
-  const [tab, setTab] = useState<TabKey>('gainerslosers');
+interface Props {
+  /**
+   * Which board this instance shows. Leaderboards is now its own left-sidebar item, so it renders
+   * standalone (no tab row); every other tab renders the market tab row as before, minus
+   * Leaderboards. Defaults to the market view.
+   */
+  mode?: 'market' | 'leaderboards';
+  /**
+   * Called when a row is clicked. The shell owns the detail view, so this only reports *which* asset
+   * was picked — enough for /api/market/asset to fetch the rest (a numeric CMC id for crypto, a
+   * ticker for everything else).
+   */
+  onSelect?: (asset: AssetRef) => void;
+}
+
+export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
+  const isLeaderboardsMode = mode === 'leaderboards';
+  const [tab, setTab] = useState<TabKey>(
+    isLeaderboardsMode ? 'leaderboards' : 'gainerslosers',
+  );
   const [coins, setCoins] = useState<Coin[]>([]);
   const [trending, setTrending] = useState<Coin[]>([]);
   const [mostVisited, setMostVisited] = useState<Coin[]>([]);
   const [recentlyAdded, setRecentlyAdded] = useState<Coin[]>([]);
   const [fearGreed, setFearGreed] = useState<FearGreed | null>(null);
-  const [rows, setRows] = useState<MoverRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
+  // Stocks / ETFs / commodities for the Leaderboards tab, off /api/market/screener.
+  const [stocks, setStocks] = useState<ScreenerRow[]>([]);
+  const [etfs, setEtfs] = useState<ScreenerRow[]>([]);
+  const [commodities, setCommodities] = useState<ScreenerRow[]>([]);
+
   const [timeframe, setTimeframe] = useState('24h');
   const [coinPool, setCoinPool] = useState(100);
+  const [lbPage, setLbPage] = useState(1);
+  const [assetClass, setAssetClass] = useState<AssetClass>('crypto');
   const [sort, setSort] = useState<{ key: SortKey | null; dir: 'asc' | 'desc' }>({
     key: null,
     dir: 'desc',
@@ -187,12 +258,13 @@ export default function MoversView() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const limit = coinPool === 0 ? ALL_POOL_LIMIT : coinPool;
+    // The pool dropdown only gates Gainers & Losers; the leaderboard always needs its full 500,
+    // so never request fewer than that.
+    const limit = Math.max(coinPool === 0 ? ALL_POOL_LIMIT : coinPool, LEADERBOARD_MAX);
     try {
-      const [cmcRes, moversRes] = await Promise.all([
-        fetch(`/api/market/cmc?limit=${limit}`).then((r) => (r.ok ? r.json() : null)),
-        fetch('/api/market/movers').then((r) => (r.ok ? r.json() : null)),
-      ]);
+      const cmcRes = await fetch(`/api/market/cmc?limit=${limit}`).then((r) =>
+        r.ok ? r.json() : null,
+      );
       if (cmcRes) {
         setCoins(cmcRes.coins ?? []);
         setTrending(cmcRes.trending ?? []);
@@ -200,7 +272,6 @@ export default function MoversView() {
         setRecentlyAdded(cmcRes.recentlyAdded ?? []);
         setFearGreed(cmcRes.fearGreed ?? null);
       }
-      if (moversRes) setRows(moversRes.rows ?? []);
       setUpdatedAt(new Date());
     } catch {
       // Leave the previous data on screen — a transient blip shouldn't blank the page.
@@ -208,6 +279,28 @@ export default function MoversView() {
       setLoading(false);
     }
   }, [coinPool]);
+
+  // The screener (500 stocks + ETFs + commodities) only feeds the Leaderboards tab, so it's fetched
+  // separately and only while that tab is open — the other seven tabs shouldn't pay for it. Kept out
+  // of `fetchData` so switching tabs doesn't rebuild that callback and restart the refresh interval.
+  const fetchScreener = useCallback(async () => {
+    try {
+      const res = await fetch('/api/market/screener').then((r) => (r.ok ? r.json() : null));
+      if (!res) return;
+      setStocks(res.stocks ?? []);
+      setEtfs(res.etfs ?? []);
+      setCommodities(res.commodities ?? []);
+    } catch {
+      // Same as above: keep whatever's already on screen.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab !== 'leaderboards') return;
+    void fetchScreener();
+    const id = setInterval(() => void fetchScreener(), REFRESH_MS);
+    return () => clearInterval(id);
+  }, [tab, fetchScreener]);
 
   useEffect(() => {
     void fetchData();
@@ -222,23 +315,33 @@ export default function MoversView() {
   }, [tab]);
 
   const handleSort = (key: SortKey) => {
-    setSort((prev) => ({
-      key,
-      dir: prev.key === key && prev.dir === 'desc' ? 'asc' : 'desc',
-    }));
+    setSort((prev) => {
+      // Rank reads best-first, so it opens ascending (#1 at the top); every other column opens
+      // descending (biggest price / mover / cap first). A second click flips whichever it is.
+      const firstDir: 'asc' | 'desc' = key === 'cmcRank' ? 'asc' : 'desc';
+      if (prev.key !== key) return { key, dir: firstDir };
+      return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
+    });
   };
 
   const sortList = useCallback(
-    <T extends Coin | MoverRow>(list: T[]): T[] => {
+    <T extends Coin | LeaderRow>(list: T[]): T[] => {
       if (!sort.key) return list;
       const k = sort.key;
-      // Not every sort key exists on every row type (MoverRow has no marketCap, for instance) —
-      // a missing or null field sorts as 0 rather than throwing.
+      // Not every sort key exists on every row type — a missing or null field sorts as 0 rather
+      // than throwing. Rank is the exception: 0 would
+      // float unranked coins to the top of an ascending sort, so they sink to the bottom instead.
+      const missing = k === 'cmcRank' ? Infinity : 0;
       const val = (row: T): number => {
         const v = (row as unknown as Record<string, unknown>)[k];
-        return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+        return typeof v === 'number' && Number.isFinite(v) ? v : missing;
       };
-      return [...list].sort((a, b) => (sort.dir === 'asc' ? val(a) - val(b) : val(b) - val(a)));
+      // Compare rather than subtract: two unranked rows are both Infinity, and Infinity - Infinity
+      // is NaN, which makes the comparator inconsistent.
+      const cmp = (x: number, y: number) => (x < y ? -1 : x > y ? 1 : 0);
+      return [...list].sort((a, b) =>
+        sort.dir === 'asc' ? cmp(val(a), val(b)) : cmp(val(b), val(a)),
+      );
     },
     [sort],
   );
@@ -261,10 +364,52 @@ export default function MoversView() {
     };
   }, [liquid, coinPool, changeKey]);
 
-  const leaderboards = useMemo(
-    () => [...coins].sort((a, b) => (b.marketCap ?? 0) - (a.marketCap ?? 0)).slice(0, 30),
-    [coins],
-  );
+  // Every asset class is normalised to one row shape so a single table, one sort and one paginator
+  // serve all four. `cmcRank` doubles as the board position, which is what the # column prints.
+  //
+  // Crypto ranks by CMC's own rank, NOT by raw `marketCap`: CMC excludes stablecoins, wrapped assets
+  // and LP tokens from its ranking, so a coin like USDY carries a top-100 market cap but a rank of
+  // 200+. Sorting on market cap pulled those into page 1 while the # column still printed their real
+  // rank, which is why 200-something numbers showed up there.
+  //
+  // The screener classes arrive already ranked from the server (stocks by market cap, ETFs and
+  // commodities by volume — neither has a market cap to rank on), so their position is just an index.
+  const leaderboardRanked = useMemo((): LeaderRow[] => {
+    if (assetClass === 'crypto') {
+      return [...coins]
+        .sort((a, b) => (a.cmcRank ?? Infinity) - (b.cmcRank ?? Infinity))
+        .slice(0, LEADERBOARD_MAX)
+        .map((c) => ({ ...c, key: String(c.id || c.symbol) }));
+    }
+    const src =
+      assetClass === 'stocks' ? stocks : assetClass === 'etfs' ? etfs : commodities;
+    return src.slice(0, LEADERBOARD_MAX).map((r, i) => ({
+      ...r,
+      cmcRank: i + 1,
+      thumb: '',
+      key: r.symbol,
+    }));
+  }, [assetClass, coins, stocks, etfs, commodities]);
+
+  const lbPageCount = Math.max(1, Math.ceil(leaderboardRanked.length / LEADERBOARD_PAGE_SIZE));
+
+  // A shrinking list (a smaller upstream response) can strand the page past the end.
+  useEffect(() => {
+    setLbPage((p) => Math.min(p, lbPageCount));
+  }, [lbPageCount]);
+
+  // Switching class swaps the whole board out, so the page you were on no longer refers to anything.
+  useEffect(() => {
+    setLbPage(1);
+    setSort({ key: null, dir: 'desc' });
+  }, [assetClass]);
+
+  // Page first, sort second — a column sort only ever reorders the 100 rows you're looking at, and
+  // never pulls a row in from another page. Which rows land on page N is fixed by board rank.
+  const leaderboards = useMemo(() => {
+    const start = (Math.min(lbPage, lbPageCount) - 1) * LEADERBOARD_PAGE_SIZE;
+    return sortList(leaderboardRanked.slice(start, start + LEADERBOARD_PAGE_SIZE));
+  }, [leaderboardRanked, lbPage, lbPageCount, sortList]);
 
   // Bullish/bearish rank by volume × change — a momentum score, so a big move on real volume
   // outranks a bigger move on none.
@@ -282,9 +427,6 @@ export default function MoversView() {
     };
   }, [liquid]);
 
-  const metalRows = useMemo(() => rows.filter((r) => r.assetType === 'metal'), [rows]);
-  const stockRows = useMemo(() => rows.filter((r) => r.assetType === 'stock'), [rows]);
-
   /* ── Table renderers ── */
 
   const sortableTh = (key: SortKey, label: string, cls: string) => (
@@ -293,19 +435,63 @@ export default function MoversView() {
     </th>
   );
 
-  // Leaderboards / Trending / Most Visited / Recently Added.
-  const renderCoinTable = (list: Coin[]) => {
-    const sorted = sortList(list);
+  /**
+   * Row-click plumbing, shared by every table on the page. A crypto row carries CMC's numeric `id`,
+   * which is what the detail endpoint keys off; the screener classes have no id and key off the
+   * ticker, so `id` is simply absent for them.
+   *
+   * Returned as props rather than a wrapper component so the <tr> keeps its place in the <tbody> —
+   * an element between them is invalid table markup.
+   */
+  const rowProps = (row: Coin | LeaderRow, cls: AssetClass) => {
+    if (!onSelect) return {};
+    const asset: AssetRef = {
+      cls,
+      symbol: row.symbol,
+      name: row.name,
+      thumb: row.thumb,
+      ...(cls === 'crypto' && 'id' in row ? { id: row.id } : {}),
+    };
+    const open = () => onSelect(asset);
+    return {
+      className: 'gl-cmc-row gl-cmc-row-link',
+      onClick: open,
+      // Keyboard parity: a clickable row that only responds to a mouse is unreachable by tab.
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open();
+        }
+      },
+      role: 'button',
+      tabIndex: 0,
+    };
+  };
+
+  // Leaderboards (any asset class) / Trending / Most Visited / Recently Added.
+  //
+  // `preSorted` is for Leaderboards: the page has already been sliced and sorted upstream (sorting
+  // is per-page, so it must happen after the slice) — re-sorting here would be redundant.
+  //
+  // `cls` picks the icon source. Crypto rows carry a CMC logo URL on the row itself (`thumb`); the
+  // screener classes carry none, so they resolve one from the ticker instead (see MarketIcon). The
+  // three crypto-only tabs never pass it, hence the default.
+  const renderCoinTable = (
+    list: (Coin | LeaderRow)[],
+    opts?: { preSorted?: boolean; cls?: AssetClass },
+  ) => {
+    const sorted = opts?.preSorted ? list : sortList(list);
+    const cls = opts?.cls ?? 'crypto';
     return (
       <div className="gl-table-wrapper">
         <table className="gl-cmc-table">
           <thead>
             <tr>
-              <th className="gl-th-rank">#</th>
+              {sortableTh('cmcRank', '#', 'gl-th-rank')}
               <th className="gl-th-name">Name</th>
               {sortableTh('price', 'Price', 'gl-th-price')}
               {sortableTh('change24h', '24h %', 'gl-th-change')}
-              {sortableTh('marketCap', 'Market Cap', 'gl-th-mcap')}
+              {sortableTh('marketCap', MCAP_LABEL[cls], 'gl-th-mcap')}
               {sortableTh('volume', 'Volume(24h)', 'gl-th-volume')}
             </tr>
           </thead>
@@ -318,10 +504,20 @@ export default function MoversView() {
               </tr>
             ) : (
               sorted.map((c, i) => (
-                <tr key={c.id || c.symbol} className="gl-cmc-row">
+                <tr
+                  key={'key' in c ? c.key : c.id || c.symbol}
+                  className="gl-cmc-row"
+                  {...rowProps(c, cls)}
+                >
+                  {/* The row's real board rank, not a row counter — a per-page sort reorders the
+                      rows, and renumbering them 1..100 would misreport rank on every sorted view. */}
                   <td className="gl-td-rank">{c.cmcRank ?? i + 1}</td>
                   <td className="gl-td-name">
-                    <CoinIcon symbol={c.symbol} thumb={c.thumb} size={28} />
+                    {cls === 'crypto' ? (
+                      <CoinIcon symbol={c.symbol} thumb={c.thumb} size={28} />
+                    ) : (
+                      <MarketIcon symbol={c.symbol} cls={cls} size={28} />
+                    )}
                     <span className="gl-coin-info">
                       <span className="gl-coin-name">{c.name}</span>
                       <span className="gl-coin-symbol">{c.symbol}</span>
@@ -372,7 +568,7 @@ export default function MoversView() {
                 </tr>
               ) : (
                 sorted.map((c) => (
-                  <tr key={c.id || c.symbol} className="gl-cmc-row">
+                  <tr key={c.id || c.symbol} className="gl-cmc-row" {...rowProps(c, 'crypto')}>
                     <td className="gl-td-rank">{c.cmcRank ?? '—'}</td>
                     <td className="gl-td-name">
                       <CoinIcon symbol={c.symbol} thumb={c.thumb} size={28} />
@@ -431,7 +627,7 @@ export default function MoversView() {
                   const s = Math.min(100, Math.max(0, 50 + pct * 2));
                   const width = isBullish ? s : 100 - s;
                   return (
-                    <tr key={c.id || c.symbol} className="gl-cmc-row">
+                    <tr key={c.id || c.symbol} className="gl-cmc-row" {...rowProps(c, 'crypto')}>
                       <td className="gl-td-rank">{c.cmcRank ?? '—'}</td>
                       <td className="gl-td-name">
                         <CoinIcon symbol={c.symbol} thumb={c.thumb} size={28} />
@@ -470,78 +666,58 @@ export default function MoversView() {
     );
   };
 
-  // Metals / Stocks — our own tabs, off /api/market/movers.
-  const renderMoverTable = (list: MoverRow[], kind: 'metal' | 'stock') => {
-    const sorted = sortList(list);
-    return (
-      <div className="gl-table-wrapper">
-        <table className="gl-cmc-table">
-          <thead>
-            <tr>
-              <th className="gl-th-name">Name</th>
-              {sortableTh('price', 'Price', 'gl-th-price')}
-              {sortableTh('change24h', '24h %', 'gl-th-change')}
-              {sortableTh('volume', 'Volume(24h)', 'gl-th-volume')}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.length === 0 ? (
-              <tr>
-                <td className="gl-td-empty" colSpan={4}>
-                  {loading ? 'Loading…' : 'No data available'}
-                </td>
-              </tr>
-            ) : (
-              sorted.map((r) => (
-                <tr key={r.symbol} className="gl-cmc-row">
-                  <td className="gl-td-name">
-                    {kind === 'metal' ? (
-                      <AssetIcon symbol={r.symbol} assetType="metal" size={28} />
-                    ) : (
-                      <AssetIcon symbol={r.symbol} assetType="stock" size={28} />
-                    )}
-                    <span className="gl-coin-info">
-                      <span className="gl-coin-name">{r.name}</span>
-                      <span className="gl-coin-symbol">{r.symbol}</span>
-                    </span>
-                  </td>
-                  <td className="gl-td-price">{fmtPrice(r.price)}</td>
-                  <td className="gl-td-change">
-                    <ChangePill pct={r.change24h} />
-                  </td>
-                  <td className="gl-td-volume">{fmtVol(r.volume)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  const heading = HEADINGS[tab];
+  const isLB = tab === 'leaderboards';
   const isGL = tab === 'gainerslosers';
+
+  // On Leaderboards the heading follows the selected asset class, not the tab.
+  const heading = isLB
+    ? {
+        title: `${ASSET_CLASSES.find((a) => a.key === assetClass)?.label ?? 'Crypto'} Leaderboards`,
+        subtitle: ASSET_SUBTITLES[assetClass],
+      }
+    : HEADINGS[tab];
 
   return (
     <div className="gl-page">
-      <nav className="gl-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={'gl-tab' + (tab === t.key ? ' active' : '')}
-            onClick={() => setTab(t.key)}
-            aria-current={tab === t.key ? 'page' : undefined}
-          >
-            <Icon name={t.icon} size={14} />
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      {/* Leaderboards is its own sidebar destination now, so it renders without the tab row — and
+          the market tab row no longer carries it. */}
+      {!isLeaderboardsMode && (
+        <nav className="gl-tabs">
+          {MARKET_TABS.map((t) => (
+            <button
+              key={t.key}
+              className={'gl-tab' + (tab === t.key ? ' active' : '')}
+              onClick={() => setTab(t.key)}
+              aria-current={tab === t.key ? 'page' : undefined}
+            >
+              <Icon name={t.icon} size={14} />
+              {t.label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <div className="gl-page-header">
         <h1 className="gl-page-title">{heading.title}</h1>
         <p className="gl-page-subtitle">{heading.subtitle}</p>
       </div>
+
+      {isLB && (
+        <div className="gl-class-tabs" role="tablist" aria-label="Asset class">
+          {ASSET_CLASSES.map((a) => (
+            <button
+              key={a.key}
+              role="tab"
+              className={'gl-class-tab' + (assetClass === a.key ? ' active' : '')}
+              onClick={() => setAssetClass(a.key)}
+              aria-selected={assetClass === a.key}
+            >
+              <Icon name={a.icon} size={13} />
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="gl-controls">
         <div className="gl-controls-left">
@@ -574,13 +750,62 @@ export default function MoversView() {
             </>
           )}
         </div>
-        <button className="gl-refresh-btn" onClick={() => void fetchData()} disabled={loading}>
+        <button
+          className="gl-refresh-btn"
+          onClick={() => {
+            void fetchData();
+            // The screener isn't part of fetchData, so refresh it too when it's what's on screen.
+            if (isLB) void fetchScreener();
+          }}
+          disabled={loading}
+        >
           <Icon name="refresh-cw" size={14} className={loading ? 'spinning' : undefined} />
           {updatedAt && <span className="gl-updated">{updatedAt.toLocaleTimeString()}</span>}
         </button>
       </div>
 
-      {tab === 'leaderboards' && renderCoinTable(leaderboards)}
+      {tab === 'leaderboards' && (
+        <>
+          {renderCoinTable(leaderboards, { preSorted: true, cls: assetClass })}
+          {leaderboardRanked.length > LEADERBOARD_PAGE_SIZE && (
+            <div className="gl-pagination">
+              <span className="gl-pagination-range">
+                {(lbPage - 1) * LEADERBOARD_PAGE_SIZE + 1}–
+                {Math.min(lbPage * LEADERBOARD_PAGE_SIZE, leaderboardRanked.length)} of{' '}
+                {leaderboardRanked.length}
+              </span>
+              <div className="gl-pagination-pages">
+                <button
+                  className="gl-page-btn"
+                  onClick={() => setLbPage((p) => Math.max(1, p - 1))}
+                  disabled={lbPage === 1}
+                  aria-label="Previous page"
+                >
+                  <Icon name="chevron-left" size={14} />
+                </button>
+                {Array.from({ length: lbPageCount }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    className={'gl-page-btn' + (p === lbPage ? ' active' : '')}
+                    onClick={() => setLbPage(p)}
+                    aria-current={p === lbPage ? 'page' : undefined}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <button
+                  className="gl-page-btn"
+                  onClick={() => setLbPage((p) => Math.min(lbPageCount, p + 1))}
+                  disabled={lbPage === lbPageCount}
+                  aria-label="Next page"
+                >
+                  <Icon name="chevron-right" size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
       {tab === 'trending' && renderCoinTable(trending)}
       {tab === 'mostvisited' && renderCoinTable(mostVisited)}
       {tab === 'recentlyadded' && renderCoinTable(recentlyAdded)}
@@ -622,9 +847,6 @@ export default function MoversView() {
           </div>
         </>
       )}
-
-      {tab === 'metals' && renderMoverTable(metalRows, 'metal')}
-      {tab === 'stocks' && renderMoverTable(stockRows, 'stock')}
 
       <p className="gl-page-disclaimer">
         Crypto data from CoinMarketCap; metals and equities from Yahoo Finance. Prices refresh every

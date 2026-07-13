@@ -15,11 +15,40 @@ const MIN_VOLUME = 50_000;
 
 function sortList(list, sort) {
   if (!sort.key) return list;
+  // A missing field sorts as 0 — except rank, where 0 would float unranked rows to the top of an
+  // ascending sort, so they sink instead. Compare rather than subtract: Infinity - Infinity is NaN,
+  // which would make the comparator inconsistent.
+  const missing = sort.key === 'cmcRank' ? Infinity : 0;
   const val = (row) => {
     const v = row[sort.key];
-    return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+    return typeof v === 'number' && Number.isFinite(v) ? v : missing;
   };
-  return [...list].sort((a, b) => (sort.dir === 'asc' ? val(a) - val(b) : val(b) - val(a)));
+  const cmp = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
+  return [...list].sort((a, b) =>
+    sort.dir === 'asc' ? cmp(val(a), val(b)) : cmp(val(b), val(a)),
+  );
+}
+
+/* ── Leaderboard: rank the board, slice the page, THEN sort within it ── */
+
+const LB_PAGE_SIZE = 100;
+const LB_MAX = 500;
+
+/** Crypto ranks by cmcRank (NOT market cap — see below); screener classes arrive pre-ranked. */
+function rankBoard(rows, assetClass) {
+  if (assetClass === 'crypto') {
+    return [...rows]
+      .sort((a, b) => (a.cmcRank ?? Infinity) - (b.cmcRank ?? Infinity))
+      .slice(0, LB_MAX);
+  }
+  return rows.slice(0, LB_MAX).map((r, i) => ({ ...r, cmcRank: i + 1 }));
+}
+
+/** The page you see: sliced first, sorted second — so a sort can never pull in another page's row. */
+function leaderboardPage(rows, assetClass, page, sort = { key: null, dir: 'desc' }) {
+  const board = rankBoard(rows, assetClass);
+  const start = (page - 1) * LB_PAGE_SIZE;
+  return sortList(board.slice(start, start + LB_PAGE_SIZE), sort);
 }
 
 // Reach's buggy sentiment render: ignores the sort entirely.
@@ -172,6 +201,111 @@ check('sub-dollar keeps 6', () => assert.equal(fmtPrice(0.137836), '$0.137836'))
 check('sub-$100 keeps 2', () => assert.equal(fmtPrice(6.58), '$6.58'));
 check('large prices get separators', () => assert.equal(fmtPrice(62566.41), '$62,566.41'));
 check('null price renders a dash', () => assert.equal(fmtPrice(null), '—'));
+
+console.log('\nLeaderboards — pagination and per-page sorting:');
+
+// 500 coins, ranks 1..500. Two of them (ranks 201/202) are given a top-100-sized market cap: this is
+// the real CMC shape — stablecoins / wrapped assets / LP tokens are excluded from CMC's *ranking* but
+// still carry a huge cap. Ranking the board by marketCap instead of cmcRank drags them onto page 1.
+const BOARD = Array.from({ length: 500 }, (_, i) => {
+  const rank = i + 1;
+  const inflated = rank === 201 || rank === 202; // e.g. USDY, DEL
+  return {
+    id: rank,
+    symbol: `C${rank}`,
+    cmcRank: rank,
+    price: 1000 - rank,
+    change24h: (rank % 7) - 3,
+    // Big enough to outrank a genuine top-50 coin (1e12/50 = 2e10) — that's the whole point.
+    marketCap: inflated ? 5e10 : 1e12 / rank,
+    volume: 1e9 / rank,
+  };
+});
+
+check('page 1 is ranks 1–100', () => {
+  const p = leaderboardPage(BOARD, 'crypto', 1);
+  assert.equal(p.length, 100);
+  assert.equal(p[0].cmcRank, 1);
+  assert.equal(p[99].cmcRank, 100);
+});
+
+check('page 2 is ranks 101–200', () => {
+  const p = leaderboardPage(BOARD, 'crypto', 2);
+  assert.equal(p[0].cmcRank, 101);
+  assert.equal(p[99].cmcRank, 200);
+});
+
+check('page 5 is ranks 401–500', () => {
+  const p = leaderboardPage(BOARD, 'crypto', 5);
+  assert.equal(p[0].cmcRank, 401);
+  assert.equal(p[99].cmcRank, 500);
+});
+
+// The regression: ordering the board by marketCap put rank-201/202 coins on page 1, while the #
+// column still printed their real rank — hence "200-something" numbers on the first page.
+check('no rank >100 leaks onto page 1 (the marketCap-ordering bug)', () => {
+  const p = leaderboardPage(BOARD, 'crypto', 1);
+  assert.ok(p.every((c) => c.cmcRank <= 100), 'a coin ranked >100 appeared on page 1');
+  const byCap = [...BOARD].sort((a, b) => b.marketCap - a.marketCap).slice(0, 100);
+  assert.ok(byCap.some((c) => c.cmcRank > 100), 'fixture must actually exercise the bug');
+});
+
+// The invariant the user asked for: a sort reorders the page, never repopulates it.
+check('every sort keeps page membership identical', () => {
+  for (const page of [1, 2, 5]) {
+    const base = leaderboardPage(BOARD, 'crypto', page)
+      .map((c) => c.symbol)
+      .sort();
+    for (const key of ['cmcRank', 'price', 'change24h', 'marketCap', 'volume']) {
+      for (const dir of ['asc', 'desc']) {
+        const got = leaderboardPage(BOARD, 'crypto', page, { key, dir })
+          .map((c) => c.symbol)
+          .sort();
+        assert.deepEqual(got, base, `page ${page} membership changed under ${key}/${dir}`);
+      }
+    }
+  }
+});
+
+check('sorting reorders the rows it does keep', () => {
+  const asc = leaderboardPage(BOARD, 'crypto', 1, { key: 'price', dir: 'asc' });
+  const desc = leaderboardPage(BOARD, 'crypto', 1, { key: 'price', dir: 'desc' });
+  assert.equal(asc[0].symbol, desc[99].symbol);
+  assert.ok(asc[0].price < asc[99].price);
+});
+
+check('rank sorts ascending (#1 first), unranked rows sink', () => {
+  const rows = [
+    { symbol: 'A', cmcRank: 3 },
+    { symbol: 'B', cmcRank: null },
+    { symbol: 'C', cmcRank: 1 },
+  ];
+  const asc = sortList(rows, { key: 'cmcRank', dir: 'asc' });
+  assert.deepEqual(asc.map((r) => r.symbol), ['C', 'A', 'B']); // null last, not first
+});
+
+check('two unranked rows do not produce a NaN comparator', () => {
+  const rows = [{ symbol: 'A', cmcRank: null }, { symbol: 'B', cmcRank: null }];
+  assert.equal(sortList(rows, { key: 'cmcRank', dir: 'asc' }).length, 2);
+});
+
+// Stocks/ETFs/commodities arrive already ranked by the server, so position is just the index.
+check('screener classes rank by arrival order', () => {
+  const etfs = [
+    { symbol: 'IBIT', volume: 10e6 },
+    { symbol: 'QQQ', volume: 6e6 },
+    { symbol: 'XLE', volume: 4e6 },
+  ];
+  const p = leaderboardPage(etfs, 'etfs', 1);
+  assert.deepEqual(p.map((r) => r.cmcRank), [1, 2, 3]);
+  assert.equal(p[0].symbol, 'IBIT');
+});
+
+check('a short class (ETFs) fits one page', () => {
+  const etfs = Array.from({ length: 40 }, (_, i) => ({ symbol: `E${i}`, volume: 40 - i }));
+  assert.equal(leaderboardPage(etfs, 'etfs', 1).length, 40);
+  assert.equal(Math.ceil(40 / LB_PAGE_SIZE), 1); // paginator hides itself
+});
 
 console.log(failures === 0 ? '\nALL PASS\n' : `\n${failures} FAILURE(S)\n`);
 process.exit(failures === 0 ? 0 : 1);
