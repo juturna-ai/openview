@@ -475,6 +475,12 @@ For `rsi`-vs-`value` alerts, `updateRsiAlertLines()` creates native lightweight-
 | `fv_layout` / `fv_layouts_named` / `fv_grid_sync` | active grid layout + per-panel symbols / named layouts / SYNC-IN-LAYOUT toggles | `persistLayout()` / `saveNamedLayout()` / grid-sync toggles | boot |
 | `fv_watchlists` / `fv_active_wl` | all named watchlists / active name | `saveWatchlists()` | boot (legacy `fv_watchlist` migrated) |
 
+| `ov_trades` | `Trade[]` — the trade journal (see §15). Written by the **Next app**, not the engine, hence the `ov_` prefix rather than `fv_`. | `saveTrades()` / `addTrade()` in `app/home/journal/trades.ts` (via the right-click → Add Trade modal) | `loadTrades()` in `app/home/journal/trades.ts` |
+| `ov_notes` | `Note[]` — the notes board (see §15). Sorted pinned-first, then most-recently-updated. | `addNote()` / `updateNote()` / `deleteNote()` in `app/home/journal/notes.ts` | `loadNotes()` (same file) |
+| `ov_holdings` | `Holding[]` — wallet portfolio (see §16). Fields are Reach's snake_case (`asset_type`, `avg_buy_price`) so holdings stay portable with the desktop app. | `addHolding()` / `updateHolding()` / `deleteHolding()` in `app/home/wallet/holdings.ts` | `loadHoldings()` (same file) |
+| `ov_portfolio_snapshots` | `Snapshot[]` (`{t, value}`) — portfolio-value time series backing the History chart. Appended on each successful price poll, throttled to one per 5 min, capped at 26k points. Reach stores these in SQLite; with no server DB they live here, which is why the chart shows "Collecting data" until two polls land. | `recordSnapshot()` in `app/home/wallet/holdings.ts` | `loadSnapshots()` (same file) |
+| `ov_tracked_wallets` | `TrackedWallet[]` (`{id, address, chain, label?}`) — on-chain addresses watched by the Wallet Tracker (see §16). Seeded with Reach's 20 known whale/exchange wallets **only when the key has never been written** (`raw === null`); an explicitly-stored `[]` is honoured as empty, so a user who clears the list doesn't get all 20 back on reload. | `saveTracked()` in `app/home/wallet/chains.ts` | `loadTracked()` / `defaultWallets()` (same file) |
+
 *(Not every key above is exhaustive — chart-settings/tool-favorite/template keys also exist; this table covers the durable app state a reader is most likely to look up.)*
 
 **Watchlist import/export** — `exportWatchlist()` downloads a `.txt` in `###SECTION` + symbols-per-line format; `importWatchlistText(txt)` parses it back into `GROUPS`, saves, and rebuilds. Buttons ⭱/⭳ in `#wlHead`.
@@ -753,8 +759,12 @@ The binding constraint (verified in code, not assumed):
 | `/home/openview` | `app/home/openview/page.tsx` | Platform description (what OpenView is). |
 | `/home/app` | `app/home/app/page.tsx` | The phone app. |
 | `/home/about` | `app/home/about/page.tsx` | Who we are. |
-| `/home/journal` | `app/home/journal/page.tsx` | **Coming soon** placeholder (folder-tab "Journal"). |
-| `/home/wallet` | `app/home/wallet/page.tsx` | **Coming soon** placeholder (folder-tab "Wallet"). |
+| `/home/journal` | `app/home/journal/page.tsx` + `JournalShell.tsx` (`'use client'`) | **Trade journal dashboard** (folder-tab "Journal"): sidebar + Calendar/Notes. See §15. |
+| `/home/wallet` | `app/home/wallet/page.tsx` + `WalletShell.tsx` (`'use client'`) | **Wallet dashboard** (folder-tab "Wallet"): sidebar + Wallet / Gainers & Losers / Wallet Tracker. See §16. |
+| `/api/market/prices` | `app/api/market/prices/route.ts` | POST holdings → `{symbol: {price, change24h}}`. Server-side price proxy (§16). |
+| `/api/market/movers` | `app/api/market/movers/route.ts` | GET metals + currencies + stocks/ETFs ranked by 24h move (§16). |
+| `/api/market/cmc` | `app/api/market/cmc/route.ts` | GET CoinMarketCap listing + spotlight + Fear & Greed — powers the market page's 6 crypto tabs (§16). No API key; see §16. |
+| `/api/wallet-tracker` | `app/api/wallet-tracker/route.ts` | POST `{action: balance\|tokens\|prices}` — on-chain lookups across 10 chains (§16). |
 
 `/home/*` share `app/home/layout.tsx` → dark folder-tab bar (`OvTabs`, tabs: Home · Openview · Journal · Wallet) + heading nav (`app/home/HomeNav.tsx`: Home · Openview · APP · About us). `OvTabs` is a client component that derives the active tab from `usePathname()`. The raw engine tab bars (`index.html`, `web/public/index.html` `#ovTabs`) mirror the same tabs (Journal/Wallet link to `/home/journal`, `/home/wallet`). The nav "Openview" is the **description** page (`/home/openview`), NOT the chart — the chart is the folder-tab "OpenView" → `/`. Old `(site)` navbar pages (`/about`, `/portfolio`, `/contact`) are unrelated leftovers.
 | `/about` | `app/(site)/about/page.tsx` | Marketing copy. |
@@ -852,3 +862,221 @@ A code-quality/security pass over `web/app/**` produced three fixes (re-verified
 - `.eslintrc.json` + `eslint`/`eslint-config-next` devDeps added so `next lint` runs non-interactively.
 
 Security review confirmed clean: no secrets/keys/creds anywhere in `web/` source; the contact `mailto:` handler `encodeURIComponent`s the fully-composed subject/body, neutralizing header/body injection; no `dangerouslySetInnerHTML`/`eval`; iframe is first-party same-origin. `web/public/index.html` verified byte-identical to root `index.html`.
+
+## 15. Journal — Trade Dashboard (`/home/journal`)
+
+A trade-journal dashboard ported from the **Reach** desktop app, rendered inside the existing Journal folder-tab: a left sidebar (New Trade · Calendar · Notes · live clock) beside the active view. Layout parity is deliberate — the calendar is Reach's `TradingMonthView` (four stat cards over an 8-column grid: 7 day columns + a weekly-summary column) and the notes board is its `NotesView`. Reach's theme vars are mapped onto this app's tokens (`--panel`/`--border`/`--muted`), profit/loss reuse the engine's `--green`/`--red`, and Reach's blue `--accent-gradient` is rebuilt from `--accent`, so the dashboard reads as the same product as the chart.
+
+**No new dependencies** — Reach uses `date-fns` + `lucide-react`; both are avoided. The date math is hand-rolled, the cumulative chart is an inline SVG (no chart lib), and the handful of Lucide glyphs used are inlined as SVG paths in `icons.tsx`. `/home/journal` costs **7.78 kB** (94.8 kB First Load).
+
+### Files
+
+| File | Role |
+|---|---|
+| `web/app/home/journal/page.tsx` | Server component; renders `<JournalShell/>` inside `<main className="ov-journal">`. |
+| `web/app/home/journal/JournalShell.tsx` | `'use client'` — owns the active view (`calendar`/`notes`); lays out sidebar + content. |
+| `web/app/home/journal/Sidebar.tsx` | `'use client'` — New Trade button, Calendar/Notes nav, live clock + date badge. |
+| `web/app/home/journal/TradingCalendar.tsx` | `'use client'` — calendar UI, stats, the SVG chart, and the right-click menu. |
+| `web/app/home/journal/TradeModal.tsx` | `'use client'` — the Add Trade dialog (form + live P&L preview). |
+| `web/app/home/journal/NotesView.tsx` | `'use client'` — notes board: search, pinned/other sections, color picker, note form, right-click menu + read-only viewer. |
+| `web/app/home/journal/trades.ts` | `Trade` type + `loadTrades()` / `saveTrades()` / `addTrade()` / `deleteTrade()`. |
+| `web/app/home/journal/notes.ts` | `Note` type, `NOTE_COLORS`, `isLightColor()` + notes CRUD. |
+| `web/app/home/journal/icons.tsx` | Inlined Lucide SVG paths (`<Icon name=… />`) — avoids the `lucide-react` dependency. |
+| `web/app/home/useSidebarResize.ts` | `'use client'` — shared drag-to-resize + collapse hook for **both** dashboard sidebars. |
+| `web/app/globals.css` | Calendar, sidebar, and notes styles appended under "Journal" banner comments. |
+
+### Sidebar
+
+Two nav items (Calendar, Notes) drive `JournalShell`'s `view` state; only the active view is mounted (both re-read localStorage on mount, so nothing is lost by unmounting). **New Trade** switches to the calendar and bumps a `newTradeSignal` counter that `TradingCalendar` watches to open `TradeModal` on the selected day — a counter rather than a boolean, so repeat clicks re-open without needing a reset. The clock ticks once a second and, like the calendar's month, stays `null` until mount to avoid a hydration mismatch against the server's clock.
+
+#### Resize + collapse (`useSidebarResize`)
+
+Both the journal and wallet sidebars are **drag-resizable** and **collapsible**, driven by one shared hook so they behave identically:
+
+- **Drag** — a 6px `role="separator"` handle straddles the sidebar's right border (`.sidebar-resize-handle`). Pointer events are bound to `window` on `pointerdown` so the drag survives the cursor leaving the element; width is clamped to **180–420px**. Arrow keys resize from the focused handle (±8px, ±32px with Shift); double-clicking it collapses.
+- **Collapse** — the `.sidebar-collapse-btn` toggle snaps the column to a **64px icons-only rail** (`.journal-sidebar.collapsed` hides `.sidebar-label`, the brand block, and the clock's date lines; nav buttons and the action button center their icons and gain `title` tooltips).
+- **Persistence** — `{width, collapsed}` is stored per-dashboard in localStorage (`openview:journal-sidebar` / `openview:wallet-sidebar`), read in an effect (not during render) so SSR markup can't mismatch, and re-clamped on read so a corrupt or out-of-range value falls back to the 244px default rather than breaking the layout.
+- **Mobile** (`max-width: 900px`) — the sidebar is already a full-width top bar, so the handle and toggle are hidden and the stored width is overridden; a sidebar left collapsed on desktop still renders with full labels here.
+
+Reach's other nav items (Wallet, Trading View, Quant, Gainers & Losers, Heatmap, Wallet Tracker, News/X), its REACH brand header, the personal/trader mode toggle, and the **Customize** panel are all deliberately **omitted** — Customize only configures a crypto/forex widget that isn't ported, so it would have been dead UI.
+
+### Notes interactions
+
+- **Left-click** a card → opens the **editor** (`.note-form`), pre-filled.
+- **Right-click** a card → a **context menu** (View · Edit · Delete), reusing the calendar's `.calendar-context-menu` styling. It is clamped to the viewport, and dismissed by any click, scroll, resize, or Escape.
+- **View** → a **read-only viewer** (`.note-view`): the full title, the **complete content** (note cards truncate at 150 chars — the viewer does not), the pin indicator, and Created/Updated dates. No inputs, nothing editable. Closes on the ✕, Escape, or a click outside. On a colored note the panel takes the note's color, and the muted/rule colors are derived from its luminance so text stays legible.
+
+### Data model — `Note`
+
+Mirrors Reach's SQLite `notes` table: `id`, `title`, `content`, `color` (one of `NOTE_COLORS`, or `null`), `pinned`, `created_at`, `updated_at` (ISO). Persisted at `ov_notes` (§9), sorted pinned-first then most-recently-updated — Reach's `ORDER BY pinned DESC, updated_at DESC`. Every mutation re-reads storage before writing, so a change in another tab isn't clobbered. A blank note (no title *and* no content) is a no-op. Card text flips to dark on light backgrounds via `isLightColor()` (luminance > 0.55), matching Reach.
+
+### Data model — `Trade`
+
+Mirrors Reach's SQLite `trades` columns (snake_case) so trades stay portable between the two apps: `id`, `trade_date` (`'YYYY-MM-DD'`), `symbol`, `direction` (`long|short`), `asset_class`, `entry_price`, `exit_price`, `position_size` (USD notional), `pnl` (**already net of commissions**), `commissions`, `margin`, `trade_type` (`spot|futures`), `amount_asset` (spot only, else `null`), `is_open`, `setup_tag`, `notes`.
+
+Persisted at `ov_trades` (see §9). `loadTrades()` returns `[]` on the server, on missing/corrupt JSON, or if storage is blocked, and coerces every field — a malformed entry is dropped, never thrown. `saveTrades()` writes the whole list back (silently no-ops if storage is blocked/full). `addTrade()` **re-reads storage before appending** and derives the new `id` from the current max, so a write from another tab is never clobbered by a stale in-memory copy.
+
+### Adding a trade
+
+**Right-click any day cell** → a context menu with **+ Add Trade** → `TradeModal`, prefilled with that cell's `'YYYY-MM-DD'` key (the date is fixed; everything else is entered). Dismiss the menu with a click anywhere, a scroll, a resize, or Escape; it is `position: fixed` at the cursor and clamped back inside the viewport so it never opens off-screen.
+
+`pnl` is **derived in the modal, not by the calendar** (which only aggregates). Quantity = `position_size / entry_price`, so a $10k long from 100 → 110 nets $1,000; the move is `exit - entry` (long) or `entry - exit` (short), minus commissions. The footer shows this live. Checking **Still open** disables the exit field and forces `pnl` to 0 — consistent with the aggregation rule below. `amount_asset` is filled for spot only (`size / entry`), `null` for futures.
+
+### Aggregation rules
+
+- **Open trades** (`is_open`) count toward a day's *trade count* but contribute **no P&L** to any total.
+- **Month totals** are scoped with `isSameMonth`, so the adjacent-month padding days visible in the grid never leak into Net P&L / win %.
+- **Trade Win %** = winning ÷ closed trades; **Day Win %** = winning ÷ trading days (a day wins if its summed P&L > 0). Breakeven (`pnl === 0`) is tracked as its own bucket in both gauges.
+- **Daily Net Cumulative P&L** is a running sum, one point per trading day in date order; it renders "Not enough data" below 2 points. Y-axis ticks snap to a `[1,2,2.5,5,10]×10ⁿ` step.
+- Dates are parsed as **local** (`new Date('YYYY-MM-DDT00:00:00')`) and keyed without `toISOString()`, so no trade shifts a day across timezones.
+
+The current month depends on the client clock, so the component renders an empty shell until mount (`useState(null)` + `useEffect`) rather than risk a hydration mismatch. A `storage` listener keeps the calendar live if trades are written in another tab.
+
+### Scope / not built
+
+Only the **month view** exists — the Day/Week toggle buttons are present but `disabled`. Trades can be **added** (sidebar New Trade, or right-click a day → modal) but not yet **edited or deleted from the UI**; `deleteTrade()` exists in `trades.ts` with no caller. Notes, by contrast, are fully CRUD. Reach's undo/redo, Ctrl+scroll zoom, sidebar drag-to-resize, and the Customize/finance widget were left out, as were its other nav destinations (Wallet, Trading View, Quant, Gainers & Losers, Heatmap, Wallet Tracker, News/X). Unlike Reach there is no auth/user scoping (no `user_id`) — trades and notes are per-browser, in localStorage.
+
+## 16. Navigation Performance (folder tabs)
+
+Measured in production (`next build` + `next start`), click → content visible:
+
+| Transition | Time | Notes |
+|---|---|---|
+| Home ↔ Journal ↔ Wallet | **48–139 ms** | Client-side `<Link>`. Zero network requests — the pages are statically prerendered and prefetched. Nothing to optimize. |
+| → Openview (chart engine) | **1310 ms cold → 122 ms warm** | A plain `<a href="/index.html">`: a **full document load** of the 720 KB single-file engine, not a client-side nav. |
+
+The engine tab was the only real cost, and it broke down as ~713 ms parsing/executing the inline JS plus ~470 ms fetching coin icons from `assets.coincap.io`. TTFB was 9 ms — the server was never the problem. Two fixes:
+
+1. **`preconnect` / `dns-prefetch` to `assets.coincap.io`** (in the engine's `<head>`) — the watchlist requests a dozen coin logos the moment it renders; warming DNS+TLS means the first one doesn't pay the handshake.
+2. **Cache headers** (`next.config.js` `headers()`) — everything under `public/` defaulted to `Cache-Control: public, max-age=0`, so *every* jump back to Openview re-validated the whole 720 KB document and re-fetched its assets. Now:
+   - `/index.html` → `max-age=0, must-revalidate, stale-while-revalidate=86400` (serve from cache instantly, revalidate in the background; a deploy lands on the next navigation).
+   - `/assets/*`, `/images/*` → `max-age=604800` (a week).
+
+Result: repeat visits to the Openview tab drop **1310 ms → 122 ms** (10×), with the document served from cache (0 KB transferred).
+
+### `NEXT_DIST_DIR` — don't clobber the dev server
+
+`next build` writes to the same `.next` the dev server serves its chunks from, so **running a production build while `npm run dev` is up silently breaks it** — every `/_next/static/*` asset 404s and pages render as unstyled HTML until the dev server is restarted. `next.config.js` now honours `NEXT_DIST_DIR`:
+
+```bash
+NEXT_DIST_DIR=.next-prod npx next build   # builds without touching the running dev server
+```
+
+---
+
+## 16. Wallet — Portfolio, Movers, On-chain Tracker (`/home/wallet`)
+
+A three-view dashboard ported from the **Reach** desktop app, replacing the old "Coming soon" placeholder. Reuses the Journal's shell (`.journal-shell` / `.journal-sidebar` / `.nav-item`) so both dashboards read as one product. Sidebar: **Add Asset** button · Wallet · Gainers & Losers · Wallet Tracker · live clock.
+
+`/home/wallet` costs **13.8 kB** (101 kB First Load). Movers + Tracker are `next/dynamic` code-split — neither is needed for the wallet's first paint.
+
+### The porting problem: Reach is Electron
+
+Reach fetches **all** market and chain data in its Electron **main process**, behind `window.electronAPI` IPC (`wallet:getPrices`, `walletTracker:*`). None of it is reachable from a browser: the upstreams send no CORS headers, and `CLAUDE.md` forbids calling external APIs from client code regardless. Every data path was therefore re-homed into **Next.js API routes**. All upstreams are keyless — no new env vars.
+
+| Concern | Reach (Electron main) | Here (API route) |
+|---|---|---|
+| Crypto price | Binance 24hr ticker | same, via `/api/market/prices` |
+| Stock price | Yahoo v8 chart | same |
+| **Metal price** | Swissquote spot — **no 24h reference, so Reach hardcodes `change24h: 0`** | **Yahoo futures** (`GC=F`/`SI=F`/`PL=F`/`PA=F`) → `regularMarketPrice` vs `chartPreviousClose` = a **real** 24h change |
+| **Currency price** | Frankfurter `/latest` — **also `change24h: 0`** | Frankfurter `/latest` **diffed against the prior published session** = a real change |
+| On-chain balance/tokens | Blockscout + public RPCs | same, via `/api/wallet-tracker` |
+| Chain-native prices | CoinGecko free `simple/price` | same |
+| **Market page (crypto)** | CoinMarketCap `data-api/v3` + alternative.me | same, via `/api/market/cmc` |
+
+The metal/currency change is the one deliberate behavioural divergence, and it is **load-bearing**: a metals/FX gainers table sourced Reach's way would render every row at `0.00%` and the gainer/loser split would be meaningless. Verified live: 13 of 14 symbols return a non-zero 24h move.
+
+### CoinMarketCap — no API key required
+
+The market page's six crypto tabs are backed by CMC's **undocumented `data-api/v3` endpoints** — the
+ones coinmarketcap.com's own frontend calls. They take **no API key**, but they *do* reject requests
+without a browser `User-Agent`, and they send no CORS headers, so they can only be called
+server-side. `/api/market/cmc` is that proxy. Two endpoints cover five tabs:
+
+| Upstream | Feeds |
+|---|---|
+| `…/cryptocurrency/listing?…&sortBy=market_cap&limit=N` | Gainers & Losers, Leaderboards, Community Sentiment — all derived locally from this one ranked list |
+| `…/cryptocurrency/spotlight?dataType=7&limit=30` | Trending + Most Visited (one call returns both) |
+| `…/cryptocurrency/spotlight?dataType=8&limit=30` | Recently Added |
+| `api.alternative.me/fng/?limit=1` | The Fear & Greed gauge on Community Sentiment |
+
+⚠ `spotlight`'s `limit` is validated upstream to **5–30**; outside that range it returns a 400.
+
+**Risk:** `data-api/v3` is undocumented and may change or rate-limit without notice. Every fetch
+therefore fails soft — a dead endpoint yields an empty list, never a throw — the three sources are
+fetched independently so one failure can't blank the others, results are cached 30 s (the client
+polls at the same cadence), and a total wipeout is never cached.
+
+### Hardening added on the way out of Electron
+
+A local desktop app can trust its own input; a public web route cannot. The routes add what Reach had no need for:
+
+- **Input validation** — symbols must match `/^[A-Z0-9]{1,10}$/` and addresses are regex-checked per chain (EVM / Solana / Tron / NEAR) *before* being interpolated into an upstream URL. A traversal-shaped symbol or address is rejected (400), never proxied.
+- **Caching** — prices 20 s, movers 60 s, CoinGecko 60 s. The client polls every 30–60 s and several tabs may poll at once; uncached this would fan out per-symbol and invite a rate-limit. A total upstream wipeout is *not* cached, so a transient failure can't stick.
+- **Error opacity** — upstream error text is never forwarded (it can carry internal URLs); failures degrade to a null quote / empty list.
+- **Bounded responses** — see the token cap below.
+
+### Files
+
+| File | Role |
+|---|---|
+| `web/app/home/wallet/page.tsx` | Server component; renders `<WalletShell/>`. |
+| `web/app/home/wallet/WalletShell.tsx` | `'use client'` — owns the active view; code-splits Movers/Tracker. |
+| `web/app/home/wallet/Sidebar.tsx` | `'use client'` — Add Asset button, 3-item nav, live clock; resizable + collapsible via `useSidebarResize` (§15). |
+| `web/app/home/wallet/WalletView.tsx` | `'use client'` — 4 stat cards, History chart, Allocation donut, assets table. |
+| `web/app/home/wallet/AddAssetModal.tsx` | `'use client'` — 4 category tabs, search, asset grid, amount / avg-buy-price. |
+| `web/app/home/wallet/MoversView.tsx` | `'use client'` — the 8-tab market page (see below). |
+| `web/app/home/wallet/CoinIcon.tsx` | `'use client'` — CMC coin logo, falls back to a coloured initial on 404. |
+| `web/app/home/wallet/movers.logic.test.mjs` | Node test for the market page's derivations (sort, sentiment, pool, formatters). |
+| `web/app/home/wallet/WalletTrackerView.tsx` | `'use client'` — address form, wallet cards, token-detail overlay. |
+| `web/app/home/wallet/assets.ts` | Asset catalog (~200 crypto / 50 stocks / 4 metals / 10 currencies) + logo/colour/glyph resolution + shared formatters. |
+| `web/public/metals/*.gif` | Reach's animated metal coin sprites (gold / silver / platinum / palladium), 32×32. |
+| `web/app/home/wallet/holdings.ts` | `ov_holdings` + `ov_portfolio_snapshots` persistence. |
+| `web/app/home/wallet/chains.ts` | 10-chain config, `detectChain()`, `ov_tracked_wallets` persistence. |
+| `web/app/home/wallet/AssetIcon.tsx` / `icons.tsx` | Asset avatar w/ fallback chain; inlined Lucide glyphs. |
+
+**No new dependencies.** As in the Journal: both charts are hand-rolled inline SVG (Reach uses no chart lib either), and the Lucide glyphs are inlined as SVG paths.
+
+**Metal logos.** The four metals use Reach's animated coin sprites, copied from its `src/assets` into `web/public/metals/` (32×32 GIFs, ~7KB total). Reach's own mapping is *not* the obvious one — its `XAG` points at `Platinum_Coin.gif` and its `XPT` at `Crystal_Coin.gif`, because the Tibia platinum coin reads as silver and the crystal coin as platinum. That indirection is resolved **at the filename** on copy (`gold/silver/platinum/palladium.gif`), so `METAL_LOGOS` stays literal. Reach's `metalSvg()` data-URI coins are retained as `METAL_SVGS` and serve as the `onError` fallback, so a missing sprite degrades to a drawn coin rather than a blank chip. The GIFs render with `object-fit: contain` and `image-rendering: pixelated` (`.wallet-icon-img-metal`) — `cover` would crop the round coin's edges and smoothing would blur the pixel art at 28–40px.
+
+Reach also appends a `?t=${Date.now()}` cache-buster so every GIF instance starts its animation on the same frame; that is **deliberately not ported** — at module scope in Next.js it differs between server and client, which hydration-mismatches the `src` attribute, and it defeats HTTP caching. The coins simply animate out of phase.
+
+### Notable behaviours
+
+- **History chart** needs a time series. Reach keeps snapshots in SQLite; with no server DB they go to `localStorage` on each price poll. The chart therefore shows Reach's own **"Collecting data"** empty state until two snapshots exist — expected on first load, not a bug.
+- **Token cap.** Blockscout's `token-balances` is unbounded: a long-lived address (Vitalik's) returns **~3 MB / 6.6k tokens in ~6 s**, mostly worthless airdrop spam. Two consequences, both handled: the fetch needs a **25 s** timeout (the default 8 s silently clipped it and yielded an empty list — a real bug caught in testing), and the response is **sorted by value and capped at 100**. The `totalUsd` is summed over *all* tokens before the cap, and the UI states "Showing the 100 most valuable of N" — a truncated list must never read as complete.
+- **Solana/Tron token USD values are 0** — no per-token rate feed exists on those paths (Reach has the same gap). The UI omits the value rather than printing a misleading `$0.00`.
+- **Whale defaults seeded.** The tracker ships with Reach's 20 known whale/exchange wallets (Vitalik, Binance cold/hot, Ethereum Foundation, Alameda, …), restorable any time via **"Load Known Wallets"** (which keeps user-added addresses). Seeding happens only when `ov_tracked_wallets` has *never* been written — unlike Reach, which re-seeds whenever the stored array is empty and therefore makes an empty tracker unreachable. All 20 verified resolving live.
+
+### Reach's endpoint config had rotted — rebuilt
+
+Reach was written against keyless endpoints that have since started demanding auth or 404'ing. Ported verbatim, three of the 20 seeded wallets could never load. Found by testing all 20 against the live chains rather than trusting the port:
+
+| Broken (Reach) | Symptom | Fix |
+|---|---|---|
+| `rpc.ankr.com/eth` (ETH fallback) | `Unauthorized: You must authenticate` | **All 7 EVM RPCs → `publicnode.com`** (keyless, verified on every chain) |
+| `polygon-rpc.com` | `API key disabled, tenant disabled` | ↑ same — Polygon had *no* working path, since its Blockscout host 500s too |
+| `bsc` / `polygon` / `avalanche` `.blockscout.com` | 404 / 500 / 404 | Dropped from `BLOCKSCOUT_HOSTS`; those chains go straight to RPC. Only eth/arbitrum/base hosts are healthy. |
+| TronGrid, called in parallel | `allowed_rps(1)` — suspends the caller | **Serialised behind a promise chain** (`tronFetch`, ~1.1 s gap). 20 wallets refreshing at once otherwise trip it. |
+| `TLyqzVGLV1srkB7dToTAEQgDSFPg9BB3in` ("Justin Sun", Tron) | `A valid account address is required` — fails base58 checksum, invalid even in isolation | Replaced with Binance's Tron cold wallet (`TWd4Wr…`, ~2.01 B TRX) |
+- **Not ported:** Reach's drag-to-reorder stat cards / swap-charts gestures.
+
+### The market page (`MoversView`) — 8 tabs
+
+Reach's six CoinMarketCap tabs, ported, **plus two of our own** (Metals, Stocks & ETFs) that Reach
+has no equivalent for:
+
+| Tab | Source | Derivation |
+|---|---|---|
+| Leaderboards | `/api/market/cmc` `coins` | top 30 by market cap |
+| Gainers & Losers | ↑ same list | filtered to `volume > 50k`, capped by the pool dropdown (Top 100 / Top 500 / All), split on the timeframe's change field (1h / 24h / 7d / 30d) |
+| Trending · Most Visited · Recently Added | CMC `spotlight` | rendered as returned |
+| Community Sentiment | ↑ `coins` + Fear & Greed | Most Bullish / Most Bearish = top 15 by `volume × change24h` (a **momentum** score — a big move on real volume outranks a bigger move on none). Per-row bar = `clamp(50 + change24h × 2, 0, 100)`, a per-coin reading, *not* a share of the list |
+| **Metals** · **Stocks & ETFs** | `/api/market/movers` | Yahoo `v8/finance/chart` — the same endpoint already used for metals futures also serves equities and ETFs (price + `chartPreviousClose` + volume), so these needed **no new provider and no key** |
+
+**Reach bug fixed in the port.** Reach's Community Sentiment table renders sortable column headers,
+but its body maps `list` instead of `sortList(list)` — so clicking "Price" updates sort state and
+changes nothing on screen. Here every table routes through the same `sortList`, so the headers work.
+Regression-tested in `movers.logic.test.mjs` (`node app/home/wallet/movers.logic.test.mjs`), which
+reproduces the original behaviour and asserts ours differs.
+- **Footer suppressed** on `/home/wallet` (as on `/home/journal`) — `HomeFooter` returns null; a marketing footer under a full-height dashboard just eats vertical space.

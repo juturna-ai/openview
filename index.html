@@ -3,7 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Coin logos all come from assets.coincap.io, and the watchlist requests a dozen of them the
+     moment it renders. Warming DNS + TLS here means the first icon doesn't pay the handshake. -->
+<link rel="preconnect" href="https://assets.coincap.io" crossorigin>
+<link rel="dns-prefetch" href="https://assets.coincap.io">
 <title>Openview — Live Crypto Charts</title>
+<meta name="description" content="Free, keyless, TradingView-style crypto charts. No signup, no paywall.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Openview">
+<meta property="og:url" content="https://openview.site/">
+<meta property="og:title" content="Openview — Live Crypto Charts">
+<meta property="og:description" content="Free, keyless, TradingView-style crypto charts. No signup, no paywall.">
+<meta property="og:image" content="https://openview.site/assets/banner.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1428">
+<meta property="og:image:height" content="798">
+<meta property="og:image:alt" content="Openview — the charting platform">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Openview — Live Crypto Charts">
+<meta name="twitter:description" content="Free, keyless, TradingView-style crypto charts. No signup, no paywall.">
+<meta name="twitter:image" content="https://openview.site/assets/banner.png">
 <link rel="icon" type="image/x-icon" href="assets/freeview.ico">
 <link rel="icon" type="image/png" sizes="256x256" href="assets/openview.png">
 <link rel="apple-touch-icon" href="assets/openview.png">
@@ -5119,6 +5138,7 @@ function wheelZoomFactor(e){
   return Math.pow(ZOOM_STEP, px / WHEEL_NOTCH);
 }
 
+
 // ── Right price-axis vertical drag (TradingView-style scale stretch) ──
 // The overlay canvas covers the chart, so the chart's own axisPressedMouseMove
 // never sees the gesture. We detect a press in the axis gutter and adjust a manual
@@ -5321,7 +5341,9 @@ rsiEl.addEventListener("touchstart", e=>{
   if(e.touches.length===1){
     _rsiTouchMouse("mousedown", rsiEl, e.touches[0]);     // starts rsiAxisDrag iff in axis
     if(rsiAxisDrag){ e.preventDefault(); return; }        // axis gutter → value-stretch
-    // Plot body → start a horizontal time pan (drives the shared time scale).
+    // Plot body → start a horizontal time pan (drives the shared time scale). Also
+    // remember the start point + a moved flag so a TAP (no drag) can surface the ⊕
+    // quick-add-alert button at that level (touch has no hover to show it otherwise).
     const range=chart.timeScale().getVisibleLogicalRange();
     if(range){ _rsiTimePan={ startX:e.touches[0].clientX, startY:e.touches[0].clientY, startScroll:chart.timeScale().scrollPosition(), moved:false }; stopAutoSnap(); e.preventDefault(); }
   } else if(e.touches.length===2){

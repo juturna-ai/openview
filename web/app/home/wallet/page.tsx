@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
+import WalletShell from './WalletShell';
 
 export const metadata: Metadata = { title: 'Wallet — Openview' };
 
 export default function WalletPage() {
   return (
-    <main className="ov-home">
-      <div className="ov-home-glow" />
-      <h1 className="ov-home-brand ov-soon">Coming soon</h1>
+    <main className="ov-journal">
+      <WalletShell />
     </main>
   );
 }

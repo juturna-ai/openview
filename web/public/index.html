@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Coin logos all come from assets.coincap.io, and the watchlist requests a dozen of them the
+     moment it renders. Warming DNS + TLS here means the first icon doesn't pay the handshake. -->
+<link rel="preconnect" href="https://assets.coincap.io" crossorigin>
+<link rel="dns-prefetch" href="https://assets.coincap.io">
 <title>Openview — Live Crypto Charts</title>
 <meta name="description" content="Free, keyless, TradingView-style crypto charts. No signup, no paywall.">
 <meta property="og:type" content="website">

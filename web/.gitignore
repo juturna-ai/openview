@@ -1,5 +1,7 @@
 /node_modules
 /.next
+# Alternate build dirs (a `next build -d`/distDir run drops ~50MB here) — build output, never source.
+/.next-*
 /out
 next-env.d.ts
 *.tsbuildinfo

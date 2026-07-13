@@ -13,6 +13,13 @@
   --accent: #2962ff;
   --hover: #2a2e39;
   --nav-h: 56px;
+
+  /* Journal accent — the engine's bar-countdown pill purple (#4E3470, see index.html #barCountdown)
+     darkened 20%, then a further 15%. Flat fill: no gradient ramp, no white sheen.
+     Kept separate from --accent (the engine's TradingView blue), which the rest of the site uses. */
+  --reach-accent: #35244D;
+  /* Kept as a var (not a gradient any more) so every consumer stays a one-line `background:`. */
+  --reach-accent-gradient: #35244D;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -327,3 +334,2064 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   50% { filter: brightness(1.15); }
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Journal — trading calendar (/home/journal)
+   Ported from the Reach desktop app's trading month view. Reach's own theme vars
+   (--bg-secondary/--border-color/--text-muted…) are mapped onto this app's tokens
+   (--panel/--border/--muted…); profit/loss use the engine's green/red so the
+   calendar reads as the same product as the chart.
+   ══════════════════════════════════════════════════════════════════════════ */
+/* No horizontal padding here — the sidebar's divider must run edge-to-edge, so the columns
+   carry their own inner padding instead (see .journal-sidebar / .journal-content). */
+.ov-journal {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  min-height: 0;
+}
+.trading-month-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* ── Header: month nav + Day/Week/Month toggle ── */
+.trading-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.trading-nav { display: flex; align-items: center; gap: 8px; }
+.btn-nav,
+.btn-today {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.btn-nav { min-width: 34px; }
+.btn-nav:hover,
+.btn-today:hover { background: var(--hover); }
+.trading-nav .date-display {
+  font-size: 18px;
+  font-weight: 600;
+  margin-left: 8px;
+  color: var(--text);
+}
+/* Month indicator, sat next to the month name. Day/Week views don't exist, so this is a label
+   rather than a toggle. */
+.view-mode-chip {
+  padding: 4px 12px;
+  margin-left: 4px;
+  border-radius: 6px;
+  background: var(--reach-accent-gradient);
+  background-size: cover;
+  background-repeat: no-repeat;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+}
+
+/* ── Stat cards ── */
+.trading-stats-cards {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+/* Cards sit flush with the dashboard background — only the border outlines them. */
+.trading-stat-card {
+  flex: 1;
+  min-width: 180px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s ease;
+}
+.trading-stat-card:hover { border-color: var(--muted); }
+.stat-card-header { display: flex; align-items: center; gap: 8px; }
+.stat-card-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stat-card-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--hover);
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+.stat-card-value {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.stat-card-value.profit { color: var(--green); }
+.stat-card-value.loss { color: var(--red); }
+.stat-card-currency {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-left: 4px;
+  letter-spacing: 0.02em;
+}
+.stat-card-chart { min-width: 260px; }
+.stat-card-chart-total {
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: auto;
+}
+.stat-card-chart-total.profit { color: var(--green); }
+.stat-card-chart-total.loss { color: var(--red); }
+
+/* ── Cumulative P&L chart ── */
+.cumulative-chart { width: 100%; height: 60px; display: block; }
+.chart-line { fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.chart-line.profit { stroke: var(--green); }
+.chart-line.loss { stroke: var(--red); }
+.chart-area { opacity: 0.1; }
+.chart-area.profit { fill: var(--green); }
+.chart-area.loss { fill: var(--red); }
+.chart-grid-line { stroke: var(--border); stroke-width: 0.5; stroke-dasharray: 4 3; }
+.chart-grid-zero { stroke: var(--muted); stroke-width: 0.8; }
+/* Halo matches the card background (now the page bg) so dots read cleanly over the area fill. */
+.chart-dot { stroke: var(--bg); stroke-width: 1; }
+.chart-dot.profit { fill: var(--green); }
+.chart-dot.loss { fill: var(--red); }
+.chart-axis-label { font-size: 9px; fill: var(--muted); font-family: inherit; }
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* ── Win % gauges ── */
+.stat-gauge-bar {
+  display: flex;
+  height: 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  gap: 2px;
+  margin-top: 6px;
+}
+.gauge-segment { border-radius: 3px; min-width: 4px; transition: flex 0.3s ease; }
+.gauge-segment.win { background: var(--green); }
+.gauge-segment.even { background: var(--muted); }
+.gauge-segment.loss { background: var(--red); }
+.gauge-segment.empty { background: var(--hover); }
+.stat-gauge-labels { display: flex; gap: 8px; margin-top: 4px; }
+.gauge-label { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 4px; }
+.gauge-label.win { color: var(--green); background: rgba(38, 166, 154, 0.12); }
+.gauge-label.even { color: var(--muted); background: rgba(120, 123, 134, 0.12); }
+.gauge-label.loss { color: var(--red); background: rgba(239, 83, 80, 0.12); }
+
+/* ── Month grid: 7 day columns + weekly summary column ── */
+.trading-unified-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr) 150px;
+  flex: 1;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+.calendar-header-cell {
+  padding: 10px 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+.trading-week-header-cell { border-bottom: 1px solid var(--border); }
+.calendar-cell {
+  padding: 8px 10px;
+  overflow: hidden;
+  cursor: pointer;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transition: background-color 0.15s ease;
+}
+.trading-cell { min-height: 90px; }
+.trading-cell:hover { background: var(--panel2); }
+.trading-cell.other-month { opacity: 0.5; }
+.trading-cell.trading-profit { background: rgba(38, 166, 154, 0.1); }
+.trading-cell.trading-loss { background: rgba(239, 83, 80, 0.1); }
+.calendar-cell.selected {
+  background: rgba(41, 98, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(41, 98, 255, 0.25);
+}
+.cell-date { font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text); }
+.calendar-cell.today .cell-date {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 600;
+  color: #fff;
+  background: var(--reach-accent);
+  box-shadow: 0 1px 4px rgba(53, 36, 77, 0.35);
+}
+.trading-cell-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin-top: 6px;
+}
+.trading-cell-pnl { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; }
+.trading-cell-pnl.profit { color: var(--green); }
+.trading-cell-pnl.loss { color: var(--red); }
+.trading-cell-count { font-size: 10px; font-weight: 500; color: var(--muted); }
+
+/* ── Weekly summary cards (8th column) ── */
+.trading-week-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px 14px;
+  margin: 4px 4px 4px 8px;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  transition: border-color 0.2s ease;
+}
+.trading-week-card:hover { border-color: var(--muted); }
+.trading-week-card.profit { border-left: 3px solid var(--green); }
+.trading-week-card.loss { border-left: 3px solid var(--red); }
+.trading-week-card.empty { opacity: 0.45; }
+.trading-week-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.trading-week-pnl { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.trading-week-pnl.profit { color: var(--green); }
+.trading-week-pnl.loss { color: var(--red); }
+.trading-week-meta { font-size: 10px; color: var(--text); margin-top: 3px; }
+
+/* ── Right-click menu on a day cell ── */
+.calendar-context-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 160px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.calendar-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.calendar-context-menu button:hover { background: var(--hover); }
+
+/* ── Add-trade modal ── */
+.trade-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.trade-modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.trade-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.trade-modal-header h2 { font-size: 15px; font-weight: 600; color: var(--text); margin: 0; }
+.trade-modal-date { font-size: 12px; color: var(--muted); }
+.trade-modal-close {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.trade-modal-close:hover { background: var(--hover); color: var(--text); }
+.trade-modal-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+.trade-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.trade-field-wide { grid-column: 1 / -1; }
+.trade-field > span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.trade-field input,
+.trade-field select,
+.trade-field textarea {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.trade-field input:focus,
+.trade-field select:focus,
+.trade-field textarea:focus { outline: none; border-color: var(--accent); }
+.trade-field input:disabled { opacity: 0.45; cursor: not-allowed; }
+.trade-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.trade-checkbox input { accent-color: var(--accent); }
+.trade-modal-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.trade-pnl-preview { display: flex; align-items: baseline; gap: 8px; }
+.trade-pnl-preview span {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.trade-pnl-preview strong { font-size: 16px; font-weight: 700; }
+.trade-pnl-preview strong.profit { color: var(--green); }
+.trade-pnl-preview strong.loss { color: var(--red); }
+.trade-modal-actions { margin-left: auto; display: flex; gap: 8px; }
+.trade-modal-actions button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+}
+.trade-modal-actions .btn-secondary { background: transparent; color: var(--text); }
+.trade-modal-actions .btn-secondary:hover { background: var(--hover); }
+/* Background/hover come from the shared .btn-primary rule (the purple gradient); this only drops
+   the border the .trade-modal-actions base sets, so the gradient isn't ringed in grey. */
+.trade-modal-actions .btn-primary { border-color: transparent; }
+
+@media (max-width: 600px) {
+  .trade-modal-body { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 900px) {
+  .ov-journal { padding: 16px 12px 24px; }
+  .trading-unified-grid { grid-template-columns: repeat(7, 1fr); }
+  .trading-week-header-cell,
+  .trading-week-card { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Journal — sidebar + notes
+   Ported from Reach's Sidebar.jsx / NotesView.jsx. Reach's theme vars map onto this
+   app's tokens; the New Trade button and active nav item use --reach-accent-gradient
+   (the site's purple), not Reach's blue palette.
+   ══════════════════════════════════════════════════════════════════════════ */
+.journal-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+}
+.journal-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 32px;
+}
+
+/* ── Sidebar ── */
+/* The divider is the sidebar's right border, so the column runs the full height of the shell
+   (which itself stretches to the viewport now that the footer is gone on this route). */
+.journal-sidebar {
+  width: 244px; /* 220 content + 24 gutter, so the content column keeps its 24px inset */
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 16px;
+  border-right: 1px solid var(--border);
+  /* Anchors the resize handle and the collapse button. */
+  position: relative;
+}
+/* Inline width from the resize hook wins over the 244px default; the transition makes the collapse
+   toggle animate but is dropped mid-drag (.resizing) so the handle tracks the pointer 1:1. */
+.journal-sidebar.resizing { transition: none; user-select: none; }
+
+/* ── Collapsed rail: icons only ── */
+.journal-sidebar.collapsed {
+  width: 64px;
+  padding-left: 12px;
+  padding-right: 12px;
+  align-items: center;
+}
+.journal-sidebar.collapsed .sidebar-label,
+.journal-sidebar.collapsed .sidebar-brand,
+.journal-sidebar.collapsed .clock-details,
+.journal-sidebar.collapsed .clock-year { display: none; }
+.journal-sidebar.collapsed .btn-add-trade,
+.journal-sidebar.collapsed .nav-item {
+  width: 40px;
+  padding: 10px 0;
+  justify-content: center;
+  gap: 0;
+}
+.journal-sidebar.collapsed .sidebar-nav { align-items: center; }
+.journal-sidebar.collapsed .sidebar-clock {
+  margin-left: -12px;
+  margin-right: -12px;
+  padding: 14px 4px 8px;
+  min-height: 0;
+}
+.journal-sidebar.collapsed .clock-time { font-size: 15px; letter-spacing: 0; margin-bottom: 8px; }
+
+/* ── Collapse toggle ── */
+/* Overlays the top-right corner of the brand block: a purple chevron — "<" to collapse, ">" to
+   expand. --reach-accent is too dark to read at this size, so the glyph uses a lighter tint. */
+.sidebar-collapse-btn {
+  position: absolute;
+  top: 14px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: #8b6fd4;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+/* Border matches the buttons' dark purple; only the glyph stays a lighter tint, since a 28px chevron
+   in --reach-accent would be unreadable against the panel. */
+.sidebar-collapse-btn:hover {
+  background: var(--hover);
+  border-color: var(--reach-accent-gradient);
+  color: #a78bfa;
+}
+/* Centered in the rail once the sidebar is a 64px column. */
+.journal-sidebar.collapsed .sidebar-collapse-btn {
+  position: static;
+  margin: 0 auto 14px;
+}
+
+/* ── Resize handle ── */
+/* Sits on the sidebar's right border. 6px wide, pulled half outside so the grab zone straddles the
+   1px divider; the divider itself stays the aside's border-right. */
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  z-index: 5;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+/* Matches the New Trade / active-nav buttons exactly (--reach-accent-gradient), so the handle reads
+   as the same dark purple rather than a brighter tint of it. */
+.sidebar-resize-handle:hover,
+.sidebar-resize-handle:focus-visible,
+.journal-sidebar.resizing .sidebar-resize-handle {
+  background: var(--reach-accent-gradient);
+  outline: none;
+}
+/* Brand header. Negative side margins cancel the sidebar's padding so the rule below it spans the
+   full column width and meets the vertical divider — same trick as .sidebar-clock's top rule. */
+.sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: -4px -24px 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+/* Same treatment as the home hero (.ov-home-brand), scaled to the sidebar: heavy weight, tight
+   tracking, and a --text→--muted gradient clipped to the glyphs. */
+.sidebar-brand-name {
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(180deg, var(--text), var(--muted));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.sidebar-brand-sub {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+
+.btn-add-trade {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--reach-accent-gradient);
+  background-size: cover;
+  background-repeat: no-repeat;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.btn-add-trade:hover { filter: brightness(1.08); }
+.sidebar-nav { display: flex; flex-direction: column; gap: 4px; }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.nav-item:hover { background: var(--hover); }
+.nav-item.active {
+  background: var(--reach-accent-gradient);
+  background-size: cover;
+  background-repeat: no-repeat;
+  color: #fff;
+}
+.nav-item.active:hover { filter: brightness(1.08); }
+.nav-icon { display: flex; align-items: center; }
+
+/* Clock block — pinned to the bottom of the sidebar (margin-top:auto). */
+.sidebar-clock {
+  margin-top: auto;
+  /* Negative side margins cancel the sidebar's padding so the top rule spans the full column
+     width, meeting the vertical divider instead of stopping short of it. */
+  margin-left: -24px;
+  margin-right: -24px;
+  padding: 18px 12px 10px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  /* Reserve the block's height so the layout doesn't jump when the clock mounts. */
+  min-height: 132px;
+}
+.clock-time {
+  font-size: 28px;
+  font-weight: 300;
+  letter-spacing: 1px;
+  color: var(--text);
+  margin-bottom: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.clock-details { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+.clock-month {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+.clock-weekday { font-size: 13px; color: var(--muted); }
+.clock-today { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.today-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--reach-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+.clock-year { font-size: 13px; color: var(--muted); letter-spacing: 1px; }
+
+/* ── Notes ── */
+.notes-container { flex: 1; overflow-y: auto; padding-bottom: 24px; }
+.notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.notes-header h2 { font-size: 22px; font-weight: 700; color: var(--text); }
+.btn-new-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 18px;
+  border: none;
+  border-radius: 8px;
+  background: var(--reach-accent-gradient);
+  background-size: cover;
+  background-repeat: no-repeat;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.btn-new-note:hover { filter: brightness(1.08); }
+.notes-toolbar { margin-bottom: 20px; }
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 360px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  transition: border-color 0.15s ease;
+}
+.search-box:focus-within { border-color: var(--accent); }
+.search-box input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+}
+.notes-section { margin-bottom: 24px; }
+.notes-section-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.note-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+.note-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  border-color: var(--muted);
+}
+.note-card.has-color { border: none; }
+.note-pin-indicator { position: absolute; top: 10px; right: 12px; color: var(--muted); opacity: 0.6; }
+.note-card-title { font-size: 14px; font-weight: 600; line-height: 1.3; margin: 0 0 8px; }
+.note-card-content {
+  flex: 1;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.note-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+.note-card.has-color .note-card-footer { border-top-color: rgba(255, 255, 255, 0.15); }
+.note-card.has-color.light-bg .note-card-footer { border-top-color: rgba(0, 0, 0, 0.1); }
+.note-card-date { font-weight: 500; }
+.note-card-actions { display: flex; gap: 2px; opacity: 0; transition: opacity 0.15s ease; }
+.note-card:hover .note-card-actions { opacity: 1; }
+.note-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.note-action-btn:hover { background: var(--hover); color: var(--text); }
+.note-action-btn.note-action-delete:hover { background: rgba(239, 83, 80, 0.12); color: var(--red); }
+
+/* Note form modal */
+.note-form-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+.note-form {
+  display: flex;
+  flex-direction: column;
+  width: 480px;
+  max-width: 90vw;
+  max-height: 80vh;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.note-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 0;
+}
+.note-form-header h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.btn-icon {
+  display: flex;
+  padding: 4px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.btn-icon:hover { opacity: 1; }
+.note-form-title,
+.note-form-content {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.note-form-title {
+  margin: 14px 20px 0;
+  padding: 10px 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.note-form-content {
+  margin: 10px 20px 0;
+  padding: 10px 12px;
+  min-height: 120px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.note-form-title:focus,
+.note-form-content:focus { border-color: var(--accent); }
+.note-form-title::placeholder,
+.note-form-content::placeholder { color: var(--muted); font-weight: 400; }
+.note-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 20px 18px;
+}
+.note-color-picker { display: flex; gap: 6px; }
+.note-color-dot {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.note-color-dot:hover { transform: scale(1.15); }
+.note-color-dot.selected { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+.note-form-actions { display: flex; align-items: center; gap: 8px; }
+.btn-pin {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.btn-pin:hover { background: var(--hover); color: var(--text); }
+.btn-pin.active { color: var(--accent); }
+.notes-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+.notes-empty p { margin: 16px 0 4px; font-size: 16px; font-weight: 600; color: var(--text); }
+.notes-empty span { font-size: 13px; }
+
+@media (max-width: 900px) {
+  .journal-shell { flex-direction: column; }
+  /* Full-width top bar here, so the drag handle and the inline width from the resize hook are both
+     meaningless — !important is needed to beat the element's own style attribute. */
+  .journal-sidebar,
+  .journal-sidebar.collapsed {
+    width: 100% !important;
+    padding: 16px 12px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    align-items: stretch;
+  }
+  .sidebar-resize-handle,
+  .sidebar-collapse-btn { display: none; }
+  .journal-sidebar.collapsed .sidebar-label { display: inline; }
+  .journal-sidebar.collapsed .sidebar-brand { display: flex; }
+  .journal-sidebar.collapsed .btn-add-trade,
+  .journal-sidebar.collapsed .nav-item {
+    width: auto;
+    padding: 10px 12px;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  .journal-sidebar.collapsed .btn-add-trade { justify-content: center; gap: 6px; }
+  .journal-sidebar.collapsed .sidebar-nav { align-items: stretch; }
+  .journal-content { padding: 16px 12px 24px; }
+  .sidebar-clock { display: none; }
+  /* Sidebar is a full-width bar here (12px padding), and it already has a bottom border —
+     so match the padding and drop the brand's own rule to avoid a doubled divider. */
+  .sidebar-brand {
+    margin: 0 -12px 14px;
+    padding-bottom: 12px;
+    border-bottom: none;
+  }
+}
+
+/* Shared dialog buttons — used by the note form and the trade modal. */
+.btn-primary,
+.btn-secondary {
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.btn-primary {
+  border: none;
+  background: var(--reach-accent-gradient);
+  background-size: cover;
+  background-repeat: no-repeat;
+  color: #fff;
+}
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-secondary {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+}
+.btn-secondary:hover { background: var(--hover); border-color: var(--muted); }
+
+/* Read-only note viewer (right-click → View). Shares the note-form overlay; the panel is its
+   own so the form's input styling never leaks in. */
+.note-view {
+  display: flex;
+  flex-direction: column;
+  width: 560px;
+  max-width: 90vw;
+  max-height: 80vh;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.note-view-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.note-view-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+  word-break: break-word;
+}
+.note-view-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.note-view-pin { display: flex; opacity: 0.8; }
+/* The one scrollable region — a long note scrolls here, the header/footer stay put. */
+.note-view-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.note-view-empty { font-style: italic; }
+.note-view-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 20px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+.calendar-context-menu button.danger { color: var(--red); }
+.calendar-context-menu button.danger:hover { background: rgba(239, 83, 80, 0.12); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Wallet — portfolio, gainers & losers, on-chain tracker
+   Ported from Reach's WalletView / GainersLosers / WalletTrackerView. Reuses the journal's
+   shell (.journal-shell / .journal-sidebar / .nav-item) so both dashboards match, and this
+   app's tokens rather than Reach's blue palette.
+   ══════════════════════════════════════════════════════════════════════════ */
+.wallet-view { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Asset icon ── */
+.wallet-asset-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1;
+}
+/* Flags and metal coins are real artwork — no tinted chip or glyph behind them. */
+.wallet-asset-icon.logo-override { background: transparent !important; }
+.wallet-icon-char { position: absolute; z-index: 0; }
+/* The logo paints over the glyph, so a slow load degrades to the letter instead of a blank. */
+.wallet-icon-img,
+.wallet-icon-img-flag {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+/* The metal coins are 32×32 pixel-art sprites drawn on transparent backgrounds. `contain` keeps the
+   whole coin (cover would crop its edges), no radius since the art is already round, and `pixelated`
+   keeps the pixels crisp when upscaled to 28–40px instead of smoothing them into mush. */
+.wallet-icon-img-metal {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+/* ── Stat cards ── */
+.wallet-stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.wallet-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px;
+  min-height: 104px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.wallet-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wallet-stat-value { font-size: 24px; font-weight: 600; }
+.wallet-stat-value.profit { color: var(--green); }
+.wallet-stat-value.loss { color: var(--red); }
+.wallet-stat-value.neutral { color: var(--text); }
+.wallet-stat-performer { display: flex; align-items: center; gap: 8px; }
+.wallet-performer-name { font-size: 18px; font-weight: 600; color: var(--text); }
+.wallet-stat-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.wallet-stat-sub.profit { color: var(--green); }
+.wallet-stat-sub.loss { color: var(--red); }
+
+/* ── Charts row ── */
+.wallet-charts-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 12px;
+}
+.wallet-history-card,
+.wallet-allocation-card,
+.wallet-assets-card {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.wallet-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.wallet-info-icon { display: inline-flex; color: var(--muted); cursor: help; }
+.wallet-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.wallet-history-tabs { display: flex; gap: 4px; }
+.wallet-history-tab {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wallet-history-tab:hover { background: var(--hover); color: var(--text); }
+.wallet-history-tab.active { background: var(--accent); color: #fff; }
+.wallet-history-chart { width: 100%; height: 220px; }
+/* The SVG carries explicit pixel width/height matching the measured container, so 1 user unit is
+   1 CSS px and text renders at its true size. Sizing it at 100% here would re-introduce the
+   non-uniform scaling that stretched and blurred the axis labels. */
+.wallet-history-svg { display: block; }
+/* 11px is the real rendered size now — the old 9px was only legible because the viewBox upscaled it. */
+.wallet-axis-label { fill: var(--muted); font-size: 11px; }
+.wallet-history-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 220px;
+  padding: 0 32px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ── Allocation donut ── */
+.wallet-alloc-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
+.wallet-donut-wrap { position: relative; width: 180px; height: 180px; }
+.wallet-donut { width: 100%; height: 100%; }
+.wallet-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.wallet-donut-total { font-size: 19px; font-weight: 600; color: var(--text); }
+.wallet-alloc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 14px;
+  width: 100%;
+}
+.wallet-legend-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.wallet-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.wallet-legend-sym { font-weight: 600; color: var(--text); }
+.wallet-legend-pct { color: var(--muted); }
+
+/* ── Assets table ──
+   A grid, not a <table>: the cells are spans so each can stack a value over a sub-label. */
+.wallet-assets-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.btn-primary.btn-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.wallet-table { display: flex; flex-direction: column; }
+.wallet-thead,
+.wallet-trow {
+  display: grid;
+  grid-template-columns: 2.2fr 1fr 0.9fr 1.3fr 1.1fr 1.3fr 0.8fr;
+  align-items: center;
+  gap: 10px;
+}
+.wallet-thead {
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wallet-trow {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+}
+.wallet-trow:last-child { border-bottom: none; }
+.wallet-trow:hover { background: var(--hover); }
+/* Numeric columns right-align so digits line up down the column. */
+.wallet-thead .wt-price,
+.wallet-thead .wt-change,
+.wallet-thead .wt-holdings,
+.wallet-thead .wt-avg,
+.wallet-thead .wt-pnl,
+.wallet-trow .wt-price,
+.wallet-trow .wt-avg { text-align: right; }
+.wt-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.wt-name-text { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wt-sym-text { color: var(--muted); font-size: 12px; }
+.wallet-trow .wt-change,
+.wallet-trow .wt-holdings,
+.wallet-trow .wt-pnl {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.wallet-trow .wt-change { flex-direction: row; justify-content: flex-end; gap: 4px; }
+.wt-change.profit { color: var(--green); }
+.wt-change.loss { color: var(--red); }
+.wt-h-value { font-weight: 600; }
+.wt-h-amount { color: var(--muted); font-size: 12px; }
+.wt-pnl.profit { color: var(--green); }
+.wt-pnl.loss { color: var(--red); }
+.wt-pnl-usd { font-weight: 600; }
+.wt-pnl-pct { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.wt-actions { display: flex; justify-content: flex-end; gap: 4px; }
+.wallet-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wallet-action-btn:hover { background: var(--hover); color: var(--text); }
+.wallet-action-btn.delete:hover { background: rgba(239, 83, 80, 0.12); color: var(--red); }
+
+/* ── Empty state ── */
+.wallet-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 80px 24px;
+  text-align: center;
+}
+.wallet-empty-icon { color: var(--muted); opacity: 0.5; }
+.wallet-empty h2 { margin: 6px 0 0; font-size: 17px; font-weight: 600; color: var(--text); }
+.wallet-empty p { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+.wallet-empty .btn-primary { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ── Add Asset modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.modal.wallet-modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 460px;
+  max-height: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-header h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text); }
+.btn-close {
+  position: absolute;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.btn-close:hover { background: var(--hover); color: var(--text); }
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+.btn-primary:disabled,
+.wt-add-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+}
+.wallet-type-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--bg);
+}
+.wallet-type-tab {
+  padding: 6px 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wallet-type-tab:hover { color: var(--text); }
+.wallet-type-tab.active { background: var(--panel); color: var(--text); }
+.wallet-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+}
+.wallet-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.wallet-search input:focus { outline: none; }
+.wallet-asset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  max-height: 230px;
+  overflow-y: auto;
+}
+.wallet-asset-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.wallet-asset-btn:hover { background: var(--hover); }
+.wallet-asset-btn.selected { border-color: var(--accent); background: var(--hover); }
+.wallet-asset-label { display: flex; flex-direction: column; min-width: 0; }
+.wallet-asset-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wallet-asset-sym { font-size: 11px; color: var(--muted); }
+.wallet-selected-info {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.form-group label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.form-group input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.form-group input:focus { outline: none; border-color: var(--accent); }
+.input-with-prefix {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+.input-with-prefix:focus-within { border-color: var(--accent); }
+.input-prefix { padding-left: 9px; color: var(--muted); font-size: 13px; }
+.input-with-prefix input { border: none; background: transparent; }
+.input-with-prefix input:focus { border-color: transparent; }
+.wallet-hint {
+  margin: 0;
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ══ Gainers & Losers ══ */
+.gl-page { display: flex; flex-direction: column; gap: 16px; }
+.gl-page-header { display: flex; flex-direction: column; gap: 4px; }
+.gl-page-title { margin: 0; font-size: 22px; font-weight: 700; color: var(--text); }
+.gl-page-subtitle { margin: 0; font-size: 13px; color: var(--muted); }
+.gl-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.gl-controls-left { display: flex; gap: 4px; }
+.gl-cat-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.gl-cat-btn:hover { color: var(--text); }
+.gl-cat-btn.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+.gl-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.gl-refresh-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.gl-refresh-btn:disabled { opacity: 0.6; cursor: default; }
+.gl-updated { font-variant-numeric: tabular-nums; }
+.spinning { animation: glSpin 0.9s linear infinite; }
+@keyframes glSpin { to { transform: rotate(360deg); } }
+.gl-sections { display: flex; flex-direction: column; gap: 16px; }
+.gl-section-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.gl-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+}
+.gl-section-header.gainers { color: var(--green); }
+.gl-section-header.losers { color: var(--red); }
+.gl-section-badge {
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+/* Tables scroll inside their own box so the page body never scrolls sideways. */
+.gl-table-wrapper { overflow-x: auto; }
+.gl-cmc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.gl-cmc-table th {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  text-align: right;
+  white-space: nowrap;
+}
+.gl-cmc-table th.gl-th-name { text-align: left; }
+.gl-sortable { cursor: pointer; user-select: none; }
+.gl-sortable:hover { color: var(--text); }
+.gl-sortable svg { display: inline-block; vertical-align: middle; margin-left: 3px; opacity: 0.6; }
+.gl-cmc-row td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  text-align: right;
+  white-space: nowrap;
+}
+.gl-cmc-row:last-child td { border-bottom: none; }
+.gl-cmc-row:hover { background: var(--hover); }
+.gl-td-name { display: flex; align-items: center; gap: 10px; text-align: left !important; }
+.gl-coin-info { display: flex; flex-direction: column; min-width: 0; }
+.gl-coin-name { font-weight: 600; }
+.gl-coin-symbol { color: var(--muted); font-size: 11px; }
+.gl-td-price { font-variant-numeric: tabular-nums; }
+.gl-td-volume { color: var(--muted); font-variant-numeric: tabular-nums; }
+.gl-change-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.gl-change-pill.positive { background: rgba(38, 166, 154, 0.14); color: var(--green); }
+.gl-change-pill.negative { background: rgba(239, 83, 80, 0.14); color: var(--red); }
+.gl-td-empty { padding: 28px 16px !important; color: var(--muted); text-align: center !important; }
+.gl-page-loading { padding: 40px 0; color: var(--muted); font-size: 13px; text-align: center; }
+.gl-page-disclaimer { margin: 0; color: var(--muted); font-size: 11px; }
+
+/* ── Market page tabs (Leaderboards / Gainers & Losers / … / Metals / Stocks) ── */
+/* Scrolls horizontally rather than wrapping — eight tabs won't fit a narrow column, and a wrapped
+   second row reads as a separate control strip. */
+.gl-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: thin;
+}
+.gl-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.gl-tab:hover { color: var(--text); }
+.gl-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+
+/* ── Timeframe / pool dropdowns ── */
+.gl-select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Gainers/losers and bullish/bearish are paired comparisons — side by side where there's room. */
+@media (min-width: 1100px) {
+  .gl-sections { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+}
+
+/* ── Coin avatar (CMC logo, falls back to a coloured initial) ── */
+.gl-coin-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  color: #fff;
+  font-weight: 700;
+}
+.gl-coin-icon-char { position: absolute; z-index: 0; }
+.gl-coin-icon-img { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%; }
+
+/* ── Extra table cells ── */
+.gl-th-rank, .gl-td-rank { width: 52px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gl-td-mcap, .gl-td-price, .gl-td-volume { font-variant-numeric: tabular-nums; }
+.gl-th-mcap, .gl-td-mcap { text-align: right; }
+.gl-th-sentiment { text-align: right; }
+.gl-td-sentiment {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.gl-sentiment-bar {
+  width: 90px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.gl-sentiment-fill { height: 100%; border-radius: 2px; }
+.gl-bullish-text { color: #16c784; font-size: 11px; }
+.gl-bearish-text { color: #ea3943; font-size: 11px; }
+
+/* ── Fear & Greed gauge ── */
+.gl-fg-card {
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.gl-fg-label { color: var(--muted); font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+.gl-fg-value { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+.gl-fg-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.gl-fg-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
+.gl-fg-labels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* ══ Wallet Tracker ══ */
+.wt-page { display: flex; flex-direction: column; gap: 16px; }
+.wt-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.wt-header-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.wt-defaults-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wt-defaults-btn:hover { background: var(--hover); color: var(--text); }
+.wt-title-row { display: flex; flex-direction: column; gap: 4px; }
+.wt-title { margin: 0; font-size: 22px; font-weight: 700; color: var(--text); }
+.wt-subtitle { margin: 0; font-size: 13px; color: var(--muted); }
+.wt-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.wt-summary-main { display: flex; flex-direction: column; gap: 4px; }
+.wt-summary-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wt-summary-value { font-size: 24px; font-weight: 600; color: var(--text); }
+.wt-summary-chains { display: flex; flex-wrap: wrap; gap: 6px; }
+.wt-chain-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--text);
+}
+.wt-chain-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.wt-chain-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+.wt-add-form { display: flex; gap: 8px; }
+.wt-chain-select { position: relative; flex-shrink: 0; }
+.wt-chain-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.wt-chain-trigger:hover { background: var(--hover); }
+.wt-chain-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.wt-chain-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.wt-chain-option:hover { background: var(--hover); }
+.wt-chain-option.active { background: var(--hover); font-weight: 600; }
+.wt-chain-sym { margin-left: auto; color: var(--muted); font-size: 11px; }
+.wt-addr-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.wt-addr-input:focus { outline: none; border-color: var(--accent); }
+.wt-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 9px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--reach-accent-gradient);
+  background-size: cover;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.wt-add-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.wt-add-error { margin: 0; color: var(--red); font-size: 12px; }
+.wt-wallet-list { display: flex; flex-direction: column; gap: 8px; }
+.wt-wallet-card {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.wt-wallet-card:hover { background: var(--hover); border-color: var(--muted); }
+.wt-card-chain { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.wt-chain-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+.wt-card-chain-info { display: flex; flex-direction: column; min-width: 0; }
+.wt-card-chain-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.wt-card-addr { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
+.wt-card-balance,
+.wt-card-price { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.wt-card-native { font-size: 13px; font-weight: 600; color: var(--text); }
+.wt-card-usd { font-size: 12px; color: var(--muted); }
+.wt-card-price-val { font-size: 13px; color: var(--text); }
+.wt-card-change { display: flex; align-items: center; gap: 3px; font-size: 12px; }
+.wt-card-change.up { color: var(--green); }
+.wt-card-change.down { color: var(--red); }
+.wt-card-actions { display: flex; gap: 4px; }
+.wt-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wt-action-btn:hover { background: var(--bg); color: var(--text); }
+.wt-remove-btn:hover { background: rgba(239, 83, 80, 0.12); color: var(--red); }
+.wt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 70px 24px;
+  text-align: center;
+}
+.wt-empty-icon { color: var(--muted); opacity: 0.5; }
+.wt-empty h2 { margin: 4px 0 0; font-size: 17px; font-weight: 600; color: var(--text); }
+.wt-empty p { margin: 0 0 8px; max-width: 380px; color: var(--muted); font-size: 13px; }
+.wt-empty .btn-primary { display: inline-flex; align-items: center; gap: 6px; }
+.wt-footer { margin: 0; color: var(--muted); font-size: 11px; }
+
+/* ── Token detail overlay ── */
+.wt-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.wt-detail-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 540px;
+  max-height: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.wt-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.wt-detail-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.wt-detail-back:hover { background: var(--hover); color: var(--text); }
+.wt-detail-info { display: flex; flex-direction: column; min-width: 0; }
+.wt-detail-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.wt-detail-addr { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
+.wt-detail-header-actions { margin-left: auto; display: flex; gap: 4px; }
+.wt-detail-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.wt-detail-total-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wt-detail-total-value { font-size: 20px; font-weight: 600; color: var(--text); }
+.wt-detail-tokens { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+.wt-detail-tokens-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 12px 16px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.wt-detail-loading { padding: 24px 16px; color: var(--muted); font-size: 13px; text-align: center; }
+.wt-detail-token-list { display: flex; flex-direction: column; }
+.wt-token-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.wt-token-info { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.wt-token-icon { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; }
+.wt-token-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+}
+.wt-token-names { display: flex; flex-direction: column; min-width: 0; }
+.wt-token-symbol {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wt-token-type { color: var(--muted); font-size: 11px; }
+.wt-token-bal { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.wt-token-amount { color: var(--text); font-variant-numeric: tabular-nums; }
+.wt-token-usd { color: var(--muted); font-size: 12px; }
+.wt-token-price { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── Narrow screens ── */
+@media (max-width: 1100px) {
+  .wallet-stats-row { grid-template-columns: repeat(2, 1fr); }
+  .wallet-charts-row { grid-template-columns: 1fr; }
+}
+@media (max-width: 860px) {
+  /* The assets table has too many columns to squeeze — let it scroll rather than crush the cells. */
+  .wallet-table { overflow-x: auto; }
+  .wallet-thead,
+  .wallet-trow { min-width: 720px; }
+  .wt-wallet-card { grid-template-columns: 1fr auto; row-gap: 10px; }
+  .wt-card-balance, .wt-card-price { align-items: flex-start; }
+  .wt-add-form { flex-wrap: wrap; }
+  .wt-addr-input { flex-basis: 100%; order: 3; }
+}
+@media (max-width: 620px) {
+  .wallet-stats-row { grid-template-columns: 1fr; }
+  .wallet-asset-grid { grid-template-columns: 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+}

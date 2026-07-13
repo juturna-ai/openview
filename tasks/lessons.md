@@ -353,3 +353,47 @@ idle behavior is silence.
 - **When a fix "doesn't work" for the user, first confirm WHERE they tested.**
   Local-only changes can't fix the deployed site (openview.site). Before re-opening
   an investigation, ask/verify which environment produced the repeat report.
+
+## Never run `next build` while the dev server is running
+**Mistake (made twice):** ran `npm run build` in `web/` while `npm run dev` was live on 3333. The production build overwrites the same `.next` directory the dev server serves its chunks from, so every `/_next/static/*` request 404s. Symptom is deceptive: pages still return 200 but render as **raw unstyled HTML** (serif fonts, blue links), which looks like a CSS bug, not a build collision. I initially went hunting for a stylesheet error.
+
+**Rule:** to build while the dev server is up, always use a separate dist dir:
+```bash
+NEXT_DIST_DIR=.next-prod npx next build
+```
+`next.config.js` reads `NEXT_DIST_DIR` (defaults to `.next`). If the dev server is already broken this way: kill it, `rm -rf .next`, restart `npm run dev`.
+
+## Measure before optimizing — dev-mode slowness is not real slowness
+**Pattern:** asked to "make tab navigation faster." Dev mode compiles routes on demand, so every first visit to a tab feels slow — but that lag does not exist in production. Measuring a real `next build` + `next start` showed Home/Journal/Wallet already navigating in 48–139 ms with **zero** network requests (prefetched static pages); there was nothing to optimize there. The real cost was the Openview tab (a full document load of the 720 KB engine, 1310 ms). Optimizing the wrong thing would have been pure waste. **Always profile production before changing anything for performance.**
+
+## When porting from another codebase, verify its endpoints are still alive — don't trust the source
+**Pattern (Reach → Wallet Tracker):** ported Reach's chain config verbatim, since "it works in Reach."
+It didn't work here. Reach was written against keyless endpoints that have since rotted:
+`rpc.ankr.com/eth` and `polygon-rpc.com` now demand auth; three `*.blockscout.com` hosts 404/500;
+TronGrid throttles keyless callers to **1 rps** and suspends you for breaching it (fatal when the UI
+fans out 20 balance lookups in parallel). One of Reach's own 20 seeded addresses was even invalid —
+it fails base58 checksum and TronGrid rejects it outright, so that card could never have loaded.
+
+**None of this surfaced in code review or the build — all of it typechecked and compiled fine.**
+It only appeared by calling all 20 addresses against the live chains and counting: 17/20, then 20/20.
+
+**Rules:**
+- A port is not done when it compiles. Exercise every seeded/default value against the real upstream
+  and **count the successes** — "17/20" is a finding; "it builds" is not.
+- Treat a source repo's endpoint list as *dated*, not authoritative. Upstreams silently start
+  requiring keys.
+- When fanning out N requests to a free/keyless API, check its rate limit first. Serialise if needed
+  (`tronFetch` — promise chain + gap), and keep the chain alive on rejection or every later call
+  inherits the failure.
+- Prefer a working keyless path over the original's: all 7 EVM chains resolve via `publicnode.com`.
+
+## Don't unilaterally drop a feature because I'd design it differently
+**Mistake:** deliberately skipped Reach's 20 hardcoded whale wallets, reasoning that a tracker
+"pre-filled with strangers' wallets is a surprising default," and shipped an empty state instead.
+The user's next message was "please start with 20 hardcoded whale addresses." The taste call was
+mine to *raise*, not to *make* — and the omission cost a round-trip plus the endpoint-rot debugging
+that seeding them immediately exposed.
+
+**Rule:** when porting, port it. If part of the source's behaviour seems like a bad default, implement
+it and *flag the concern* — don't silently drop it. Reserve unilateral omissions for things that are
+broken, unsafe, or impossible, not things I merely disagree with.
