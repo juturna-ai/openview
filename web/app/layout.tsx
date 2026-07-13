@@ -16,10 +16,16 @@ export const metadata: Metadata = {
     ],
     apple: '/assets/freeview.png',
   },
+  // Self-referential canonical. Do NOT hardcode `url` here: a fixed og:url on every page
+  // makes /home advertise `openview.site` as its canonical entity, so Facebook resolves a
+  // shared /home link against a DIFFERENT cache key than the one the debugger re-scrapes —
+  // the composer then keeps serving a stale attachment even after a successful re-scrape.
+  // Next derives the per-route absolute URL from metadataBase instead.
+  alternates: { canonical: './' },
   openGraph: {
     type: 'website',
     siteName: 'Openview',
-    url: SITE_URL,
+    url: './',
     title: TITLE,
     description: DESCRIPTION,
     images: [
