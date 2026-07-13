@@ -10,6 +10,7 @@ const LINKS = [
   { href: '/home', label: 'Home' },
   { href: '/home/openview', label: 'Openview' },
   { href: '/home/app', label: 'APP' },
+  { href: '/home/docs', label: 'Docs' },
   { href: '/home/about', label: 'About us' },
 ];
 

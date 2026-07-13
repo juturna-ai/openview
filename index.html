@@ -52,14 +52,17 @@
   /* ── Folder-tab bar (site nav): Home ↔ OpenView. Dark, browser-tab style. Sits above
      #app. Hidden entirely in embed mode (phone app / grid panels) — see html.embed rule
      below — so the mobile WebView only ever sees the raw chart. */
+  /* Bar + inactive tabs sit on --bg, not the lighter --panel2/--panel, so the chrome is one shade
+     with the page. Kept in sync with .ov-tabs / .ov-tab in web/app/globals.css — this document is
+     standalone and carries its own copy of the tab-bar CSS. */
   #ovTabs{position:relative; display:flex; align-items:flex-end; gap:2px; height:34px; padding:0 8px;
-    background:var(--panel2); border-bottom:1px solid var(--border); user-select:none;}
+    background:var(--bg); border-bottom:1px solid var(--border); user-select:none;}
   #ovTabs .ov-tabs-brand{position:absolute; right:clamp(16px,4vw,40px); top:50%; transform:translateY(-50%);
     display:flex; flex-direction:row-reverse; align-items:center; gap:8px;
     font-size:15px; font-weight:700; letter-spacing:-0.01em; color:var(--text); text-decoration:none;}
   #ovTabs .ov-tabs-brand img{width:20px; height:20px; border-radius:6px;}
   #ovTabs .ov-tab{display:inline-flex; align-items:center; height:26px; padding:0 16px;
-    font-size:13px; font-weight:600; color:rgba(255,255,255,0.7); background:var(--panel);
+    font-size:13px; font-weight:600; color:rgba(255,255,255,0.7); background:transparent;
     border:1px solid var(--border); border-bottom:none;
     border-radius:8px 8px 0 0; cursor:pointer; text-decoration:none; line-height:1;
     transition:color .12s ease, background .12s ease;}
@@ -473,6 +476,17 @@
   .indrow .x:hover{color:var(--red);} .indrow .gear{cursor:pointer; color:var(--muted);}
   .indrow .gear:hover{color:#fff;} .indrow .eye{cursor:pointer; color:var(--muted);}
   .indrow .eye:hover{color:#fff;}
+  /* Information button (pane labels + legend rows). The ⓘ codepoint (U+24D8) is missing from
+     Trebuchet MS and renders as tofu, so the circle is drawn in CSS around a plain ASCII "i". */
+  .infoBtn{display:inline-flex; align-items:center; justify-content:center; flex:none;
+    width:12px; height:12px; border:1px solid currentColor; border-radius:50%;
+    font-family:Georgia, 'Times New Roman', serif; font-size:9px; font-style:italic; font-weight:700;
+    line-height:1; cursor:pointer; color:var(--muted); opacity:.9;}
+  .infoBtn:hover{color:var(--accent); opacity:1;}
+  .indrow .infoBtn{margin:0 1px;}
+  /* #rsiLabel is the built-in RSI pane's label — it is not a .subLabel, so it needs
+     naming explicitly or the button ends up flush against the last value. */
+  .subpane .subLabel .infoBtn, #rsiLabel .infoBtn{margin-left:8px; vertical-align:middle;}
   /* Symbol info popover */
   #symInfoPop .sibody{padding:6px 0;}
   #symInfoPop .sirow{display:flex; justify-content:space-between; padding:5px 14px; font-size:12px;}
@@ -555,6 +569,14 @@
   .dialog .prow select{padding:5px 6px; background:#131722; border:1px solid var(--border); border-radius:5px; color:#d1d4dc; font-size:12px; outline:none;}
   .dialog .prow input[type=number], .dialog .prow input[type=text]{padding:5px 6px; background:#131722; border:1px solid var(--border); border-radius:5px; color:#d1d4dc; font-size:12px; outline:none;}
   .dialog .prow .pw{width:52px;}
+  /* ⓘ Information dialog — read-only prose, so it's wider and the body text wraps. */
+  .dialog.info-dlg{width:480px;}
+  .dialog .infotext{font-size:13px; line-height:1.55; color:#d1d4dc; white-space:normal; margin-top:-4px;}
+  .dialog .infotext em{font-style:normal; font-weight:600; color:#fff;}
+  /* Draggable header (info dialog). touch-action:none so a drag doesn't scroll the page. */
+  .dialog .dh.dh-drag{cursor:move; touch-action:none; user-select:none;}
+  .dialog .dh.dh-drag .cl{cursor:pointer;}
+  .dialog .infocat{font-size:12px; color:var(--muted); padding-bottom:2px; border-bottom:1px solid var(--border);}
   .dialog.ma-dlg{width:520px;}
   .dialog .ma-editrow{gap:6px; justify-content:flex-start;}
   .dialog .ma-editrow .ma_type, .dialog .ma-editrow .ma_src{flex:none; width:72px;}
@@ -717,7 +739,7 @@
 
   /* ── Docked right-sidebar panel (Object tree / Data window / rail panels) ──
      Replaces the watchlist area while open — TradingView docks rail panels, never floats. */
-  #rightPanel{width:var(--wl-w,300px); background:var(--panel); border-left:1px solid var(--border);
+  #rightPanel{width:var(--wl-w,300px); background:var(--bg); border-left:1px solid var(--border);
     display:none; flex-direction:column; overflow:hidden; position:relative;}
   #rightPanel.open{display:flex;}
   html.dock-open #watchlist{display:none;}
@@ -771,7 +793,7 @@
   .dw-row .v{color:var(--text); font-variant-numeric:tabular-nums; white-space:nowrap;}
   /* alerts panel re-parented into the dock */
   #alertsPanel.docked{display:block !important; position:static; width:auto; max-height:none;
-    box-shadow:none; border:none; border-radius:0; flex:1; overflow-y:auto;}
+    background:transparent; box-shadow:none; border:none; border-radius:0; flex:1; overflow-y:auto;}
   #alertsPanel.docked .ph{display:none;}   /* dock supplies the header */
   #wlNameBtn{cursor:pointer; padding:2px 4px; border-radius:4px;} #wlNameBtn:hover{background:var(--hover);}
   #wlNameMenu{position:absolute; top:34px; left:12px; min-width:160px;}
@@ -6259,9 +6281,11 @@ function movePane(el, dir){
   // Host the RSI pane inside #subPanes so it participates in pane reordering.
   try{ const wrap=document.getElementById("subPanes");
     wrap.insertBefore(rsiWrapEl, wrap.firstChild); wrap.style.display="flex"; }catch(e){}
-  const mk=(txt,title,fn)=>{ const s=document.createElement("span"); s.className="subClose"; s.textContent=txt; s.title=title; s.onclick=fn; label.appendChild(s); return s; };
+  // `cls` overrides the default .subClose (the info button is styled by .infoBtn instead).
+  const mk=(txt,title,fn,cls)=>{ const s=document.createElement("span"); s.className=cls||"subClose"; s.textContent=txt; s.title=title; s.onclick=fn; label.appendChild(s); return s; };
   // No ↑/↓ reorder buttons (owner request): the arrow glyphs render as odd vertical
-  // dotted strokes on phones. Label keeps collapse/settings/close only.
+  // dotted strokes on phones. Label keeps info/collapse/settings/close only.
+  mk("i","Information — what this indicator does", ()=>openIndicatorInfo("rsi","RSI"), "infoBtn");
   mk("▁","Collapse / restore", rsiCollapse);
   mk("⚙","RSI settings", ()=>openRsiSettings());
   mk("×","Close RSI pane", hideRsiPane);
@@ -6415,7 +6439,12 @@ function openSettings(id){
   g("dlgClose").onclick=closeDlg;
   g("dlgDel").onclick=()=>{ deleteShape(id); closeDlg(); };
 }
-function closeDlg(){ dlg.classList.remove("open","ma-dlg"); backdrop.classList.remove("open"); }
+function closeDlg(){
+  dlg.classList.remove("open","ma-dlg","info-dlg");
+  // Clear any drag position so the next dialog opens centred again (see makeDialogDraggable).
+  dlg.style.left=dlg.style.top=dlg.style.transform="";
+  backdrop.classList.remove("open");
+}
 
 // ─────────────────────────────────────────────────────────────────────
 //  FIB RETRACEMENT SETTINGS  (TradingView parity: Style / Coordinates / Visibility)
@@ -7658,6 +7687,91 @@ const IND_META = {
   hl52: { inputs:[{key:"length",label:"Length",type:"num",min:1,step:1}], plots:["High","Low"] },
   pivots: { inputs:[], plots:["P","R1","S1","R2","S2"] },
 };
+// ── Indicator info text (the ⓘ button on every pane / legend row) ─────
+// Plain-English explainer per indicator type, keyed the same as IND_CATALOG.
+//   what : what the indicator actually measures / computes
+//   how  : how the plot is read in practice (levels, crosses, divergence)
+//   use  : what traders reach for it to do
+// Any type missing here falls back to a generic message in openIndicatorInfo().
+const IND_INFO = {
+  sma:{what:"The unweighted mean of the last N values of the chosen source (usually close). Every bar in the window counts equally.",how:"Price above the line = the average buyer over the window is in profit; below = underwater. The line's slope is the trend; crosses of price through it, or of a fast SMA through a slow one, are the classic signals.",use:"The baseline trend filter. Slow to react and prone to whipsaw in chop, but it lags honestly — good for defining 'the trend' on higher timeframes (50/100/200)."},
+  ema:{what:"An exponentially weighted average: recent bars carry more weight, older ones decay away rather than dropping out abruptly.",how:"Read like an SMA, but it turns faster. Price reclaiming/losing the EMA, and fast-over-slow EMA crosses, are the usual triggers.",use:"Preferred over SMA when you want the average to respond quickly to a new move. The 9/21 pair is a common short-term trend gauge; 200 EMA is a widely-watched line."},
+  wma:{what:"A weighted average where weights fall off linearly — the newest bar gets weight N, the oldest gets 1.",how:"Sits between SMA and EMA in responsiveness. Same trend/cross reading as any moving average.",use:"When SMA lags too much but EMA's long tail of old data bothers you. Also the building block inside HMA and Coppock."},
+  vwma:{what:"A moving average weighted by volume — bars that traded heavily pull the average toward their price.",how:"Compare it against a plain SMA of the same length: VWMA above SMA means the heavy volume printed at higher prices (buyers paid up), below means the volume was distributed lower.",use:"A cheap way to ask 'where did the real money actually transact?' rather than treating a thin bar and a huge bar as equals."},
+  hma:{what:"Hull Moving Average — a WMA-of-WMAs construction designed to cut lag while staying smooth.",how:"Turns much sooner than an EMA of the same length. Most people trade the *slope*: rising HMA = long bias, falling = short bias.",use:"Trend-following when you want early turns. The tradeoff: it can overshoot and briefly point the wrong way at a sharp reversal."},
+  dema:{what:"Double EMA — 2×EMA minus the EMA of that EMA, which cancels out much of the normal EMA lag.",how:"Same as an EMA, only faster to respond. Slope and price-cross are the readings.",use:"Faster trend confirmation than an EMA of equal length; noisier in ranges."},
+  tema:{what:"Triple EMA — a three-stage lag-cancelling construction, faster still than DEMA.",how:"Read as a very responsive moving average. Crosses and slope.",use:"Short-timeframe trend work where lag costs you the move. Most whipsaw-prone of the MA family."},
+  alma:{what:"Arnaud Legoux MA — a Gaussian-weighted average whose peak weighting you can slide anywhere in the window (Offset) and whose sharpness you tune (Sigma).",how:"Offset near 1 = responsive/less lag; near 0 = smooth/more lag. Otherwise a standard MA read.",use:"When you want to explicitly dial the smoothness-vs-lag tradeoff instead of accepting an EMA's fixed one."},
+  smma:{what:"Smoothed / Running MA (RMA) — an EMA using a 1/N smoothing factor, so it decays much more slowly.",how:"A very slow, very smooth trend line.",use:"Long-horizon trend context, and the internal smoothing used by Wilder's own indicators (RSI, ATR, ADX)."},
+  lsma:{what:"Least Squares MA — fits a linear regression line to the last N bars and plots the line's endpoint each bar.",how:"It's the statistical best-fit trend value 'right now'. Price above it = above the fitted trend.",use:"The lowest-lag way to represent the current trend line; also the basis of the regression channel."},
+  envel:{what:"A moving average with bands drawn a fixed percentage above and below it.",how:"Price at the upper band = stretched above its average by that % (potentially overbought); lower band = the reverse. In a trend, price can ride a band.",use:"Simple mean-reversion envelope, and a visual sense of 'how far from normal is this?' Unlike Bollinger Bands the width is fixed, not volatility-driven."},
+  rsi:{what:"Relative Strength Index — the ratio of average gains to average losses over N bars, mapped to a 0–100 scale.",how:"Above 70 is conventionally overbought, below 30 oversold — but in a strong trend RSI *stays* pinned there, so those levels alone are not signals. The higher-value reads: the 50 line as a bull/bear divider, and divergence (price makes a new high, RSI doesn't).",use:"Momentum strength and exhaustion. Best used as a divergence and 50-line tool rather than a naive 70/30 fade."},
+  macd:{what:"Moving Average Convergence Divergence — the fast EMA minus the slow EMA (the MACD line), an EMA of that (the signal line), and the gap between them (the histogram).",how:"MACD crossing above signal = momentum turning up; below = down. The zero line separates bull from bear (fast MA above/below slow). The histogram shrinking is momentum fading *before* the cross happens.",use:"The workhorse momentum + trend indicator. Divergence between price and the MACD line is one of the more reliable reversal warnings."},
+  stoch:{what:"Stochastic Oscillator — where the close sits inside the high–low range of the last N bars, as 0–100 (%K), plus a smoothed version of it (%D).",how:"Above 80 = closing near the top of its recent range, below 20 = near the bottom. The %K/%D cross is the trigger; the level tells you where it happened.",use:"Range-bound / mean-reversion trading, and spotting momentum loss. In a trend it saturates and gives repeated bad fade signals."},
+  stochrsi:{what:"A Stochastic applied to RSI instead of to price — i.e. where RSI sits inside its own recent range.",how:"Far more sensitive than either parent. 0.8/0.2 (or 80/20) are the extremes; it hits them often.",use:"Timing entries inside a bias you've already established elsewhere. Too twitchy to trade on its own."},
+  cci:{what:"Commodity Channel Index — how far price has deviated from its own typical-price average, scaled by mean deviation. Unbounded, but mostly lives in ±100.",how:"Above +100 = unusually strong upside deviation, below −100 = downside. Two schools: fade the extremes (mean reversion) or trade the +100/−100 breakouts (momentum).",use:"Detecting the start of a new trend leg and cyclical turns, on any instrument (the 'commodity' name is historical)."},
+  willr:{what:"Williams %R — the close's position inside the last N bars' range, plotted on an inverted −100…0 scale. Effectively an unsmoothed Stochastic.",how:"Above −20 = overbought zone, below −80 = oversold. Because it's unsmoothed, it reaches extremes fast.",use:"Short-term reversal timing and momentum failure. Same trend-saturation caveat as Stochastic."},
+  mom:{what:"Momentum — simply price now minus price N bars ago. The raw rate of change, in price units.",how:"Above zero = higher than N bars ago and momentum is positive; the *slope* matters more than the level. Rising price with a falling Momentum line means the advance is decelerating.",use:"The purest read on 'is this move speeding up or running out of gas'. Zero-line crosses are a crude trend signal; divergence is the real value."},
+  roc:{what:"Rate of Change — the same idea as Momentum but expressed as a percentage, so it's comparable across instruments and price levels.",how:"Zero line divides gaining from losing over the lookback. Magnitude shows how violent the move is.",use:"Comparing momentum across different symbols, and spotting blow-off/exhaustion where ROC spikes far beyond its normal range."},
+  ao:{what:"Awesome Oscillator — the 5-period minus 34-period SMA of each bar's midpoint (high+low)/2, drawn as a histogram.",how:"Above zero = short-term momentum leads the longer term. Bill Williams' patterns: 'saucer' (colour flips back to trend after a shallow dip) and 'twin peaks' (a divergent second peak on the same side of zero).",use:"Measuring the market's driving force independent of the close price. Pairs with AC below."},
+  ac:{what:"Accelerator Oscillator — AO minus a 5-period SMA of AO, i.e. the *acceleration* of momentum.",how:"AC turns before AO, and AO turns before price. Bars changing colour are the early warning; zero-line crosses are late.",use:"Bill Williams' earliest warning that a move is losing or gaining force, taken before AO confirms."},
+  uo:{what:"Ultimate Oscillator — Larry Williams' blend of buying pressure over three timeframes (fast/medium/slow), weighted 4:2:1, on a 0–100 scale.",how:"Above 70 overbought, below 30 oversold. Its intended use is divergence: price makes a new low, UO doesn't, then you buy the break of the divergence high.",use:"Cutting down the false divergences you get from a single-timeframe oscillator by demanding agreement across three."},
+  trix:{what:"The 1-bar rate of change of a triple-smoothed EMA — triple smoothing strips out cycles shorter than the length.",how:"Zero-line crosses signal trend change; the TRIX/signal cross is the earlier, noisier trigger. Divergence works well because the line is so clean.",use:"A low-noise momentum oscillator that filters out short-term wiggles by construction."},
+  cmo:{what:"Chande Momentum Oscillator — (sum of up moves − sum of down moves) / (sum of all moves), on a −100…+100 scale. Unlike RSI it doesn't smooth the numerator.",how:"±50 are the conventional extremes. Values near zero mean a genuinely directionless market.",use:"A more responsive RSI alternative; also a decent 'is there any trend at all' meter — a flat CMO near zero means don't trade trend systems."},
+  ppo:{what:"Percentage Price Oscillator — MACD expressed as a percentage of the slow EMA rather than in price units.",how:"Read exactly like MACD (line/signal cross, zero line, histogram).",use:"Everything MACD does, but the values are comparable across symbols and across time — a $5 stock and a $500 stock give directly comparable PPO readings."},
+  dpo:{what:"Detrended Price Oscillator — price minus a moving average that has been *shifted back* in time, which removes the trend and leaves the cycle.",how:"Peaks and troughs mark the cycle; the distance between them estimates the cycle's length. It is deliberately not a trend indicator and it is shifted, so it doesn't predict the current bar.",use:"Measuring how long the market's short-cycle rhythm is, so you can time entries with that cycle instead of against it."},
+  fisher:{what:"Fisher Transform — normalises price into the recent range, then applies a Gaussian transform that turns the distribution's fat tails into sharp, unmistakable spikes.",how:"Extreme spikes mark turning points; the Fisher/trigger crossover is the entry. Turns are far more abrupt than any conventional oscillator.",use:"Making price extremes visually obvious. Its sharpness is the point — and also why it produces false alarms in low-volatility drift."},
+  bop:{what:"Balance of Power — (close − open) / (high − low) per bar: who won each bar, buyers or sellers, and by how much of the bar's range.",how:"Persistently positive = buyers closing bars near the highs. Above/below zero is the read; it's noisy bar-to-bar so smoothing helps.",use:"A per-bar read on buyer vs seller dominance that ignores volume entirely — useful where volume data is untrustworthy."},
+  coppock:{what:"Coppock Curve — a weighted MA of two summed rates of change (14 and 11 period), originally designed for monthly stock index data.",how:"The classic signal is the curve turning up from *below zero* — that's the buy. It intentionally has no sell signal.",use:"Long-term bottom-fishing on indices. A monthly/weekly tool, not a day-trading one."},
+  adx:{what:"Average Directional Index with the Directional Movement pair. +DI measures upward directional movement, −DI downward, and ADX measures how *strong* the trend is regardless of direction.",how:"ADX above ~25 = trending, below ~20 = ranging (and trend systems will get chopped up). Direction comes from which DI line is on top, not from ADX.",use:"The regime filter: it tells you whether to trade trend-following or mean-reversion tools at all. ADX alone never tells you which way."},
+  aroon:{what:"Aroon Up/Down — how many bars have passed since the highest high and the lowest low of the lookback, expressed as 0–100.",how:"Aroon Up near 100 = new highs are being made recently (strong uptrend). The Up/Down crossover marks a trend change; both lines low and tangled = no trend.",use:"Identifying the *beginning* of a trend and spotting consolidation, based purely on the timing of extremes rather than price magnitude."},
+  supertrend:{what:"A trailing stop line placed an ATR multiple away from price; it flips sides when price closes through it.",how:"Line below price and green = uptrend, hold long; line above and red = downtrend. The flip is the signal, and the line doubles as your stop level.",use:"Mechanical trend-following with a built-in stop. Excellent in trends, painful in ranges where it flips repeatedly."},
+  psar:{what:"Parabolic SAR (Stop And Reverse) — dots that trail price and accelerate toward it the longer the trend runs.",how:"Dots below price = long, above = short. When price touches the dots, the system reverses. The acceleration factor controls how tightly it trails.",use:"Trailing stops and exit timing in a trending market. Wilder designed it to always be in the market, so in a range it reverses constantly."},
+  ichimoku:{what:"Ichimoku Cloud — a complete system: Conversion (fast) and Base (slow) midpoint lines, a forward-projected Cloud between two spans, and a Lagging Span (close shifted back).",how:"Price above the Cloud = bullish, below = bearish, inside = no trade. Cloud thickness = the strength of that support/resistance. Conversion crossing Base is the trigger; the Lagging Span above past price confirms.",use:"A single glance gives trend, support/resistance, momentum, and a forward-looking view. It works best on liquid, trending markets and clutters badly in chop."},
+  vortex:{what:"Two lines (VI+ and VI−) built from the distance between the current high and the prior low, and vice versa — measuring the tug-of-war between upward and downward movement.",how:"VI+ crossing above VI− = uptrend starting; the reverse for downtrends. The wider the separation, the stronger the trend.",use:"Trend-change identification, often as a cleaner alternative to the DI lines in ADX."},
+  bb:{what:"Bollinger Bands — a moving average with bands set N standard deviations above and below it, so the bands widen and narrow with volatility.",how:"Bands squeezing tight = volatility contraction, which typically precedes an expansion (the 'squeeze'). Touching a band is NOT a sell signal — in a trend price walks the band. %B and Bandwidth quantify the same thing numerically.",use:"Volatility regime, relative high/low, and squeeze-into-breakout setups. Bollinger himself insisted the bands are not standalone buy/sell triggers."},
+  kc:{what:"Keltner Channels — a moving average with channels set an ATR multiple away, so the width tracks true range rather than standard deviation.",how:"Closes outside the channel indicate a genuine breakout (they're rarer than Bollinger touches). The channel slope is the trend.",use:"Breakout confirmation and trend-riding. Compared against Bollinger Bands, BB inside KC is the canonical 'squeeze' setup."},
+  donchian:{what:"Donchian Channels — simply the highest high and the lowest low of the last N bars, with the midline between them.",how:"A close at the upper channel is a new N-bar high — that IS the breakout, no smoothing involved.",use:"The original Turtle Traders' breakout system. Blunt, transparent, and the cleanest possible definition of 'a new high'."},
+  atr:{what:"Average True Range — the average of each bar's true range (which accounts for gaps), over N bars. A pure volatility measure with no directional information.",how:"Rising ATR = volatility expanding; falling = contracting. The absolute value is in price units, so it's directly usable for sizing.",use:"Position sizing and stop placement (e.g. a stop 2×ATR away adapts to the instrument's own volatility). Never a direction signal."},
+  stdev:{what:"The statistical standard deviation of the source over N bars — the dispersion of price around its own mean.",how:"High = price is scattering widely (volatile); low = tight and coiled.",use:"Raw volatility measurement, the ingredient inside Bollinger Bands, and a filter for 'is anything actually happening?'"},
+  chop:{what:"Choppiness Index — a 0–100 measure of whether the market is trending or ranging, derived from how much ground price covered versus the total range it travelled.",how:"Above ~61 = choppy/consolidating; below ~38 = strongly trending. It says nothing about direction.",use:"A regime switch: use it to decide whether to deploy trend-following or range-trading strategies. Extended high readings often precede a breakout."},
+  bbw:{what:"Bollinger Bandwidth — the width of the Bollinger Bands normalised by the middle band, as a single line.",how:"Multi-month lows in bandwidth = 'The Squeeze' — a volatility contraction that historically resolves in a sharp directional expansion (direction unknown).",use:"Quantifying the squeeze so you can alert on it instead of eyeballing the bands."},
+  volume:{what:"The raw number of units traded per bar, coloured by whether the bar closed up or down.",how:"Volume confirms: a breakout on heavy volume is credible, the same breakout on thin volume is suspect. Volume climaxes often mark exhaustion, not continuation.",use:"The reality check on every price move — it tells you whether anyone actually participated."},
+  volprofile:{what:"Volume Profile — volume distributed across *price levels* over the visible range rather than across time, drawn as a horizontal histogram.",how:"The fattest bar is the Point of Control (POC) — the price where the most business was done, and a magnet/pivot. Thin areas are low-acceptance zones price tends to move through quickly.",use:"Finding meaningful support/resistance from actual traded volume rather than from drawn lines."},
+  vwap:{what:"Volume Weighted Average Price — the session's average transaction price, weighted by volume. Resets each session.",how:"Price above VWAP = buyers are paying more than the session's average (and institutional buy programs are 'behind'); below = the reverse. It acts as a magnet and as intraday support/resistance.",use:"The intraday institutional benchmark — desks are literally measured against it. Primarily an intraday tool; it's meaningless on daily+ charts."},
+  obv:{what:"On Balance Volume — a running total that adds the bar's whole volume on an up close and subtracts it on a down close.",how:"The *direction* of the OBV line matters, not its absolute value. OBV making new highs while price stalls means accumulation is happening under the surface; the opposite is distribution.",use:"Granville's original idea that volume precedes price. Divergence between OBV and price is its whole reason for existing."},
+  mfi:{what:"Money Flow Index — an RSI that is weighted by volume. Sometimes called 'volume-weighted RSI'. 0–100 scale.",how:"Above 80 overbought, below 20 oversold. Divergence with price is the strong signal.",use:"Everything RSI does, but a move ignored by volume won't push MFI — so it filters out low-conviction momentum RSI would happily register."},
+  adl:{what:"Accumulation/Distribution Line — a cumulative total of volume weighted by where each bar closed within its range.",how:"Rising = accumulation (closes near the highs on volume); falling = distribution. Divergence against price is the classic read.",use:"Detecting quiet accumulation or distribution while price is still range-bound. Note: unlike OBV, it ignores gaps between bars."},
+  cmf:{what:"Chaikin Money Flow — the same close-location-value idea as ADL, but summed over N bars and normalised by volume, so it oscillates around zero.",how:"Above zero = buying pressure over the window, below = selling pressure. Sustained readings past ±0.25 are meaningful.",use:"A bounded, comparable version of the accumulation/distribution idea — easier to threshold and alert on than the unbounded ADL."},
+  chaikin:{what:"Chaikin Oscillator — the MACD (fast EMA minus slow EMA) *of the Accumulation/Distribution Line*.",how:"Crossing above zero = accumulation momentum turning positive. It's a momentum reading on money flow, not on price.",use:"Spotting a change in the buying/selling pressure trend earlier than the raw ADL slope would show it."},
+  pvt:{what:"Price Volume Trend — a cumulative line like OBV, except each bar adds volume scaled by the *percentage* price change rather than the whole volume.",how:"Rising = money flowing in, proportional to how much price actually moved. Divergence with price is the signal.",use:"OBV's flaw is treating a 0.01% up-close the same as a 5% one; PVT fixes that by weighting the contribution."},
+  fi:{what:"Force Index — price change multiplied by volume, then smoothed. Combines direction, magnitude, and participation into one number.",how:"Above zero = bulls in control. Spikes to extremes mark climaxes; a short-length FI is a trigger, a long-length one is a trend read.",use:"Elder's measure of the raw power behind a move. New FI highs confirm a trend; divergence warns it's hollow."},
+  alligator:{what:"Bill Williams' Alligator — three smoothed MAs (Jaw 13, Teeth 8, Lips 5), each shifted forward by a different amount.",how:"Lines intertwined and flat = the alligator is sleeping (no trend, stay out). Lines fanning apart in order = it's feeding (trend, ride it). The wider the fan, the stronger the trend.",use:"A visual go/no-go on whether a trend exists at all, before you commit to a trend strategy."},
+  fractals:{what:"Williams Fractals — a marker on any bar whose high is higher than the two bars either side (or low lower than both sides). A five-bar swing point.",how:"Each fractal marks a local swing high or low. They confirm two bars late, by definition — you can't know it's a fractal until the bars after it print.",use:"Objective, mechanical swing points for stop placement, structure (higher-highs/lower-lows), and as the reference level for breakout entries."},
+  mcginley:{what:"McGinley Dynamic — a moving average with an automatic speed adjustment: it accelerates when price runs away from it and slows when price hugs it.",how:"Because it self-adjusts, price rarely separates from it violently the way it does from a fixed-length EMA.",use:"A trend line that tries to track price through changing market speeds without you re-tuning the length."},
+  kama:{what:"Kaufman Adaptive MA — measures the 'efficiency ratio' (net movement ÷ total movement) and smooths hard when price is choppy, tracks fast when it's trending.",how:"Flat during noise, responsive during real moves. Slope and price-cross are the reads.",use:"One MA that behaves like a fast EMA in trends and a slow one in chop — designed specifically to cut down on whipsaw."},
+  ckstop:{what:"Chande Kroll Stop — ATR-based long and short stop lines derived from the recent highs and lows.",how:"The two lines bracket price; the relevant one is your trailing stop for that direction. Price closing through it exits the position.",use:"A systematic ATR trailing stop that adapts to volatility rather than using a fixed percentage."},
+  lrc:{what:"Linear Regression Channel — the best-fit line through the last N bars, with parallel channel lines set a standard-deviation multiple away.",how:"The centre line is the statistical trend. Touches of the outer channel are statistically stretched conditions within that trend; a break outside it suggests the trend's character is changing.",use:"Defining a trend channel objectively rather than by hand-drawing lines, and gauging how extended price is inside it."},
+  tsi:{what:"True Strength Index — price momentum double-smoothed with two EMAs, which strips most of the noise out while keeping the direction.",how:"Zero line separates bull from bear; the TSI/signal cross triggers. Overbought/oversold zones apply, and its smoothness makes divergence unusually readable.",use:"A cleaner momentum oscillator than raw ROC, well suited to divergence hunting."},
+  kst:{what:"Know Sure Thing — Pring's weighted sum of four smoothed rates of change over different lookbacks, plus a signal line.",how:"KST crossing its signal line, and crossing zero, are the signals. Combining four timeframes makes it slow but decisive.",use:"A long-term momentum read that won't fire on every short-term wiggle. Built for weekly/monthly analysis."},
+  rvi:{what:"Relative Vigor Index — the ratio of (close − open) to (high − low), smoothed. The premise: in an uptrend, markets close higher than they open.",how:"RVI crossing its signal line is the trigger. Divergence with price warns of exhaustion.",use:"Confirming the conviction inside bars — whether the buying is holding into the close or fading."},
+  smi:{what:"Stochastic Momentum Index — like a Stochastic, but it measures the close's distance from the *midpoint* of the range instead of from the low, on a −100…+100 scale.",how:"Above +40 overbought, below −40 oversold. Centred on zero, it's less noisy and gives fewer false extremes than a plain Stochastic.",use:"A refined Stochastic — the same job, with a clearer neutral point and cleaner signals."},
+  woodies:{what:"Woodies CCI — a CCI plus a short 'Turbo' CCI, used with Ken Wood's pattern rules.",how:"The zero-line rules dominate: a 'Zero Line Reject' (a pullback to zero that fails to cross) is the flagship setup. The Turbo line times the entry.",use:"A complete discretionary system built around CCI patterns rather than a standalone reading."},
+  crsi:{what:"Connors RSI — a composite of three components: a short RSI of price, an RSI of the up/down streak length, and the percentile rank of the recent rate of change.",how:"Extremely aggressive: below 10 is oversold, above 90 overbought. It fires often, on short timeframes.",use:"Short-term mean-reversion systems. Built explicitly for 2–5 day holds, not for trend-following."},
+  eom:{what:"Ease of Movement — how far price moved relative to how much volume it took to move it.",how:"High positive = price rose easily on light volume (little resistance above). Near zero = price is grinding, needing heavy volume to go anywhere.",use:"Judging whether a move is effortless (likely to continue) or laboured (likely to stall) — the volume-cost of each point of price."},
+  klinger:{what:"Klinger Oscillator — compares 'volume force' (volume signed by trend and scaled by range) across a fast and slow EMA, with a signal line.",how:"Signal-line crosses trigger; the strongest use is divergence between the oscillator and price.",use:"Reconciling short-term money flow against long-term flow — designed to catch turns that volume alone misses."},
+  netvol:{what:"Net Volume — volume signed by the bar's direction: positive on an up bar, negative on a down bar, as a histogram.",how:"Persistent positive bars = net buying pressure. Big single bars mark aggressive one-sided participation.",use:"Seeing, per bar, which side is actually doing the volume — the un-cumulated ingredient behind OBV."},
+  volosc:{what:"Volume Oscillator — the percentage difference between a fast and a slow moving average of volume.",how:"Above zero = current volume is running above its longer-term norm, which confirms whatever price is doing. Below zero on a breakout is a red flag.",use:"Answering 'is this move actually being participated in?' without worrying about volume's absolute size."},
+  twap:{what:"Time Weighted Average Price — the simple average price over the session, with every time slice weighted equally regardless of volume.",how:"Read like VWAP: price above = trading above the period's average.",use:"The benchmark for time-sliced execution algos. Compared with VWAP, the gap between them tells you whether the volume clustered above or below the time-average."},
+  bbpct:{what:"Bollinger %B — where price sits relative to the bands, as a single number: 1.0 = at the upper band, 0.0 = at the lower, 0.5 = at the basis.",how:"Above 1 or below 0 means price has closed *outside* the bands. In a strong trend %B can stay above 0.8 for a long time — that's trend strength, not a sell signal.",use:"Making the band position numeric so you can alert on it, backtest it, or feed it into another system."},
+  histvol:{what:"Historical Volatility — the annualised standard deviation of logarithmic returns over N bars.",how:"It's a percentage figure directly comparable to option implied volatility. Rising HV = the market is getting rowdier.",use:"Options work (comparing realised vs implied vol), volatility-based position sizing, and spotting volatility regime changes."},
+  massidx:{what:"Mass Index — sums the ratio of two EMAs of the high–low range, detecting when the daily *range* is expanding.",how:"The classic signal is the 'reversal bulge': the index rises above 27, then falls back below 26.5 — a reversal is likely, in whatever direction the trend was.",use:"Predicting reversals from range expansion alone, with no reference to price direction. Distinctive precisely because it's direction-blind."},
+  ulcer:{what:"Ulcer Index — the root-mean-square of drawdowns from recent highs. It measures downside pain only; upside volatility doesn't register.",how:"Higher = deeper and/or longer drawdowns. Low and flat = a smooth ride up.",use:"A risk metric that matches how investors actually experience risk (drawdown), unlike standard deviation which penalises upside moves equally."},
+  bbp:{what:"Bull Bear Power — Bull Power (high − EMA) plus Bear Power (low − EMA): how far bulls can push above, and bears below, the consensus average.",how:"Bull Power positive and rising = buyers are extending highs above the average. Elder's setup: buy when Bear Power is negative but rising within an uptrend.",use:"Separating the two sides' strength instead of netting them into one number — you can see which side is actually gaining ground."},
+  ribbon:{what:"Moving Average Ribbon — a series of MAs of increasing length, plotted together.",how:"A widely fanned, correctly-ordered ribbon = a strong trend. Compressed and tangled = consolidation. The ribbon flipping order is a trend change.",use:"An immediate visual read on trend strength and alignment across timeframes, without staring at individual crossovers."},
+  hl52:{what:"52 Week High/Low — the highest high and lowest low over the lookback (252 trading days ≈ one year), drawn as levels.",how:"Price near the 52-week high is a widely-tracked momentum condition; near the low, the opposite. Both act as psychological support/resistance.",use:"The single most-cited institutional reference range. Breaking a 52-week high draws attention and flows in a way an arbitrary level does not."},
+  pivots:{what:"Pivot Points Standard — the pivot (P) from the previous period's high/low/close, plus symmetric resistance (R1, R2) and support (S1, S2) levels derived from it.",how:"Price above P = bullish bias for the period, below = bearish. R/S levels are where reactions are expected; they're mechanically computed, not drawn.",use:"Pre-computed intraday support/resistance that a very large number of traders watch simultaneously — which is a large part of why they work."},
+};
 // Line-style options for the Style tab (LWC LineStyle enum values).
 const LINE_STYLES = [["Solid",0],["Dotted",1],["Dashed",2]];
 // Fallback label when a param has no IND_META entry: title-case the key.
@@ -8197,10 +8311,11 @@ function buildIndicatorSeries(ind){
   const label=document.createElement("div"); label.className="subLabel"; label.textContent=ind.name;
   // No 👁 hide / ↑↓ reorder / ⤢ maximize buttons (owner request) — the sub-pane label
   // matches the built-in RSI pane chrome: collapse, settings, close.
+  const info=document.createElement("span"); info.className="infoBtn"; info.textContent="i"; info.title="Information — what this indicator does"; info.onclick=()=>openIndicatorInfo(ind.type, ind.name);
   const collapse=document.createElement("span"); collapse.className="subClose"; collapse.textContent="▁"; collapse.title="Collapse / restore"; collapse.onclick=()=>togglePaneCollapse(el);
   const gear=document.createElement("span"); gear.className="subClose"; gear.textContent="⚙"; gear.title="Settings"; gear.onclick=()=>openIndicatorSettings(ind.id);
   const close=document.createElement("span"); close.className="subClose"; close.textContent="×"; close.onclick=()=>removeIndicator(ind.id);
-  label.appendChild(collapse); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
+  label.appendChild(info); label.appendChild(collapse); label.appendChild(gear); label.appendChild(close); el.appendChild(label);
   const grip=document.createElement("div"); grip.className="paneResize"; grip.title="Drag to resize pane"; wirePaneResize(grip,el); el.appendChild(grip);
   wrap.appendChild(el); ind.paneEl=el;
   // Right-click the sub-pane → app menu (Settings / Add alert / Remove), same as
@@ -8416,7 +8531,8 @@ function renderIndLegend(){
   indicators.filter(i=>i.pane==="main").forEach(ind=>{
     const row=document.createElement("div"); row.className="indrow"; row.dataset.id=ind.id;
     const params=indParamSummary(ind);
-    row.innerHTML='<span class="nm" style="color:'+(ind.params.color||"#d1d4dc")+(ind.hidden?";opacity:.5":"")+'">'+ind.name+(params?" ("+params+")":"")+'</span><span class="vals"></span><span class="eye" title="Hide / show">'+(ind.hidden?"🚫":"👁")+'</span><span class="gear" title="Settings">⚙</span><span class="x" title="Remove">×</span>';
+    row.innerHTML='<span class="nm" style="color:'+(ind.params.color||"#d1d4dc")+(ind.hidden?";opacity:.5":"")+'">'+ind.name+(params?" ("+params+")":"")+'</span><span class="vals"></span><span class="infoBtn" title="Information — what this indicator does">i</span><span class="eye" title="Hide / show">'+(ind.hidden?"🚫":"👁")+'</span><span class="gear" title="Settings">⚙</span><span class="x" title="Remove">×</span>';
+    row.querySelector(".infoBtn").onclick=()=>openIndicatorInfo(ind.type, ind.name);
     row.querySelector(".eye").onclick=()=>toggleIndicatorHidden(ind.id);
     row.querySelector(".gear").onclick=()=>openIndicatorSettings(ind.id);
     row.querySelector(".x").onclick=()=>removeIndicator(ind.id);
@@ -8496,6 +8612,67 @@ function applyIndicatorStyle(ind){
     if(specs[i] && specs[i].k!=="hist"){ opt.lineWidth=st.width||1; opt.lineStyle=st.style||0; }
     if(ind.precision!=null && ind.precision!=="") opt.priceFormat={ type:"price", precision:+ind.precision, minMove:Math.pow(10,-(+ind.precision)) };
     try{ s.applyOptions(opt); }catch(e){}
+  });
+}
+// ── ⓘ Information dialog ──────────────────────────────────────────────
+// Read-only explainer for an indicator, opened by the ⓘ button on the pane label /
+// legend row. Reuses the shared #settingsDlg element (like every other dialog here),
+// so it must not collide with an open settings dialog — closeDlg() clears both.
+// `type` is an IND_CATALOG type key; `name` is the display name (falls back to the
+// catalog name). Any type without an IND_INFO entry still gets a usable dialog.
+function openIndicatorInfo(type, name){
+  const cat = IND_CATALOG.find(c=>c.type===type);
+  const title = name || (cat && cat.name) || type || "Indicator";
+  const info = IND_INFO[type];
+  const esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  // The IND_INFO prose uses *asterisks* for emphasis. Convert to <em> AFTER escaping so the
+  // markup we inject is only ever the <em> tags we added ourselves — never anything from the text.
+  const em  = s => esc(s).replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  const sec = (h,b) => '<div class="dsec">'+h+'</div><div class="infotext">'+em(b)+'</div>';
+  const body = info
+    ? sec("What it is", info.what) + sec("How to read it", info.how) + sec("What it's for", info.use)
+    : '<div class="infotext" style="color:var(--muted)">No description is available for this indicator yet.</div>';
+  const catLine = cat ? '<div class="infocat">'+esc(cat.cat)+' · '+(cat.pane==="main"?"Overlay on price":cat.pane==="overlay"?"Chart overlay":"Separate pane")+'</div>' : "";
+
+  dlg.innerHTML='<div class="dh"><span>'+esc(title)+'</span><span class="cl" id="dlgClose">×</span></div>'
+    +'<div class="db">'+catLine+body+'</div>'
+    +'<div class="df"><button class="btn primary" id="dlgOk">Close</button></div>';
+  // No backdrop: this is a reference panel, so the chart behind it stays fully visible and
+  // usable while it's open (owner request). It's draggable by its header instead.
+  dlg.classList.remove("fib-dialog","ma-dlg"); dlg.classList.add("open","info-dlg");
+  makeDialogDraggable(dlg);
+  document.getElementById("dlgOk").onclick=closeDlg;
+  document.getElementById("dlgClose").onclick=closeDlg;
+}
+// Drag a dialog by its .dh header. The dialog is centred with translate(-50%,-50%), which
+// can't coexist with explicit coords — so on first drag we bake the current on-screen box
+// into left/top and drop the transform. closeDlg() clears both so the next dialog re-centres.
+function makeDialogDraggable(d){
+  const head = d.querySelector(".dh"); if(!head) return;
+  head.classList.add("dh-drag");
+  // With no backdrop there is nothing shielding the chart underneath, so events that land on
+  // the dialog would otherwise also reach the chart's pan/zoom/crosshair handlers. Swallow
+  // them at the dialog. Wired once per element (guarded) since the dialog node is reused.
+  if(!d._eventShield){
+    d._eventShield = true;
+    ["pointerdown","mousedown","wheel","touchstart","dblclick","contextmenu"].forEach(t=>
+      d.addEventListener(t, e=>{ e.stopPropagation(); }, {passive:false}));
+  }
+  head.addEventListener("pointerdown", e=>{
+    if(e.button!==0 || e.target.closest(".cl")) return;   // ignore the × close button
+    const r = d.getBoundingClientRect();
+    d.style.transform="none"; d.style.left=r.left+"px"; d.style.top=r.top+"px";
+    const dx=e.clientX-r.left, dy=e.clientY-r.top;
+    head.setPointerCapture(e.pointerId);
+    const move=ev=>{
+      // Keep the header on-screen: never let it be dragged fully out of reach.
+      const maxX=window.innerWidth-40, maxY=window.innerHeight-30;
+      d.style.left=Math.max(40-r.width, Math.min(maxX, ev.clientX-dx))+"px";
+      d.style.top =Math.max(0,          Math.min(maxY, ev.clientY-dy))+"px";
+    };
+    const up=()=>{ head.removeEventListener("pointermove",move); head.removeEventListener("pointerup",up); };
+    head.addEventListener("pointermove",move); head.addEventListener("pointerup",up);
+    e.preventDefault();
   });
 }
 function openIndicatorSettings(id){
@@ -10428,22 +10605,13 @@ function openHelpPanel(){
   const rows=KEY_SHORTCUTS.map(([k,d])=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid var(--border);font-size:11px">'
     +'<span style="color:var(--text);white-space:nowrap"><b>'+escHtml(k)+'</b></span>'
     +'<span style="color:var(--muted);text-align:right">'+escHtml(d)+'</span></div>').join("");
-  // AI assistant (MCP + API) section — live status + quick-start for the LLM bridge (mcp/README.md).
+  // AI assistant (MCP + API) — live status only; the setup guide lives on the Docs page (/home/docs).
   const agentStatus = agentHelpStatus();
-  const hstep=(k,d)=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-top:1px solid var(--border);font-size:11px">'
-    +'<span style="color:var(--text);white-space:nowrap"><b>'+k+'</b></span>'
-    +'<span style="color:var(--muted);text-align:right">'+d+'</span></div>';
-  const code=(s)=>'<code style="background:var(--panel);border:1px solid var(--border);border-radius:3px;padding:1px 4px;font-size:10px;color:var(--text);word-break:break-all">'+escHtml(s)+'</code>';
   const ai=
     '<div style="margin-top:16px;padding:6px 0;font-size:11px;color:var(--text);font-weight:600">AI assistant — MCP + API'
       +'<span id="helpAgentStatus" style="float:right;font-weight:400;color:'+agentStatus[0]+'">● '+agentStatus[1]+'</span></div>'
-    +'<div style="font-size:10px;color:var(--muted);line-height:1.5;padding-bottom:4px">Connect an LLM (e.g. Claude) to this chart: it can read the candles, indicators, alerts and drawings, and draw its own support/resistance lines, fibs and notes — ask “where is the resistance?” and it marks it on the chart. It can NOT change the app, your settings, alerts or indicators, and can only delete drawings it created itself (Ctrl+Z undoes them too).</div>'
-    +hstep('1. Start server', code('node mcp/server.mjs')+' (Node ≥18, nothing to install)')
-    +hstep('2. Open the app', 'via '+code('http://127.0.0.1:8787/')+' — any localhost origin auto-connects')
-    +hstep('3. Add to Claude', code('claude mcp add openview -- node <repo>/mcp/server.mjs --mcp'))
-    +hstep('MCP tools', 'get_chart · get_bars · get_indicators · get_alerts · list/add/remove_drawings')
-    +hstep('REST API', code('http://127.0.0.1:8787/api/')+' chart · bars · indicators · alerts · drawings')
-    +'<div style="margin-top:6px;font-size:10px;color:var(--muted)">Local-only: binds 127.0.0.1, hostile origins rejected. Full docs in mcp/README.md.</div>';
+    +'<div style="font-size:10px;color:var(--muted);line-height:1.5">Connect an LLM (e.g. Claude) to this chart to read its data and draw on it. '
+      +'<a href="/home/docs" target="_blank" rel="noopener" style="color:#715587">Setup guide →</a></div>';
   railPanelShell("Help — Keyboard shortcuts", rows
     +'<div style="margin-top:10px;font-size:10px;color:var(--muted)">Right-click the chart, a drawing, a pane or the watchlist for context actions.</div>'
     +ai, "help");
