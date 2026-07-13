@@ -19,5 +19,9 @@ test/screenshots/
 *.png
 !assets/*.png
 !images/*.png
+# ...but web/public/ is SHIPPED static content, never a screenshot dump. Anything the
+# site serves (banner.png for link previews, favicons, doc screenshots) must be tracked
+# or it 404s in production.
+!web/public/**/*.png
 _docs/index.full.backup.html
 .vercel

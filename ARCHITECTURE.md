@@ -766,6 +766,19 @@ The binding constraint (verified in code, not assumed):
 
 Layout structure: `app/layout.tsx` (root `<html><body>`), `app/(site)/layout.tsx` (adds `Navbar` — used by /about, /portfolio, /contact only; /home is standalone with `OvTabs`). The `(site)` route group scopes the navbar to marketing pages; `/chart` sits outside it (full-viewport, no navbar). Site chrome CSS in `app/globals.css` mirrors the engine's TV colour vars. Single client-nav component `app/Navbar.tsx` (uses `usePathname` for the active link; "Open Chart" is a plain `<a href="/">` so it does a real navigation to the static engine).
 
+### Link previews (Open Graph / Twitter cards)
+
+Sharing an Openview URL on Facebook / WhatsApp / X / Slack shows a large image card. The preview image is **`web/public/assets/banner.png`** (1428×798, ~1.79:1 — close enough to the 1.91:1 OG ratio that no crop artefacts appear). Source of truth for the asset is `assets/banner.png` at the repo root; the copy under `web/public/assets/` is what actually ships.
+
+Two places declare the tags, because **two different documents serve pages**:
+
+1. **`app/layout.tsx`** — `metadata.openGraph` + `metadata.twitter` on the root layout, so every App Router page (`/home/*`, `/chart`, `(site)`) inherits them. `metadataBase: new URL('https://openview.site')` is what turns the relative `/assets/banner.png` into the **absolute** URL crawlers require — without it Next emits a relative `og:image` and every scraper silently drops the card. Per-page `export const metadata` in the route files only overrides `title`; Next merges the rest down from the root, so the image survives.
+2. **`web/public/index.html`** — the static chart engine bypasses the Next layout entirely, so it carries its own hand-written `og:*` / `twitter:*` `<meta>` tags with **fully-qualified** `https://openview.site/...` image URLs.
+
+Note the interaction with the root redirect (see `next.config.js`): a bare `openview.site/` **307s to `/home`**, and crawlers follow that redirect — so in practice the card a shared root link renders comes from `/home` (i.e. from `app/layout.tsx`), not from the engine. The engine's own tags only apply on `/?embed=1&…`, which is an iframe contract nobody shares socially; they exist for completeness.
+
+Gotcha: Facebook and WhatsApp cache scrape results aggressively. After changing the banner or the tags, re-scrape via Facebook's Sharing Debugger (developers.facebook.com/tools/debug) — otherwise the old (empty) preview persists for days.
+
 ### Key files
 
 ```
