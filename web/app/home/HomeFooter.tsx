@@ -9,7 +9,12 @@ import { usePathname } from 'next/navigation';
 // rendered markup can't disagree with the server's across a New Year boundary.
 export default function HomeFooter({ year }: { year: number }) {
   const pathname = usePathname();
-  if (pathname?.startsWith('/home/journal') || pathname?.startsWith('/home/wallet')) return null;
+  if (
+    pathname?.startsWith('/home/journal') ||
+    pathname?.startsWith('/home/wallet') ||
+    pathname?.startsWith('/home/assets')
+  )
+    return null;
   return (
     <footer className="ov-footer">
       <div>© {year} Openview</div>

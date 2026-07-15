@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AssetRef } from './AssetDetailView';
 import CoinIcon from './CoinIcon';
+import { getMovers, setMovers } from './dataCache';
 import MarketIcon from './MarketIcon';
 import { Icon } from './icons';
 
@@ -47,6 +48,22 @@ interface ScreenerRow {
   marketCap: number | null;
   volume: number | null;
 }
+
+// Shapes of the two upstream responses, cached whole so a revisit paints instantly (see dataCache).
+interface CmcResponse {
+  coins?: Coin[];
+  trending?: Coin[];
+  mostVisited?: Coin[];
+  recentlyAdded?: Coin[];
+  fearGreed?: FearGreed | null;
+}
+interface ScreenerResponse {
+  stocks?: ScreenerRow[];
+  etfs?: ScreenerRow[];
+  commodities?: ScreenerRow[];
+}
+const CACHE_CMC = 'cmc';
+const CACHE_SCREENER = 'screener';
 
 /**
  * One leaderboard row, whatever the asset class. Crypto rows are Coins; stocks/ETFs/commodities are
@@ -230,18 +247,26 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
   const [tab, setTab] = useState<TabKey>(
     isLeaderboardsMode ? 'leaderboards' : 'gainerslosers',
   );
-  const [coins, setCoins] = useState<Coin[]>([]);
-  const [trending, setTrending] = useState<Coin[]>([]);
-  const [mostVisited, setMostVisited] = useState<Coin[]>([]);
-  const [recentlyAdded, setRecentlyAdded] = useState<Coin[]>([]);
-  const [fearGreed, setFearGreed] = useState<FearGreed | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Seed every fetched dataset from the session cache so a revisit (or a return from another folder
+  // tab) paints the last data instantly instead of the empty "Loading…" table; the fetch effects
+  // below refresh it. `cmc`/`screener` hold the last raw response blobs under one key each.
+  const cachedCmc = getMovers<CmcResponse>(CACHE_CMC);
+  const cachedScreener = getMovers<ScreenerResponse>(CACHE_SCREENER);
+  const [coins, setCoins] = useState<Coin[]>(() => cachedCmc?.coins ?? []);
+  const [trending, setTrending] = useState<Coin[]>(() => cachedCmc?.trending ?? []);
+  const [mostVisited, setMostVisited] = useState<Coin[]>(() => cachedCmc?.mostVisited ?? []);
+  const [recentlyAdded, setRecentlyAdded] = useState<Coin[]>(() => cachedCmc?.recentlyAdded ?? []);
+  const [fearGreed, setFearGreed] = useState<FearGreed | null>(() => cachedCmc?.fearGreed ?? null);
+  // Only show the initial loading state when there's nothing cached to show.
+  const [loading, setLoading] = useState(!cachedCmc);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   // Stocks / ETFs / commodities for the Leaderboards tab, off /api/market/screener.
-  const [stocks, setStocks] = useState<ScreenerRow[]>([]);
-  const [etfs, setEtfs] = useState<ScreenerRow[]>([]);
-  const [commodities, setCommodities] = useState<ScreenerRow[]>([]);
+  const [stocks, setStocks] = useState<ScreenerRow[]>(() => cachedScreener?.stocks ?? []);
+  const [etfs, setEtfs] = useState<ScreenerRow[]>(() => cachedScreener?.etfs ?? []);
+  const [commodities, setCommodities] = useState<ScreenerRow[]>(
+    () => cachedScreener?.commodities ?? [],
+  );
 
   const [timeframe, setTimeframe] = useState('24h');
   const [coinPool, setCoinPool] = useState(100);
@@ -262,7 +287,7 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
     // so never request fewer than that.
     const limit = Math.max(coinPool === 0 ? ALL_POOL_LIMIT : coinPool, LEADERBOARD_MAX);
     try {
-      const cmcRes = await fetch(`/api/market/cmc?limit=${limit}`).then((r) =>
+      const cmcRes: CmcResponse | null = await fetch(`/api/market/cmc?limit=${limit}`).then((r) =>
         r.ok ? r.json() : null,
       );
       if (cmcRes) {
@@ -271,6 +296,7 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
         setMostVisited(cmcRes.mostVisited ?? []);
         setRecentlyAdded(cmcRes.recentlyAdded ?? []);
         setFearGreed(cmcRes.fearGreed ?? null);
+        setMovers(CACHE_CMC, cmcRes);
       }
       setUpdatedAt(new Date());
     } catch {
@@ -285,11 +311,14 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
   // of `fetchData` so switching tabs doesn't rebuild that callback and restart the refresh interval.
   const fetchScreener = useCallback(async () => {
     try {
-      const res = await fetch('/api/market/screener').then((r) => (r.ok ? r.json() : null));
+      const res: ScreenerResponse | null = await fetch('/api/market/screener').then((r) =>
+        r.ok ? r.json() : null,
+      );
       if (!res) return;
       setStocks(res.stocks ?? []);
       setEtfs(res.etfs ?? []);
       setCommodities(res.commodities ?? []);
+      setMovers(CACHE_SCREENER, res);
     } catch {
       // Same as above: keep whatever's already on screen.
     }

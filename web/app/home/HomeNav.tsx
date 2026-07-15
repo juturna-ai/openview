@@ -16,8 +16,13 @@ const LINKS = [
 
 export default function HomeNav() {
   const pathname = usePathname();
-  // Journal / Wallet are standalone dashboards — no heading nav row.
-  if (pathname?.startsWith('/home/journal') || pathname?.startsWith('/home/wallet')) return null;
+  // Journal / Wallet / Assets are standalone dashboards — no heading nav row.
+  if (
+    pathname?.startsWith('/home/journal') ||
+    pathname?.startsWith('/home/wallet') ||
+    pathname?.startsWith('/home/assets')
+  )
+    return null;
   return (
     <nav className="ov-hnav">
       <div className="ov-hnav-links">

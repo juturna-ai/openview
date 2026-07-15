@@ -32,6 +32,63 @@ export function getChain(id: string): Chain | undefined {
   return CHAINS.find((c) => c.id === id);
 }
 
+// Trust Wallet's asset repo folder name per chain. Only the chains whose token detail comes from
+// Blockscout are listed: Blockscout returns EIP-55 *checksummed* contract addresses, and Trust
+// Wallet's raw.githubusercontent path is case-sensitive — a lowercase address 404s. The Moralis
+// chains (bsc/avalanche) return lowercase addresses and would need keccak checksumming to hit this,
+// so they deliberately skip it and rely on Moralis' own `logo` or the generic badge.
+const TRUSTWALLET_CHAINS: Record<string, string> = {
+  ethereum: 'ethereum',
+  arbitrum: 'arbitrum',
+  base: 'base',
+  polygon: 'polygon',
+  optimism: 'optimism',
+};
+
+/**
+ * A best-effort real-logo URL for an ERC-20 with no logo from the balance source, from Trust Wallet's
+ * public asset repo (keyless, by contract). Returns null when the chain isn't Trust-Wallet-eligible
+ * (see TRUSTWALLET_CHAINS) or there's no contract — the caller then shows the generic chain badge.
+ * The address is used verbatim: it must already be checksummed (Blockscout's is), since the path is
+ * case-sensitive. Loaded via <img>, so a 404 just fires onError → generic badge; no request is wasted
+ * server-side.
+ */
+export function trustWalletLogoUrl(chainId: string, contractAddress: string): string | null {
+  const folder = TRUSTWALLET_CHAINS[chainId];
+  if (!folder || !contractAddress) return null;
+  return `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${folder}/assets/${contractAddress}/logo.png`;
+}
+
+/**
+ * Explorer URL for a single token in a wallet's detail view.
+ *
+ * A token row links to that token's page on the chain's explorer (its per-contract page), except the
+ * native coin — which has no contract, so it links to the wallet's own address page instead. The
+ * token path differs per explorer family, so it's derived from `chain.explorer` (which ends in the
+ * chain's *address* path) rather than stored separately:
+ *   - EVM etherscan-family (eth/bsc/polygon/arbitrum/optimism/base/avalanche): `/address/` → `/token/`
+ *   - Solana solscan: `/account/` → `/token/`
+ *   - Tron tronscan:  `/#/address/` → `/#/token20/`
+ *   - NEAR nearblocks: `/address/` → `/token/`
+ * `walletAddress` is the fallback for the native row.
+ */
+export function tokenExplorerUrl(
+  chain: Chain,
+  opts: { native: boolean; contractAddress: string; walletAddress: string },
+): string {
+  if (opts.native || !opts.contractAddress) return chain.explorer + opts.walletAddress;
+
+  let tokenBase: string;
+  if (chain.id === 'tron') {
+    tokenBase = chain.explorer.replace('/#/address/', '/#/token20/');
+  } else if (chain.id === 'solana') {
+    tokenBase = chain.explorer.replace('/account/', '/token/');
+  } else {
+    tokenBase = chain.explorer.replace('/address/', '/token/');
+  }
+  return tokenBase + opts.contractAddress;
+}
+
 /** Sentinel for "no chain filter" — the wallet list's default. */
 export const ALL_CHAINS = 'all';
 

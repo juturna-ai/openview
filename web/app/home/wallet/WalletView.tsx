@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AddAssetModal from './AddAssetModal';
 import AssetIcon from './AssetIcon';
 import { type AssetType, fmtPrice, fmtUsd, getAssetColor } from './assets';
+import { getMarketPrices, setMarketPrices } from './dataCache';
 import {
   addHolding,
   deleteHolding as removeHolding,
@@ -244,7 +245,9 @@ function PortfolioHistory({
 
 export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: number }) {
   const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [prices, setPrices] = useState<PriceMap>({});
+  // Seed from the session cache so a revisit (or a return from another folder tab) shows the last
+  // prices immediately instead of an empty table; the poll below refreshes them.
+  const [prices, setPrices] = useState<PriceMap>(() => getMarketPrices() ?? {});
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
@@ -280,6 +283,7 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
       if (!res.ok) return;
       const data = (await res.json()) as PriceMap;
       setPrices(data);
+      setMarketPrices(data);
 
       const total = current.reduce((sum, h) => sum + h.amount * (data[h.symbol]?.price || 0), 0);
       if (total > 0) setSnapshots(recordSnapshot(total));

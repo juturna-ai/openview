@@ -2740,6 +2740,19 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   font-size: 13px;
 }
 .wt-addr-input:focus { outline: none; border-color: var(--accent); }
+/* Optional-name field: a fixed, narrower box sitting left of the address input. */
+.wt-name-input {
+  flex: 0 0 160px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.wt-name-input:focus { outline: none; border-color: var(--accent); }
 .wt-add-btn {
   display: inline-flex;
   align-items: center;
@@ -2834,7 +2847,15 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wt-chain-badge-img { width: 100%; height: 100%; display: block; }
 .wt-card-chain-info { display: flex; flex-direction: column; min-width: 0; }
 .wt-card-chain-name { font-size: 13px; font-weight: 600; color: var(--text); }
-.wt-card-addr { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
+.wt-card-addr {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  word-break: break-all;
+  cursor: pointer;
+}
+.wt-card-addr:hover { color: var(--text); }
+.wt-addr-copied { color: var(--green); font-size: 11px; }
 .wt-card-balance,
 .wt-card-price { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .wt-card-native { font-size: 13px; font-weight: 600; color: var(--text); }
@@ -2872,6 +2893,71 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wt-empty p { margin: 0 0 8px; max-width: 380px; color: var(--muted); font-size: 13px; }
 .wt-empty .btn-primary { display: inline-flex; align-items: center; gap: 6px; }
 .wt-footer { margin: 0; color: var(--muted); font-size: 11px; }
+
+/* ── Right-click row menu ── */
+.wt-ctx-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.wt-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.wt-ctx-item:hover { background: var(--hover); }
+.wt-ctx-danger { color: var(--red); }
+.wt-ctx-danger:hover { background: rgba(239, 83, 80, 0.12); }
+
+/* ── Edit wallet dialog ── */
+.wt-edit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 420px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+.wt-edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.wt-edit-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.wt-edit-field { display: flex; flex-direction: column; gap: 6px; }
+.wt-edit-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.wt-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.wt-edit-cancel {
+  padding: 9px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wt-edit-cancel:hover { background: var(--hover); }
 
 /* ── Token detail overlay ── */
 .wt-detail-overlay {
@@ -2918,7 +3004,14 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wt-detail-back:hover { background: var(--hover); color: var(--text); }
 .wt-detail-info { display: flex; flex-direction: column; min-width: 0; }
 .wt-detail-name { font-size: 13px; font-weight: 600; color: var(--text); }
-.wt-detail-addr { font-size: 12px; color: var(--muted); font-family: ui-monospace, monospace; }
+.wt-detail-addr {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  word-break: break-all;
+  cursor: pointer;
+}
+.wt-detail-addr:hover { color: var(--text); }
 .wt-detail-header-actions { margin-left: auto; display: flex; gap: 4px; }
 .wt-detail-total {
   display: flex;
@@ -2957,7 +3050,13 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 10px 16px;
   border-top: 1px solid var(--border);
   font-size: 13px;
+  /* Rows are now <a> links to the chain explorer — reset link styling and signal clickability. */
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.12s ease;
 }
+.wt-token-row:hover { background: var(--hover); }
 .wt-token-info { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .wt-token-icon { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; }
 .wt-token-avatar {
@@ -2987,6 +3086,14 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wt-token-usd { color: var(--muted); font-size: 12px; }
 .wt-token-price { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 
+/* ── Phone-app embed (/home/wallet?embed=wallet) ──
+   No site chrome/sidebar (both suppressed in JS); tighten outer padding so the dashboard
+   fills the phone WebView edge-to-edge and starts at the top. The existing narrow-screen
+   breakpoints below already stack the stats/charts and scroll the table at phone width. */
+.wallet-embed { min-height: 100vh; }
+.wallet-embed.journal-shell { display: block; }
+.wallet-embed .journal-content { padding: 12px 12px 24px; }
+
 /* ── Narrow screens ── */
 @media (max-width: 1100px) {
   .wallet-stats-row { grid-template-columns: repeat(2, 1fr); }
@@ -3003,6 +3110,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
      anything — it would just be four labels pointing at the wrong cells. Drop it. */
   .wt-list-head { display: none; }
   .wt-add-form { flex-wrap: wrap; }
+  .wt-name-input { flex-basis: 100%; order: 2; }
   .wt-addr-input { flex-basis: 100%; order: 3; }
 }
 @media (max-width: 620px) {

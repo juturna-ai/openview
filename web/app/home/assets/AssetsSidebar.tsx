@@ -2,31 +2,30 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSidebarResize } from '../useSidebarResize';
-import { Icon } from './icons';
+import { Icon } from '../wallet/icons';
 
-// Left sidebar — same shape as the journal's (New action button, nav, live clock), scoped to the
-// wallet's three views. Reuses the journal's .journal-sidebar / .nav-item styles so the two
-// dashboards stay visually identical, including the resize handle and collapse toggle.
+// Left sidebar for the Assets tab — same shape as the wallet's (brand header, nav, live clock,
+// resize handle), but scoped to the two boards and with NO Add Asset button. Reuses the shared
+// .journal-sidebar / .nav-item styles so every dashboard stays visually identical.
 
-export type WalletTab = 'wallet' | 'tracker';
+export type AssetsTab = 'leaderboards' | 'movers';
 
-const NAV: { id: WalletTab; label: string; icon: string }[] = [
-  { id: 'wallet', label: 'Wallet', icon: 'wallet' },
-  { id: 'tracker', label: 'Wallet Tracker', icon: 'radar' },
+const NAV: { id: AssetsTab; label: string; icon: string }[] = [
+  { id: 'leaderboards', label: 'Leaderboards', icon: 'trophy' },
+  { id: 'movers', label: 'Gainers & Losers', icon: 'bar-chart' },
 ];
 
 interface Props {
-  view: WalletTab;
-  onViewChange: (v: WalletTab) => void;
-  onAddAsset: () => void;
+  view: AssetsTab;
+  onViewChange: (v: AssetsTab) => void;
 }
 
-export default function Sidebar({ view, onViewChange, onAddAsset }: Props) {
+export default function AssetsSidebar({ view, onViewChange }: Props) {
   // Held at null until mount so the server doesn't render a timestamp the client immediately
   // contradicts (hydration mismatch).
   const [now, setNow] = useState<Date | null>(null);
   const { asideRef, width, collapsed, dragging, toggleCollapsed, startResize, onHandleKeyDown } =
-    useSidebarResize('openview:wallet-sidebar');
+    useSidebarResize('openview:assets-sidebar');
 
   useEffect(() => {
     setNow(new Date());
@@ -44,7 +43,7 @@ export default function Sidebar({ view, onViewChange, onAddAsset }: Props) {
     >
       <div className="sidebar-brand">
         <span className="sidebar-brand-name">Openview</span>
-        <span className="sidebar-brand-sub">the wallet</span>
+        <span className="sidebar-brand-sub">the assets</span>
       </div>
 
       <button
@@ -55,15 +54,6 @@ export default function Sidebar({ view, onViewChange, onAddAsset }: Props) {
         aria-expanded={!collapsed}
       >
         <Icon name={collapsed ? 'chevron-right' : 'chevron-left'} size={18} />
-      </button>
-
-      <button
-        className="btn-add-trade"
-        onClick={onAddAsset}
-        title={collapsed ? 'Add Asset' : undefined}
-      >
-        <Icon name="plus" size={18} />
-        <span className="sidebar-label">Add Asset</span>
       </button>
 
       <nav className="sidebar-nav">

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { BLOCKSCOUT_HOSTS } from './hosts';
+import { BLOCKSCOUT_HOSTS, MORALIS_CHAINS } from './hosts';
 
 // On-chain wallet tracker — ported from Reach's `walletTracker:*` IPC handlers (electron/main.js).
 //
@@ -180,13 +180,114 @@ export interface TrackedToken {
 /** Most tokens a wallet detail view will return — see the sort/cap note in getTokens. */
 const MAX_TOKENS = 100;
 
+/** Sort by USD value, sum the *whole* set before capping, then cap. Shared by every token source. */
+function packTokens(tokens: TrackedToken[]) {
+  tokens.sort((a, b) => b.usdValue - a.usdValue);
+  const totalUsd = tokens.reduce((s, t) => s + t.usdValue, 0);
+  const truncated = tokens.length > MAX_TOKENS;
+  return { tokens: tokens.slice(0, MAX_TOKENS), totalUsd, truncated, totalCount: tokens.length };
+}
+
+// Moralis' free tier is 40k compute units/day. Every wallet-detail click on bsc/avalanche is one
+// call, so re-opening the same card would burn quota needlessly. Cache each address' token result for
+// a few minutes — a re-open inside the window costs 0 CU, which keeps normal browsing comfortably
+// inside the free tier. Keyed by `chain:address`. Bounded so a long session can't grow it unboundedly.
+const MORALIS_TTL_MS = 5 * 60_000;
+const MORALIS_CACHE_MAX = 500;
+type MoralisResult = Awaited<ReturnType<typeof fetchMoralisTokens>>;
+const moralisCache = new Map<string, { at: number; data: MoralisResult }>();
+
+/**
+ * Token detail for EVM chains with no healthy Blockscout instance (bsc, avalanche), via Moralis'
+ * free tier. Its /wallets/{addr}/tokens returns native + ERC-20 balances *and* USD prices in one
+ * call. Returns null when MORALIS_API_KEY is unset, so the caller degrades to balance-only.
+ * Cached (see moralisCache) so a repeat open of the same wallet doesn't spend a compute unit.
+ */
+async function getEvmTokensMoralis(address: string, chain: string, cfg: ChainCfg) {
+  const key = process.env.MORALIS_API_KEY;
+  const moralisChain = MORALIS_CHAINS[chain];
+  if (!key || !moralisChain) return null;
+
+  const cacheKey = `${chain}:${address.toLowerCase()}`;
+  const hit = moralisCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < MORALIS_TTL_MS) return hit.data;
+
+  const data = await fetchMoralisTokens(address, moralisChain, key, cfg);
+
+  // Evict the oldest entry once full (Map preserves insertion order) before recording the new one.
+  if (moralisCache.size >= MORALIS_CACHE_MAX && !moralisCache.has(cacheKey)) {
+    const oldest = moralisCache.keys().next().value;
+    if (oldest) moralisCache.delete(oldest);
+  }
+  moralisCache.set(cacheKey, { at: Date.now(), data });
+  return data;
+}
+
+async function fetchMoralisTokens(address: string, moralisChain: string, key: string, cfg: ChainCfg) {
+  // exclude_spam trims Moralis' airdrop noise upstream; limit caps the page (we only ship MAX_TOKENS).
+  const res = await fetch(
+    `https://deep-index.moralis.io/api/v2.2/wallets/${address}/tokens?chain=${moralisChain}&exclude_spam=true&limit=100`,
+    {
+      headers: { 'X-API-Key': key, Accept: 'application/json' },
+      signal: AbortSignal.timeout(SLOW_TIMEOUT_MS),
+      cache: 'no-store',
+    },
+  );
+  const body = (await res.json()) as {
+    result?: {
+      symbol?: string;
+      name?: string;
+      balance_formatted?: string;
+      usd_value?: number;
+      usd_price?: number;
+      native_token?: boolean;
+      token_address?: string;
+      logo?: string;
+      possible_spam?: boolean;
+      verified_contract?: boolean;
+    }[];
+    message?: string;
+  };
+  if (!res.ok) {
+    // A handful of mega-whale wallets (e.g. Binance's BSC hot wallet) hold >10k tokens; Moralis
+    // refuses to enumerate them on any endpoint. Surface that as its own state, not a generic error,
+    // so the detail panel can say "too many tokens to list" instead of blanking.
+    if (/too many|over 10000|10,000/i.test(body?.message ?? '')) {
+      return { tokens: [], totalUsd: 0, tooMany: true };
+    }
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  const tokens: TrackedToken[] = [];
+  for (const t of body.result ?? []) {
+    if (t.possible_spam) continue;
+    // Spam tokens impersonate real symbols (a fake "USDT" with a 1e39 balance) and Moralis' spam flag
+    // misses some, poisoning the total with absurd USD values. Every legit token here is a verified
+    // contract; keep the native coin and verified ERC-20s only.
+    if (!t.native_token && !t.verified_contract) continue;
+    const bal = parseFloat(t.balance_formatted ?? '0') || 0;
+    if (bal <= 0) continue;
+    tokens.push({
+      symbol: t.symbol || (t.native_token ? cfg.native : '???'),
+      name: t.name || t.symbol || '???',
+      balance: bal,
+      usdValue: t.usd_value ?? 0,
+      price: t.usd_price ?? 0,
+      type: t.native_token ? 'native' : 'ERC-20',
+      thumb: t.logo || '',
+      contractAddress: t.native_token ? '' : t.token_address || '',
+    });
+  }
+  return packTokens(tokens);
+}
+
 async function getTokens(address: string, chain: string) {
   const cfg = CHAINS[chain];
   if (!cfg) return { tokens: [], totalUsd: 0 };
 
   if (cfg.type === 'evm') {
     const host = BLOCKSCOUT_HOSTS[chain];
-    if (!host) return { tokens: [], totalUsd: 0 };
+    if (!host) return (await getEvmTokensMoralis(address, chain, cfg)) ?? { tokens: [], totalUsd: 0 };
 
     const [addrRes, tokRes] = await Promise.all([
       fetchJSON(`https://${host}/api/v2/addresses/${address}`) as Promise<{
@@ -241,18 +342,9 @@ async function getTokens(address: string, chain: string) {
       }
     }
 
-    // Sort by value, then cap. A long-lived address accrues thousands of unpriced airdrop tokens
-    // (Vitalik's holds ~6.6k); shipping them all would be a multi-MB response that buries the real
-    // holdings. The total is summed over everything *before* the cap, so it stays accurate.
-    tokens.sort((a, b) => b.usdValue - a.usdValue);
-    const totalUsd = tokens.reduce((s, t) => s + t.usdValue, 0);
-    const truncated = tokens.length > MAX_TOKENS;
-    return {
-      tokens: tokens.slice(0, MAX_TOKENS),
-      totalUsd,
-      truncated,
-      totalCount: tokens.length,
-    };
+    // A long-lived address accrues thousands of unpriced airdrop tokens (Vitalik's holds ~6.6k);
+    // packTokens sorts by value and caps at MAX_TOKENS, summing the total *before* the cap.
+    return packTokens(tokens);
   }
 
   if (cfg.type === 'solana') {

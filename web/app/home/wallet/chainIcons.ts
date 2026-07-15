@@ -5,8 +5,9 @@
 // missing one on a wallet card mislabels which network the balance is on, which is a correctness bug
 // rather than a cosmetic one. No network, no lookup, nothing to mismatch, no extra round-trip.
 //
-// Each mark is the network's own recognisable glyph on a disc tinted with the chain colour already
-// held in chains.ts (Chain.color), so the icons and the existing summary pills stay in sync.
+// Each mark uses the network's official logo geometry (path data from the MIT-licensed web3icons
+// set, or scaled from the brand's own assets) drawn on a disc in the chain's brand colour, so the
+// glyphs actually match the logos users know from explorers and wallets.
 
 /** Wraps chain artwork in a filled disc. `art` is SVG markup on a 0 0 100 100 canvas. */
 function disc(bg: string, art: string): string {
@@ -16,76 +17,131 @@ function disc(bg: string, art: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-/**
- * The Ethereum octahedron — two stacked diamonds. Reused by every chain whose native token is ETH
- * (Arbitrum, Optimism, Base), tinted to that chain's colour so the rollups stay distinguishable from
- * mainnet at a glance while still reading as "this is an ETH balance".
- */
-const ether = (bg: string) =>
-  disc(
-    bg,
+/** Wraps official artwork drawn on a 24×24 canvas, centred and scaled to sit inside the disc. */
+function mark24(bg: string, art: string): string {
+  return disc(bg, `<g transform="translate(6.8 6.8) scale(3.6)">${art}</g>`);
+}
+
+const CHAIN_ART: Record<string, string> = {
+  // Ethereum — the octahedron, two stacked diamonds.
+  ethereum: disc(
+    '#627eea',
     `<path d="M50 16 30 51l20 12 20-12z" fill="#fff" opacity="0.62"/>` +
       `<path d="M50 16 30 51l20-9z" fill="#fff"/>` +
       `<path d="M50 67 30 55l20 29 20-29z" fill="#fff" opacity="0.62"/>` +
       `<path d="M50 67 30 55l20 9z" fill="#fff"/>`,
-  );
+  ),
 
-const CHAIN_ART: Record<string, string> = {
-  ethereum: ether('#627eea'),
-  arbitrum: ether('#28a0f0'),
-  optimism: ether('#ff0420'),
-  base: ether('#0052ff'),
+  // Arbitrum — the hex shield with the twin light-blue/white ascending arrows, on the brand navy.
+  arbitrum: mark24(
+    '#213147',
+    `<path d="M13.3531 13.3677L12.4682 15.7577C12.4442 15.8241 12.4442 15.8965 12.4682 15.963L13.9905 20.0752L15.7511 19.0738L13.638 13.3677C13.59 13.2363 13.401 13.2363 13.3531 13.3677Z" fill="#12AAFF"/>` +
+      `<path d="M15.1273 9.3485C15.0793 9.21704 14.8903 9.21704 14.8423 9.3485L13.9575 11.7384C13.9334 11.8049 13.9334 11.8773 13.9575 11.9437L16.4515 18.6764L18.2122 17.6749L15.1273 9.3485Z" fill="#12AAFF"/>` +
+      `<path d="M11.9984 4.11521C12.0419 4.11521 12.0854 4.12703 12.1244 4.14771L18.8387 7.96602C18.9166 8.01033 18.9647 8.09305 18.9647 8.1802V15.8153C18.9647 15.904 18.9166 15.9852 18.8387 16.0295L12.1244 19.8479C12.0869 19.87 12.0419 19.8803 11.9984 19.8803C11.955 19.8803 11.9114 19.8685 11.8725 19.8479L5.15817 16.0325C5.08019 15.9881 5.0322 15.9055 5.0322 15.8183V8.18167C5.0322 8.09305 5.08019 8.01181 5.15817 7.9675L11.8725 4.14919C11.9114 4.12703 11.955 4.11521 11.9984 4.11521ZM11.9984 3C11.76 3 11.52 3.06056 11.3056 3.18316L4.59277 6.99999C4.16386 7.24371 3.8999 7.69423 3.8999 8.18167V15.8168C3.8999 16.3043 4.16386 16.7548 4.59277 16.9985L11.3071 20.8168C11.5215 20.938 11.76 21 11.9999 21C12.2384 21 12.4783 20.9395 12.6928 20.8168L19.407 16.9985C19.836 16.7548 20.0999 16.3043 20.0999 15.8168V8.18167C20.0999 7.69423 19.836 7.24371 19.407 6.99999L12.6913 3.18316C12.4768 3.06056 12.2369 3 11.9984 3Z" fill="#9DCCED"/>` +
+      `<path d="M7.55859 18.6854L8.17649 17.0192L9.41975 18.0369L8.25747 19.0827L7.55859 18.6854Z" fill="#213147"/>` +
+      `<path d="M11.4334 7.63513H9.73114C9.60366 7.63513 9.48969 7.71342 9.44619 7.83158L5.79736 17.6838L7.55804 18.6854L11.5758 7.83602C11.6133 7.73853 11.5398 7.63513 11.4334 7.63513Z" fill="#fff"/>` +
+      `<path d="M14.4117 7.63513H12.7095C12.582 7.63513 12.468 7.71342 12.4245 7.83158L8.2583 19.0812L10.019 20.0827L14.5542 7.83602C14.5902 7.73853 14.5166 7.63513 14.4117 7.63513Z" fill="#fff"/>`,
+  ),
 
-  // BNB — the four-diamond cluster around a centre square.
+  // Optimism — the rounded "OP" wordmark.
+  optimism: mark24(
+    '#ff0420',
+    `<path fill-rule="evenodd" clip-rule="evenodd" d="M3.96598 15.8003C4.61807 16.2668 5.45548 16.5 6.47819 16.5C7.71385 16.5 8.70121 16.2206 9.44024 15.6622C10.1785 15.0955 10.6981 14.2416 10.9987 13.1002C11.1791 12.4003 11.3339 11.6792 11.4629 10.9373C11.5048 10.672 11.5261 10.451 11.527 10.2742C11.527 9.69135 11.3767 9.19175 11.076 8.77545C10.7669 8.34324 10.3365 8.01244 9.83925 7.82494C9.31535 7.60832 8.72294 7.5 8.062 7.5C5.63269 7.5 4.12587 8.64576 3.54157 10.9373C3.33527 11.7795 3.17647 12.5004 3.0652 13.1002C3.02627 13.323 3.00446 13.5484 3 13.7744C3 14.6498 3.322 15.3251 3.96598 15.8003ZM8.61573 13.0251C8.36926 13.9822 7.68954 14.6056 6.65834 14.6056C5.63821 14.6056 5.29006 13.9159 5.47353 13.0251C5.62826 12.2168 5.783 11.5333 5.93773 10.9749C6.20299 9.94146 6.82855 9.39438 7.89401 9.39438C8.91083 9.39438 9.2424 10.0752 9.06667 10.9749C8.96351 11.5585 8.8132 12.2418 8.61573 13.0251ZM12.5184 16.4104C12.5692 16.4694 12.6403 16.4988 12.7317 16.4988H14.4359C14.523 16.4978 14.607 16.4666 14.6735 16.4104C14.7476 16.3537 14.797 16.2705 14.8117 16.1783L15.35 13.6584H17.083C18.1772 13.6584 19.0327 13.1279 19.6593 12.6559C20.2945 12.1843 20.7162 11.4557 20.9248 10.4697C20.9757 10.2384 21.0007 10.0155 21 9.8011C21 9.05618 20.7162 8.48624 20.1489 8.0913C19.5889 7.6971 18.8455 7.5 17.9186 7.5H14.5862C14.4985 7.50141 14.4141 7.53348 14.3476 7.59063C14.2749 7.64811 14.2261 7.73036 14.2105 7.82162L12.4808 16.1783C12.4623 16.2577 12.4758 16.3411 12.5184 16.4104ZM18.6082 10.4443C18.4513 11.1329 17.8512 11.7629 17.146 11.7629H15.7058L16.2021 9.39438H17.7053C18.217 9.39438 18.6447 9.49606 18.6447 10.0586C18.6447 10.1691 18.6333 10.2976 18.6082 10.4443Z" fill="#fff"/>`,
+  ),
+
+  // Base — the solid roundel with the horizontal slot on the left.
+  base: disc(
+    '#0052ff',
+    `<circle cx="50" cy="50" r="30" fill="#fff"/>` +
+      `<rect x="19" y="47.5" width="40.7" height="5" fill="#0052ff"/>`,
+  ),
+
+  // BNB — the official five-diamond mark (geometry scaled from Binance's 2500×2500 asset).
   bsc: disc(
     '#f3ba2f',
-    `<g fill="#fff">` +
-      `<path d="M50 20l9 9-9 9-9-9z"/><path d="M29 41l9 9-9 9-9-9z"/>` +
-      `<path d="M71 41l9 9-9 9-9-9z"/><path d="M50 62l9 9-9 9-9-9z"/>` +
-      `<path d="M50 41l9 9-9 9-9-9z"/>` +
+    `<g fill="#fff" transform="translate(20 20) scale(0.6)">` +
+      `<path d="M30.58 42.02 50 22.6l19.43 19.43 11.3-11.3L50 0 19.28 30.72z"/>` +
+      `<path d="M0 50l11.3-11.3L22.6 50 11.3 61.3z"/>` +
+      `<path d="M77.4 50l11.3-11.3L100 50 88.7 61.3z"/>` +
+      `<path d="M30.58 57.98 50 77.4l19.43-19.43 11.31 11.32L50 100 19.28 69.28z"/>` +
+      `<path d="M61.46 50 50 38.53 38.53 50 50 61.47z"/>` +
       `</g>`,
   ),
 
-  // Polygon — the interlocking hexagon mark, drawn as two offset hex outlines.
-  polygon: disc(
+  // Polygon — the interlocking-hexagons "M" mark.
+  polygon: mark24(
     '#8247e5',
-    `<g fill="none" stroke="#fff" stroke-width="6" stroke-linejoin="round">` +
-      `<path d="M36 33l14-8 14 8v16l-14 8-14-8z"/>` +
-      `<path d="M36 51l14-8 14 8v16l-14 8-14-8z" opacity="0.55"/>` +
-      `</g>`,
+    `<path d="M16.3644 15.217L20.6338 12.7816C20.8601 12.6521 21 12.4122 21 12.1547V7.2838C21 7.02631 20.8601 6.7864 20.6338 6.65702L16.3644 4.22156C16.138 4.09218 15.8569 4.09344 15.6319 4.22156L11.3623 6.65702C11.136 6.7864 10.9961 7.02631 10.9961 7.2838V15.9882L8.00191 17.6951L5.00763 15.9882V12.5729L8.00191 10.866L9.97646 11.9927V9.70168L8.36809 8.78352C8.25748 8.72071 8.13032 8.68679 8.00191 8.68679C7.87349 8.68679 7.74634 8.72071 7.63573 8.78352L3.36617 11.2191C3.13986 11.3484 3 11.5882 3 11.8457V16.7167C3 16.9742 3.13986 17.2141 3.36617 17.3434L7.63573 19.779C7.86205 19.907 8.14177 19.907 8.36809 19.779L12.6376 17.3434C12.864 17.2141 13.0039 16.9742 13.0039 16.7167V8.01231L13.0571 7.98216L15.9968 6.30534L18.9911 8.01231V11.4275L15.9968 13.1344L14.0247 12.0103V14.3013L15.6306 15.217C15.857 15.345 16.1379 15.345 16.3629 15.217H16.3644Z" fill="#fff"/>`,
   ),
 
-  // Avalanche — the stylised "A" peak.
-  avalanche: disc(
+  // Avalanche — the segmented "A" peak.
+  avalanche: mark24(
     '#e84142',
-    `<path d="M50 22l26 46H60L50 50 40 68H24z" fill="#fff"/>` +
-      `<path d="M64 44l14 24H64l-7-12z" fill="#fff" opacity="0.85"/>`,
+    `<path d="M7.5154 19.8742H4.49154C3.85502 19.8742 3.54003 19.8742 3.34972 19.756C3.24793 19.6921 3.16307 19.6046 3.10229 19.5008C3.04152 19.3971 3.00664 19.2803 3.00062 19.1602C2.9888 18.9358 3.14629 18.6654 3.46128 18.1195L10.9317 5.13813C11.2519 4.58691 11.4146 4.3113 11.618 4.21024C11.7259 4.15475 11.8453 4.1258 11.9665 4.1258C12.0877 4.1258 12.2072 4.15475 12.315 4.21024C12.517 4.3113 12.6745 4.58691 12.9895 5.13813L14.5317 7.78137L14.5369 7.79319C14.7903 8.16723 14.9911 8.57409 15.1328 9.00195C15.218 9.33924 15.218 9.7054 15.1328 10.048C14.9908 10.4801 14.7903 10.8908 14.5369 11.2685L10.6114 18.1089L10.5996 18.1313C10.3988 18.5394 10.1403 18.9187 9.83447 19.256C9.57014 19.5028 9.25267 19.6855 8.90658 19.7901C8.58634 19.8742 8.23198 19.8742 7.51671 19.8742H7.5154ZM15.1616 19.8742H19.4927C20.1397 19.8742 20.4599 19.8742 20.6516 19.7508C20.7531 19.6866 20.8376 19.5991 20.8983 19.4954C20.9588 19.3916 20.9934 19.2749 20.9994 19.1549C21.0112 18.9358 20.859 18.6772 20.5558 18.164L20.5216 18.1089L18.3508 14.4525L18.3285 14.4079C18.0241 13.9013 17.8666 13.6427 17.6697 13.5416C17.5629 13.486 17.4443 13.4568 17.3239 13.4568C17.2034 13.4568 17.0849 13.486 16.9781 13.5416C16.7759 13.6427 16.6184 13.913 16.3034 14.4525L14.1314 18.1142V18.126C13.8112 18.6641 13.6537 18.9358 13.6654 19.1549C13.6717 19.2755 13.7063 19.3929 13.7668 19.4975C13.8273 19.6019 13.9118 19.6905 14.0133 19.756C14.1996 19.8742 14.5199 19.8742 15.1616 19.8742Z" fill="#fff"/>`,
   ),
 
   // Solana — the three slanted bars.
-  solana: disc(
+  solana: mark24(
     '#9945ff',
-    `<g fill="#fff">` +
-      `<path d="M30 34h44l-10 10H20z"/><path d="M20 50h44l10 10H30z" opacity="0.8"/>` +
-      `<path d="M30 66h44l-10 10H20z" opacity="0.6"/>` +
-      `</g>`,
+    `<path d="M18.4128 7.90222C18.3006 8.00534 18.1544 8.06331 18.002 8.06496H3.57973C3.06788 8.06496 2.80933 7.47961 3.16368 7.13707L5.53262 4.85345C5.64271 4.74715 5.78907 4.68664 5.94209 4.68414H20.4208C20.9379 4.68414 21.1912 5.27474 20.8316 5.61859L18.4128 7.90222Z" fill="#fff"/>` +
+      `<path d="M18.4128 19.1584C18.2999 19.2595 18.1536 19.3156 18.002 19.3159H3.57973C3.06788 19.3159 2.80933 18.7357 3.16368 18.3932L5.53262 16.1031C5.643 15.998 5.78972 15.9396 5.94209 15.9403H20.4208C20.9379 15.9403 21.1912 16.5256 20.8316 16.8682L18.4128 19.1584Z" fill="#fff" opacity="0.75"/>` +
+      `<path d="M18.4128 10.4727C18.2999 10.3716 18.1536 10.3155 18.002 10.3152H3.57973C3.06788 10.3152 2.80933 10.8954 3.16368 11.2379L5.53262 13.5281C5.64442 13.6308 5.79021 13.6889 5.94209 13.6909H20.4208C20.9379 13.6909 21.1912 13.1055 20.8316 12.763L18.4128 10.4727Z" fill="#fff" opacity="0.88"/>`,
   ),
 
-  // Tron — the angular triangular mark.
-  tron: disc(
+  // Tron — the angular "T" shard.
+  tron: mark24(
     '#ef0027',
-    `<path d="M22 28l56 10-30 40z" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>` +
-      `<path d="M22 28l26 50 8-40z" fill="#fff" opacity="0.85"/>`,
+    `<path fill-rule="evenodd" clip-rule="evenodd" d="M4.41958 3.18579C4.48795 3.11039 4.5754 3.05483 4.67269 3.02495C4.76997 2.99507 4.87352 2.99196 4.97243 3.01598L16.8757 5.93028C16.9472 5.94689 17.0145 5.97827 17.0732 6.02242L19.4952 7.7889C19.6129 7.87561 19.6924 8.00447 19.7171 8.14848C19.7419 8.29251 19.71 8.44047 19.6281 8.56157L11.2959 20.7531C11.2373 20.8395 11.1559 20.9078 11.0608 20.9506C10.9655 20.9932 10.8604 21.0088 10.7569 20.9952C10.6534 20.9818 10.5558 20.9398 10.4749 20.874C10.3939 20.8083 10.3327 20.7213 10.2982 20.6228L4.30638 3.75311C4.27274 3.65729 4.26548 3.55418 4.28542 3.45459C4.30532 3.35501 4.35167 3.26262 4.41958 3.1871M6.3835 6.2304L10.543 17.9415L11.2275 11.8734L6.3835 6.2304ZM12.3411 12.0682L11.6461 18.2429L17.53 9.63303L12.3411 12.0682ZM18.0604 8.13772L14.2682 9.91736L16.81 7.22684L18.0604 8.13772ZM15.6648 6.79509L6.41115 4.53105L11.8369 10.8493L15.6648 6.79509Z" fill="#fff"/>`,
   ),
 
-  // NEAR — the parallelogram "N".
-  near: disc(
+  // NEAR — the angular "N" with the fold-back arms.
+  near: mark24(
     '#1c1c1c',
-    `<path d="M28 26h10l24 32V26h10v48H62L38 42v32H28z" fill="#fff"/>`,
+    `<path d="M17.4254 3.9197L13.6649 9.49961C13.4084 9.88511 13.9093 10.3351 14.2693 10.0201L17.5483 6.80567C17.6443 6.72318 17.7854 6.78017 17.7854 6.92118V16.983C17.7854 17.118 17.6054 17.175 17.5289 17.0791L6.75447 3.6812C6.5785 3.46475 6.35575 3.291 6.10295 3.17305C5.85016 3.0551 5.5739 2.996 5.29497 3.00021C4.13849 3.00021 3 3.58521 3 4.92319V19.071C3.0018 19.4882 3.13934 19.8935 3.39181 20.2256C3.64427 20.5577 3.99798 20.7986 4.39947 20.912C4.80095 21.0254 5.22843 21.0048 5.61729 20.8538C6.00615 20.7027 6.33529 20.4292 6.55496 20.0745L10.3094 14.4945C10.5659 14.1091 10.0709 13.6591 9.71093 13.9741L6.45146 17.253C6.35547 17.3356 6.21447 17.2785 6.21447 17.136V7.10118C6.21447 6.96017 6.39447 6.90917 6.47097 7.00517L17.2258 20.319C17.5858 20.763 18.1258 21 18.6854 21C19.8493 21 20.9998 20.421 20.9998 19.0785V4.9292C20.9991 4.50901 20.8612 4.10057 20.6072 3.76593C20.3532 3.43128 19.9968 3.18873 19.5922 3.07517C19.1877 2.9616 18.7572 2.98322 18.366 3.13674C17.9749 3.29026 17.6446 3.56728 17.4254 3.92571V3.9197Z" fill="#fff"/>`,
   ),
 };
 
 /** Inline artwork for a chain id, or null if uncataloged (caller falls back to the letter badge). */
 export function getChainArt(chainId: string): string | null {
   return CHAIN_ART[chainId] ?? null;
+}
+
+// Brand tint per chain — the disc colour for the generic token badge below. Kept separate from the
+// chain art's own `bg` so the placeholder reads as "a token on this chain" (brand colour + the token's
+// initial) rather than being mistaken for the chain's native-coin logo.
+const CHAIN_TINT: Record<string, string> = {
+  ethereum: '#627eea',
+  bsc: '#f3ba2f',
+  polygon: '#8247e5',
+  arbitrum: '#213147',
+  optimism: '#ff0420',
+  base: '#0052ff',
+  avalanche: '#e84142',
+  solana: '#9945ff',
+  tron: '#ef0027',
+  near: '#111111',
+};
+
+// Yellow/light discs (BNB) need dark text; the rest read better with white. Keeps the initial legible.
+const DARK_TEXT_CHAINS = new Set(['bsc']);
+
+/**
+ * Generic placeholder for a token with no logo: a round disc in the chain's brand colour with the
+ * token's initial. Distinct from the chain's own coin icon (which is `getChainArt`), so a logo-less
+ * token reads as "a token on chain X" without being confused for the native coin. Deterministic
+ * data-URI — no network, matching the rest of the tracker's artwork.
+ */
+export function genericTokenArt(chainId: string, symbol: string): string {
+  const bg = CHAIN_TINT[chainId] ?? '#4b5563';
+  const fg = DARK_TEXT_CHAINS.has(chainId) ? '#1a1a1a' : '#ffffff';
+  // First alphanumeric char, uppercased; fall back to a neutral dot if the symbol is empty/exotic.
+  const ch = (symbol.match(/[a-z0-9]/i)?.[0] ?? '•').toUpperCase();
+  const letter =
+    `<text x="50" y="50" fill="${fg}" font-family="Arial,Helvetica,sans-serif" ` +
+    `font-size="52" font-weight="700" text-anchor="middle" dominant-baseline="central">` +
+    `${ch === '&' ? '&amp;' : ch}</text>`;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
+    `<circle cx="50" cy="50" r="50" fill="${bg}"/>${letter}</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }

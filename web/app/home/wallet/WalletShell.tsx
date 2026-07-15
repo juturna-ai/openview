@@ -1,78 +1,85 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import React, { useState } from 'react';
-import type { AssetRef } from './AssetDetailView';
+import React, { useEffect, useState } from 'react';
 import Sidebar, { type WalletTab } from './Sidebar';
 import WalletView from './WalletView';
+import { useEmbedWallet } from './useEmbedWallet';
 
 // Sidebar + content, mirroring JournalShell. The sidebar owns the active view; Add Asset always
-// routes to the wallet, since that's where the modal lives.
+// routes to the wallet, since that's where the modal lives. The leaderboards / gainers-losers
+// boards moved out to the top-level Assets tab (/home/assets).
 //
-// The other views are code-split: each pulls in its own data layer and none is needed for the
-// wallet's first paint. The asset detail panel is the strongest case for it — nobody sees it until
-// they click a leaderboard row, so its chart code shouldn't ship with the shell.
+// The tracker view is code-split: it pulls in its own data layer and isn't needed for the wallet's
+// first paint. But once the wallet has painted we warm its chunk on idle (see the effect below), so
+// the first switch to it is instant instead of paying a chunk round-trip.
 
-const MoversView = dynamic(() => import('./MoversView'), {
-  loading: () => <p className="gl-page-loading">Loading…</p>,
-});
 const WalletTrackerView = dynamic(() => import('./WalletTrackerView'), {
-  loading: () => <p className="gl-page-loading">Loading…</p>,
-});
-const AssetDetailView = dynamic(() => import('./AssetDetailView'), {
   loading: () => <p className="gl-page-loading">Loading…</p>,
 });
 
 export default function WalletShell() {
+  // Phone-app embed (/home/wallet?embed=wallet): show ONLY the wallet dashboard — no sidebar,
+  // no Add-Asset/Tracker nav. view is locked to 'wallet'.
+  const embed = useEmbedWallet();
   const [view, setView] = useState<WalletTab>('wallet');
+  // The tracker is mounted lazily on first visit, then kept mounted (hidden with display:none)
+  // rather than unmounted — so switching Wallet ↔ Tracker is instant and neither view re-fetches
+  // its data or loses its scroll/filter/panel state on every switch.
+  const [trackerMounted, setTrackerMounted] = useState(false);
   // Bumped on each Add Asset click; WalletView opens its modal on the change.
   const [addAssetSignal, setAddAssetSignal] = useState(0);
-  // The asset whose detail page is open, or null for the board itself. Any board can set it — the
-  // leaderboards, gainers/losers and sentiment tables all hand back the same shape.
-  const [selected, setSelected] = useState<AssetRef | null>(null);
+
+  // Warm the tracker's code-split chunk while the browser is idle, after the wallet has painted, so
+  // the first switch to it doesn't wait on a chunk download. Harmless if it never gets clicked.
+  useEffect(() => {
+    if (embed) return;
+    const warm = () => void import('./WalletTrackerView');
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
+    const id = w.requestIdleCallback ? w.requestIdleCallback(warm) : window.setTimeout(warm, 1500);
+    return () => {
+      const win = window as Window & { cancelIdleCallback?: (id: number) => void };
+      if (win.cancelIdleCallback) win.cancelIdleCallback(id);
+      else clearTimeout(id);
+    };
+  }, [embed]);
 
   const handleAddAsset = () => {
     setView('wallet');
-    setSelected(null);
     setAddAssetSignal((n) => n + 1);
   };
 
-  // Leaving the board that opened a detail page has to close it too, or Back would return to a view
-  // the sidebar has already navigated away from.
   const handleViewChange = (v: WalletTab) => {
-    setSelected(null);
+    if (v === 'tracker') setTrackerMounted(true);
     setView(v);
   };
 
-  // The detail panel replaces the board rather than stacking on it, so the sidebar stays put and
-  // Back restores exactly the board (and page, and sort) the user left.
-  const board =
-    view === 'leaderboards' ? (
-      <MoversView key="lb" mode="leaderboards" onSelect={setSelected} />
-    ) : (
-      <MoversView key="mkt" mode="market" onSelect={setSelected} />
+  // Embedded in the phone app: wallet dashboard only, no sidebar/chrome. WalletView carries
+  // its own Add Asset buttons (header + Assets table), so nothing is lost by dropping the sidebar.
+  if (embed) {
+    return (
+      <div className="journal-shell wallet-embed">
+        <div className="journal-content">
+          <WalletView addAssetSignal={addAssetSignal} />
+        </div>
+      </div>
     );
-
-  const isBoard = view === 'leaderboards' || view === 'movers';
+  }
 
   return (
     <div className="journal-shell">
       <Sidebar view={view} onViewChange={handleViewChange} onAddAsset={handleAddAsset} />
       <div className="journal-content">
-        {view === 'wallet' && <WalletView addAssetSignal={addAssetSignal} />}
-        {/* Same component, two sidebar destinations: Leaderboards renders it standalone (no tab
-            row), Gainers & Losers renders the market tabs. Keyed so switching between the two
-            remounts rather than carrying the other's tab state across.
-
-            Hidden rather than unmounted while a detail page is open: unmounting would throw away the
-            board's page, sort and 30s-refreshed data, and Back would land on a reloading table. */}
-        {isBoard && (
-          <div style={selected ? { display: 'none' } : undefined}>{board}</div>
+        {/* Both views stay mounted (the tracker once first visited); the inactive one is hidden with
+            display:none rather than unmounted, so a switch neither re-fetches nor loses state. */}
+        <div style={view === 'wallet' ? undefined : { display: 'none' }}>
+          <WalletView addAssetSignal={addAssetSignal} />
+        </div>
+        {trackerMounted && (
+          <div style={view === 'tracker' ? undefined : { display: 'none' }}>
+            <WalletTrackerView />
+          </div>
         )}
-        {isBoard && selected && (
-          <AssetDetailView asset={selected} onBack={() => setSelected(null)} />
-        )}
-        {view === 'tracker' && <WalletTrackerView />}
       </div>
     </div>
   );
