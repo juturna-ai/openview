@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cleanName, isCommonEquity } from './stocks';
 
 // Leaderboard universes for the non-crypto asset classes: stocks, ETFs and commodities.
 //
@@ -81,25 +82,36 @@ const parseNum = (s: string | undefined): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** "NVIDIA Corporation Common Stock" → "NVIDIA Corporation". */
-const cleanName = (s: string): string =>
-  s.replace(/\s+(Common Stock|Capital Stock|Ordinary Shares|Class [A-Z])\b.*$/i, '').trim() || s;
-
 async function fetchStocks(): Promise<ScreenerRow[]> {
   const res = (await fetchJSON(
     `https://api.nasdaq.com/api/screener/stocks?tableonly=true&limit=${STOCK_LIMIT}&country=united_states`,
   )) as { data?: { table?: { rows?: RawNasdaqRow[] } } };
 
-  return (res?.data?.table?.rows ?? [])
-    .map((r) => ({
-      symbol: r.symbol ?? '',
-      name: cleanName(r.name ?? ''),
-      price: parseNum(r.lastsale),
-      change24h: parseNum(r.pctchange),
-      marketCap: parseNum(r.marketCap),
-      volume: null, // Not in Nasdaq's payload — the UI renders this as a dash.
-    }))
-    .filter((r) => r.symbol && r.price != null);
+  const seen = new Set<string>();
+
+  return (
+    (res?.data?.table?.rows ?? [])
+      // Preferred shares, notes and warrants are stamped with the *issuer's* market cap, so they'd
+      // rank as a second copy of the company (GOOGM/GOOGN at Alphabet's ~$600B, TBB at AT&T's).
+      // See stocks.ts.
+      .filter((r) => isCommonEquity(r.name ?? ''))
+      .map((r) => ({
+        symbol: r.symbol ?? '',
+        name: cleanName(r.name ?? '', r.symbol ?? ''),
+        price: parseNum(r.lastsale),
+        change24h: parseNum(r.pctchange),
+        marketCap: parseNum(r.marketCap),
+        volume: null, // Not in Nasdaq's payload — the UI renders this as a dash.
+      }))
+      .filter((r) => r.symbol && r.price != null)
+      // Belt-and-braces: Nasdaq has never repeated a symbol in one response, but a duplicate key
+      // would render as a genuine duplicate row and only warn in React.
+      .filter((r) => {
+        if (seen.has(r.symbol)) return false;
+        seen.add(r.symbol);
+        return true;
+      })
+  );
 }
 
 /* ── ETFs + commodities: Yahoo's chart endpoint, one request per symbol ── */

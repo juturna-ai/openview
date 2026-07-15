@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { BLOCKSCOUT_HOSTS } from './hosts';
 
 // On-chain wallet tracker — ported from Reach's `walletTracker:*` IPC handlers (electron/main.js).
 //
@@ -41,15 +42,6 @@ const CHAINS: Record<string, ChainCfg> = {
   solana: { rpc: 'https://api.mainnet-beta.solana.com', type: 'solana', decimals: 9, cgId: 'solana', native: 'SOL' },
   tron: { rpc: 'https://api.trongrid.io', type: 'tron', decimals: 6, cgId: 'tron', native: 'TRX' },
   near: { rpc: 'https://rpc.mainnet.near.org', type: 'near', decimals: 24, cgId: 'near', native: 'NEAR' },
-};
-
-// Blockscout is preferred for balances (it also carries per-token USD rates for the token view), but
-// only these hosts are healthy — bsc/polygon/avalanche currently 404/500, so those chains skip
-// straight to the RPC above. Balances are unaffected; token detail is EVM-Blockscout-only regardless.
-const BLOCKSCOUT_HOSTS: Record<string, string> = {
-  ethereum: 'eth.blockscout.com',
-  arbitrum: 'arbitrum.blockscout.com',
-  base: 'base.blockscout.com',
 };
 
 const UA =

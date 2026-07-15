@@ -287,16 +287,30 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 }
 
 /* ── Home surface: nav row + hero share ONE gradient so they read continuous. ── */
+/*
+ * The two purple radials are positioned against the VIEWPORT (`background-attachment: fixed`),
+ * not against this element's own box. They used to be painted in-flow, which was fine for the
+ * short marketing pages but broke on the tall ones: `.ov-home-bg` grows to fit its content, so on
+ * the wallet's Leaderboards (~5600px of table) the `at 30%` radial was pushed 1700px down and both
+ * radials — only ~500px tall — ran out long before the fold. Everything past ~2000px scrolled onto
+ * flat `--bg`, so the board looked like it had lost the site's background entirely.
+ *
+ * Anchoring to the viewport keeps the wash behind the content at any page height, and leaves the
+ * short pages (866px wallet, hero, docs) looking exactly as they did.
+ */
 .ov-home-bg {
   flex: 1 0 auto;
   display: flex;
   flex-direction: column;
-  background:
+  background-color: var(--bg);
+  background-image:
     /* soft dark-to-clear fade at the very top so the flat tab bar eases into color */
     linear-gradient(180deg, var(--bg) 0%, rgba(19, 23, 34, 0) 120px),
     radial-gradient(900px 500px at 50% -10%, rgba(139, 92, 246, 0.15), transparent 60%),
-    radial-gradient(700px 500px at 80% 30%, rgba(109, 40, 217, 0.11), transparent 55%),
-    var(--bg);
+    radial-gradient(700px 500px at 80% 30%, rgba(109, 40, 217, 0.11), transparent 55%);
+  /* The fade stays in flow (it must line up with the tab bar); the radials pin to the viewport. */
+  background-attachment: scroll, fixed, fixed;
+  background-repeat: no-repeat;
 }
 /* Content region (everything after the nav) grows to fill, so the footer sits low. */
 .ov-home-bg > :not(.ov-hnav) { flex: 1 0 auto; }

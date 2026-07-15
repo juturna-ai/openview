@@ -2,8 +2,12 @@
 //
 // Requires: Technicals gauge (real MA/oscillator votes → Sell/Neutral/Buy verdict),
 // Screener, Economic calendar, News (RSS), Notifications (bell = fired-alerts log
-// with unread badge), Apps grid, Help (keyboard-shortcuts dialog). All thin-line
+// with unread badge), Pine Editor, Help (keyboard-shortcuts dialog). All thin-line
 // SVG icons with tooltips; active icon highlights; opens DOCKED in the right sidebar.
+//
+// The Apps grid stub was REMOVED and its rail slot given to the Pine Editor (§6.1) —
+// TradingView's app marketplace needs their backend, whereas Pine actually runs here.
+// The Pine Editor is a DOCKED panel (#pinePanel) that shrinks the chart, not a floating window.
 //   Run:  node test/regression_rightrail_bottomgroup.mjs
 import { chromium } from 'playwright';
 
@@ -29,7 +33,7 @@ const struct = await p.evaluate(() => {
   const btns = [...document.querySelectorAll('#rightRail .rr-btn')];
   return { titles: btns.map(x => x.title), svgAll: btns.every(x => x.querySelector('svg')) };
 });
-const want = ['Technicals', 'Screener', 'Economic calendar', 'News', 'Notifications', 'Apps', 'Help', 'Paper trading'];
+const want = ['Technicals', 'Screener', 'Economic calendar', 'News', 'Notifications', 'Pine Editor', 'Help', 'Paper trading'];
 const t1 = want.every(w => struct.titles.includes(w)) && struct.svgAll;
 
 // 2) Technicals opens with a real verdict + vote counts + indicator rows.
@@ -39,12 +43,30 @@ const tech = await panelText();
 const t2 = /Technicals/.test(tech) && /(Strong Buy|Buy|Neutral|Sell|Strong Sell)/.test(tech)
         && /RSI \(14\)/.test(tech) && /MACD/.test(tech) && /SMA 20/.test(tech) && /checks on loaded/.test(tech);
 
-// 3) Economic calendar + Apps stubs open.
+// 3) Economic calendar stub opens; the Pine Editor opens as a DOCKED panel (#pinePanel, a flex
+//    sibling of #main, so the chart shrinks) AND compiles a script onto the chart. The script's
+//    indicator() title becomes the indicator name (TradingView titles the editor by the script).
 await clickRail('Economic calendar'); await p.waitForTimeout(200);
 const cal = /Economic Calendar/.test(await panelText());
-await clickRail('Apps'); await p.waitForTimeout(200);
-const apps = /Apps/.test(await panelText());
-const t3 = cal && apps;
+const chartBefore = await p.evaluate(() => document.getElementById('main').getBoundingClientRect().width);
+await clickRail('Pine Editor'); await p.waitForSelector('#pinePanel.open', { timeout: 5000 });
+await p.fill('#pineCode', '//@version=5\nindicator("Rail test MA", overlay=true)\nplot(ta.sma(close, 20), "MA")');
+await p.click('#pineAdd');
+await p.waitForTimeout(800);
+const pine = await p.evaluate((cw) => {
+  // Docked, not floating: #pinePanel is position:relative (a normal flex child), and opening it
+  // shrank the chart. A fixed/absolute panel or an unchanged chart width would be the old design.
+  const panel = document.querySelector('#pinePanel.open');
+  const docked = panel && !/fixed|absolute/.test(getComputedStyle(panel).position);
+  const chartShrank = document.getElementById('main').getBoundingClientRect().width < cw - 100;
+  const i = indicators.find((x) => x.type === 'pine' && x.name === 'Rail test MA');
+  if (!docked || !chartShrank || !i) return false;
+  const pts = (i.params.plots?.[0]?.data || []).filter((v) => v != null).length;
+  return !i.pineError && i.series.length === 1 && pts > 0;
+}, chartBefore);
+const t3 = cal && pine;
+// Close the Pine panel so the chart gets its width back before the remaining panels run.
+await p.click('#pineClose').catch(() => {}); await p.waitForTimeout(150);
 
 // 4) Help lists keyboard shortcuts.
 await clickRail('Help'); await p.waitForTimeout(200);
@@ -74,7 +96,7 @@ const t7 = errs.length === 0;
 
 console.log('t1 8 bottom+paper SVG btns :', t1, struct.titles.join(','));
 console.log('t2 technicals real verdict :', t2);
-console.log('t3 calendar+apps stubs     :', t3);
+console.log('t3 calendar stub + pine run:', t3);
 console.log('t4 help shortcuts dialog   :', t4);
 console.log('t5 notif badge + log + clear:', t5, `badge=${badgeBefore}`);
 console.log('t6 active highlight        :', t6);
