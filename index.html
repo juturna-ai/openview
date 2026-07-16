@@ -1053,6 +1053,7 @@
   <a class="ov-tab active" href="/index.html" aria-current="page">Openview</a>
   <a class="ov-tab" href="/home/journal">Journal</a>
   <a class="ov-tab" href="/home/wallet">Wallet</a>
+  <a class="ov-tab" href="/home/reports">Reports</a>
   <a class="ov-tabs-brand" href="/home"><img src="/assets/openview.png" alt="Openview"><span>Openview</span></a>
 </div>
 <div id="app">
@@ -5892,7 +5893,9 @@ dcanvas.addEventListener("wheel", e=>{
 
 function startPending(c){
   const tool=draw.tool;
-  const need=CLICKS[tool]||2;
+  // ?? not || — brush/polyline use 0 ("freehand, unbounded"), which || would
+  // discard as falsy and silently turn into a plain 2-point shape.
+  const need=CLICKS[tool]??2;
   if(need===1){ finishOneClick(tool,c); return; }
   if(need===0){ // freehand (brush) or click-to-add multi-point (polyline)
     draw.pending={ id:newId(), type:tool, pts:[c, {...c}], style:{...DEFAULT_STYLE}, freehand:(tool==="brush") };
@@ -6130,7 +6133,7 @@ window.addEventListener("mouseup", e=>{
   // finishing the creation gesture for a pending shape
   if(draw.pending){
     const pend=draw.pending;
-    const need=CLICKS[pend.type]||2;
+    const need=CLICKS[pend.type]??2;
     // Brush: a stroke is complete the moment the button is released.
     if(pend.freehand){ if(pend.pts.length>2) commitPending(); else { draw.pending=null; redraw(); } downPt=null; downMoved=false; return; }
     if(downMoved){
@@ -7258,7 +7261,13 @@ function drawShape(s, selected, hovered){
     case "pricelabel": drawPriceLabelTool(s,a); break;
   }
   if(selected || hovered){
-    for(const q of P) if(q.x!=null && (selected)) handle(q.x,q.y);
+    // Brush strokes hold dozens of sampled points — a handle per point would bury
+    // the stroke in dots. Show only the two ends (TradingView does the same).
+    if(selected && s.type==="brush"){
+      const ends=P.filter(q=>q.x!=null);
+      if(ends.length){ handle(ends[0].x,ends[0].y); const e=ends[ends.length-1]; if(ends.length>1) handle(e.x,e.y); }
+    }
+    else for(const q of P) if(q.x!=null && (selected)) handle(q.x,q.y);
     if(hovered && !selected && a.x!=null){ /* subtle hover dot */ dctx.save(); dctx.fillStyle="#2962ff"; dctx.beginPath(); dctx.arc(a.x,a.y,3,0,7); dctx.fill(); dctx.restore(); }
   }
 }

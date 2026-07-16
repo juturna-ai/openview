@@ -423,11 +423,16 @@ export interface ScreenerPayload {
 
 let cache: { at: number; payload: ScreenerPayload } | null = null;
 
-export async function GET() {
-  if (cache && Date.now() - cache.at < CACHE_TTL_MS) {
-    return NextResponse.json(cache.payload);
-  }
+/* Single-flight: a cold pass here is the most expensive in the app — one Nasdaq screener call plus a
+ * per-symbol Yahoo chart *and* quoteSummary for every ETF and commodity. Letting concurrent misses
+ * each run their own pass multiplied that against a rate-limited upstream. The first caller does the
+ * work; the rest await it. Cleared in `finally` so a failed pass never wedges the route.
+ *
+ * Scope: per-instance module state, like `cache` — it collapses the herd within one server, not
+ * across serverless instances. A cost reduction, not a global lock. */
+let inflightPass: Promise<ScreenerPayload> | null = null;
 
+async function buildPayload(): Promise<ScreenerPayload> {
   // Each class fails independently — one dead upstream must not blank the other two tabs.
   const [stocks, etfs, commodities] = await Promise.all([
     fetchStocks().catch(() => [] as ScreenerRow[]),
@@ -442,5 +447,19 @@ export async function GET() {
     cache = { at: Date.now(), payload };
   }
 
-  return NextResponse.json(payload);
+  return payload;
+}
+
+export async function GET() {
+  if (cache && Date.now() - cache.at < CACHE_TTL_MS) {
+    return NextResponse.json(cache.payload);
+  }
+
+  if (!inflightPass) {
+    inflightPass = buildPayload().finally(() => {
+      inflightPass = null;
+    });
+  }
+
+  return NextResponse.json(await inflightPass);
 }

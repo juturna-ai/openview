@@ -322,6 +322,9 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
   const [fearGreed, setFearGreed] = useState<FearGreed | null>(() => cachedCmc?.fearGreed ?? null);
   // Only show the initial loading state when there's nothing cached to show.
   const [loading, setLoading] = useState(!cachedCmc);
+  // Spins the refresh button on an explicit user refresh only. Kept separate from `loading` so the
+  // 30s background poll refreshes in place without flipping a populated table to "Loading…".
+  const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   // Stocks / ETFs / commodities for the Leaderboards tab, off /api/market/screener.
@@ -344,11 +347,14 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
     TIMEFRAMES.find((t) => t.key === timeframe)?.changeKey ?? 'change24h';
   const tfLabel = TIMEFRAMES.find((t) => t.key === timeframe)?.label ?? '24h';
 
+  // The pool dropdown only gates Gainers & Losers; the leaderboard always needs its full 500, so
+  // never request fewer than that. Derived here rather than inside fetchData so the fetch depends on
+  // the request it actually makes: Top 100 and Top 500 both clamp to 500, so switching between them
+  // reuses the coins already on screen (the pool is applied client-side below) instead of refetching
+  // and restarting the refresh interval. Only "All" widens the request.
+  const limit = Math.max(coinPool === 0 ? ALL_POOL_LIMIT : coinPool, LEADERBOARD_MAX);
+
   const fetchData = useCallback(async () => {
-    setLoading(true);
-    // The pool dropdown only gates Gainers & Losers; the leaderboard always needs its full 500,
-    // so never request fewer than that.
-    const limit = Math.max(coinPool === 0 ? ALL_POOL_LIMIT : coinPool, LEADERBOARD_MAX);
     try {
       const cmcRes: CmcResponse | null = await fetch(`/api/market/cmc?limit=${limit}`).then((r) =>
         r.ok ? r.json() : null,
@@ -365,9 +371,11 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
     } catch {
       // Leave the previous data on screen — a transient blip shouldn't blank the page.
     } finally {
+      // Only the very first load shows the loading state; the 30s background polls refresh in place
+      // rather than flipping a populated table back to "Loading…".
       setLoading(false);
     }
-  }, [coinPool]);
+  }, [limit]);
 
   // The screener (500 stocks + ETFs + commodities) only feeds the Leaderboards tab, so it's fetched
   // separately and only while that tab is open — the other seven tabs shouldn't pay for it. Kept out
@@ -394,10 +402,20 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
     return () => clearInterval(id);
   }, [tab, fetchScreener]);
 
+  // Refetch whenever the requested size changes (only "All" widens it — see `limit`), then poll.
+  // The size change is user-driven and the 1000-coin pass is the slowest one, so it spins the
+  // refresh indicator; the interval's background passes stay silent and refresh in place.
   useEffect(() => {
-    void fetchData();
+    let cancelled = false;
+    setRefreshing(true);
+    void fetchData().finally(() => {
+      if (!cancelled) setRefreshing(false);
+    });
     const id = setInterval(() => void fetchData(), REFRESH_MS);
-    return () => clearInterval(id);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [fetchData]);
 
   // A sort column from one tab rarely means anything on the next (and the GL tab's change column is
@@ -881,13 +899,19 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
         <button
           className="gl-refresh-btn"
           onClick={() => {
-            void fetchData();
+            setRefreshing(true);
             // The screener isn't part of fetchData, so refresh it too when it's what's on screen.
-            if (isLB) void fetchScreener();
+            void Promise.all([fetchData(), isLB ? fetchScreener() : null]).finally(() =>
+              setRefreshing(false),
+            );
           }}
-          disabled={loading}
+          disabled={loading || refreshing}
         >
-          <Icon name="refresh-cw" size={14} className={loading ? 'spinning' : undefined} />
+          <Icon
+            name="refresh-cw"
+            size={14}
+            className={loading || refreshing ? 'spinning' : undefined}
+          />
           {updatedAt && <span className="gl-updated">{updatedAt.toLocaleTimeString()}</span>}
         </button>
       </div>

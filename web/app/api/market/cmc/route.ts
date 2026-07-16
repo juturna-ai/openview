@@ -24,6 +24,11 @@ const UA =
 const UPSTREAM_TIMEOUT_MS = 10_000;
 const CACHE_TTL_MS = 30_000;
 
+/* The only two listing sizes served, mirroring MoversView's LEADERBOARD_MAX / ALL_POOL_LIMIT. The
+ * client asks for one or the other; every other `limit` quantises onto them (see GET). */
+const LISTING_SIZE = 500;
+const ALL_POOL_LIMIT = 1000;
+
 async function fetchJSON(url: string): Promise<unknown> {
   const res = await fetch(url, {
     headers: { 'User-Agent': UA, Accept: 'application/json' },
@@ -251,16 +256,19 @@ export interface CmcPayload {
 // Keyed by pool size — "Top 100" and "All" fetch different list lengths.
 const cache = new Map<number, { at: number; payload: CmcPayload }>();
 
-export async function GET(req: Request) {
-  const raw = Number(new URL(req.url).searchParams.get('limit'));
-  // Clamp: a caller-supplied limit must never let the client ask CMC for an unbounded list.
-  const limit = Number.isFinite(raw) ? Math.min(1000, Math.max(100, Math.trunc(raw))) : 500;
+/* Single-flight: concurrent misses for the same pool size share one upstream pass.
+ *
+ * Without this, every request arriving while the cache is cold (a reload, several boards mounting,
+ * or simply the 30s TTL lapsing under traffic) independently re-fetched the whole 500-coin listing
+ * and — on a sparkline miss — another 100 chart calls. The first caller does the work; the rest
+ * await the same promise. Cleared in `finally` so a failed pass never wedges the key.
+ *
+ * Scope: like `cache`, this is per-instance module state. It collapses the herd within one server,
+ * NOT across serverless instances — N cold lambdas still make N passes. That's the same bound the
+ * TTL cache already had; both are a cost reduction, not a global lock. */
+const inflight = new Map<number, Promise<CmcPayload>>();
 
-  const hit = cache.get(limit);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
-    return NextResponse.json(hit.payload);
-  }
-
+async function buildPayload(limit: number): Promise<CmcPayload> {
   // Each source fails independently — one dead endpoint must not blank the whole page.
   const [coins, spotlight, fearGreed] = await Promise.all([
     fetchListing(limit).catch(() => [] as Coin[]),
@@ -297,5 +305,28 @@ export async function GET(req: Request) {
     cache.set(limit, { at: Date.now(), payload });
   }
 
-  return NextResponse.json(payload);
+  return payload;
+}
+
+export async function GET(req: Request) {
+  const raw = Number(new URL(req.url).searchParams.get('limit'));
+  // Quantise to the only two sizes the client actually asks for (the board's 500, or "All" at
+  // ALL_POOL_LIMIT). Clamping alone still let a caller-supplied `limit` pick its own cache key, so
+  // sweeping 100..1000 sidestepped both the TTL cache and the single-flight below and bought ~900
+  // concurrent full CMC listing passes off one script. Two fixed buckets means an arbitrary `limit`
+  // can only ever land on a key that's already cached or already in flight.
+  const limit = Number.isFinite(raw) && raw > LISTING_SIZE ? ALL_POOL_LIMIT : LISTING_SIZE;
+
+  const hit = cache.get(limit);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
+    return NextResponse.json(hit.payload);
+  }
+
+  let job = inflight.get(limit);
+  if (!job) {
+    job = buildPayload(limit).finally(() => inflight.delete(limit));
+    inflight.set(limit, job);
+  }
+
+  return NextResponse.json(await job);
 }

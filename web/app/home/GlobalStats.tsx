@@ -111,14 +111,6 @@ function Sparkline({ data, up }: { data: SeriesPoint[]; up: boolean }) {
 }
 
 // Fear & Greed dial: red (fear) → yellow → green (greed). Needle angle maps 0–100 to -90°..90°.
-function fgColor(v: number): string {
-  if (v < 25) return 'var(--red)';
-  if (v < 45) return '#f0a020';
-  if (v < 55) return '#e0c020';
-  if (v < 75) return '#8bc34a';
-  return 'var(--green)';
-}
-
 export default function GlobalStats() {
   const [data, setData] = useState<GlobalPayload | null>(null);
 
@@ -170,7 +162,7 @@ export default function GlobalStats() {
       </div>
 
       {/* Fear & Greed */}
-      <div className="ov-gcard">
+      <div className="ov-gcard ov-gcard--center">
         <div className="ov-gcard-explainer" role="tooltip">
           Scores market sentiment 0 (Extreme Fear) to 100 (Extreme Greed) from volatility, momentum,
           volume, social media and BTC dominance. Extreme fear can signal a buy; extreme greed, a top.
@@ -196,7 +188,7 @@ export default function GlobalStats() {
             <circle cx="50" cy="50" r="4" fill="var(--text)" />
           </svg>
           <div className="ov-fg-info">
-            <span className="ov-gcard-value" style={fg ? { color: fgColor(fg.value) } : undefined}>
+            <span className="ov-gcard-value">
               {fg ? fg.value : '—'}
             </span>
             <span className="ov-fg-label">{fg?.classification || ''}</span>

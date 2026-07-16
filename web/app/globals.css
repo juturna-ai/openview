@@ -478,7 +478,9 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 }
 .ov-mc-tip-price strong { color: var(--text); font-weight: 700; }
 .ov-mc-tip-swatch { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-/* Fear & Greed gauge */
+/* Fear & Greed gauge — card contents are centered in the column so the gauge sits between the
+   Market Cap and Altcoin Season cards rather than hugging its left edge. */
+.ov-gcard--center { align-items: center; text-align: center; }
 .ov-gcard-fg { display: flex; align-items: center; gap: 12px; }
 .ov-fg-gauge { width: 92px; height: auto; flex: none; }
 .ov-fg-info { display: flex; flex-direction: column; gap: 2px; }
@@ -2375,7 +2377,9 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 .gl-tab:hover { color: var(--text); }
-.gl-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+/* Matches the folder tab bar's active purple (.ov-tab.active), so a selected market tab reads as
+   the same accent as the selected Wallet tab above it. */
+.gl-tab.active { color: #715587; border-bottom-color: #715587; }
 
 /* ── Timeframe / pool dropdowns ── */
 .gl-select {
@@ -2842,7 +2846,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 6px 12px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: var(--panel);
+  background: transparent;
   color: var(--muted);
   font-family: inherit;
   font-size: 12px;
@@ -2884,7 +2888,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 5px 10px;
   border: 1px solid var(--border);
   border-radius: 20px;
-  background: var(--bg);
+  background: transparent;
   font-size: 12px;
   color: var(--text);
 }
@@ -2900,7 +2904,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 9px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--panel);
+  background: transparent;
   color: var(--text);
   font-family: inherit;
   font-size: 13px;
@@ -2947,7 +2951,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 9px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
   font-family: inherit;
   font-size: 13px;
@@ -2960,7 +2964,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 9px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg);
+  background: transparent;
   color: var(--text);
   font-family: inherit;
   font-size: 13px;
@@ -2972,18 +2976,17 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   gap: 6px;
   flex-shrink: 0;
   padding: 9px 16px;
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--reach-accent-gradient);
-  background-size: cover;
-  color: #fff;
+  background: transparent;
+  color: var(--text);
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: filter 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-.wt-add-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.wt-add-btn:hover:not(:disabled) { background: var(--hover); }
 .wt-add-error { margin: 0; color: var(--red); font-size: 12px; }
 /* Chain filter pills. Wrap rather than scroll — with 10 chains a horizontal scroller would hide
    half of them behind a gesture. */
@@ -3005,10 +3008,18 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .wt-filter-pill:hover { background: var(--hover); color: var(--text); }
-.wt-filter-pill.active { background: var(--hover); color: var(--text); border-color: var(--muted); }
+/* Active pill uses the same purple accent as the leaderboard asset-class tabs (.gl-class-tab.active),
+   so both dashboards mark selection identically. :hover is included or the grey hover above would
+   wipe the accent while the cursor sits on the selected pill. */
+.wt-filter-pill.active,
+.wt-filter-pill.active:hover {
+  background: rgba(124, 92, 191, 0.14);
+  border-color: #7c5cbf;
+  color: #b79cff;
+}
 /* The count is secondary to the chain name — recede it, and keep it legible on the active pill. */
 .wt-filter-count { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
-.wt-filter-pill.active .wt-filter-count { color: var(--text); }
+.wt-filter-pill.active .wt-filter-count { color: #b79cff; }
 
 /* Column headers for the wallet list. Grid + gap + horizontal padding must stay identical to
    .wt-wallet-card below, or the labels drift off the columns they name. */
@@ -3091,7 +3102,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.wt-action-btn:hover { background: var(--bg); color: var(--text); }
+.wt-action-btn:hover { background: var(--hover); color: var(--text); }
 .wt-remove-btn:hover { background: rgba(239, 83, 80, 0.12); color: var(--red); }
 .wt-empty {
   display: flex;
@@ -3430,7 +3441,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 9px 18px;
   border: none;
   border-radius: 8px;
-  background: var(--accent);
+  background: var(--reach-accent-gradient);
   color: #fff;
   font-family: inherit;
   font-size: 14px;
@@ -3457,7 +3468,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .exp-family-pill:hover { background: var(--hover); color: var(--text); }
-.exp-family-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.exp-family-pill.active { background: rgba(124, 92, 191, 0.14); border-color: #7c5cbf; color: #b79cff; }
 
 /* Sub-row to pick a specific EVM chain (they share the 0x…40 address format). */
 .exp-evm-subrow { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }

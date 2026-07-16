@@ -11,7 +11,11 @@ import { useEffect, useState } from 'react';
 //
 // Not rendered inside the chart engine or the phone app — the engine carries its own copy
 // (hidden on embed), so the mobile WebView never shows tabs.
-export default function OvTabs({ active }: { active?: 'home' | 'openview' | 'journal' | 'wallet' }) {
+export default function OvTabs({
+  active,
+}: {
+  active?: 'home' | 'openview' | 'journal' | 'wallet' | 'reports';
+}) {
   const pathname = usePathname();
   // Hide the folder-tab bar when the wallet is embedded in the phone app
   // (/home/wallet?embed=wallet) — the app owns its own tab bar. Reads window after mount
@@ -31,7 +35,9 @@ export default function OvTabs({ active }: { active?: 'home' | 'openview' | 'jou
       ? 'journal'
       : pathname?.startsWith('/home/wallet')
         ? 'wallet'
-        : 'home');
+        : pathname?.startsWith('/home/reports')
+          ? 'reports'
+          : 'home');
   return (
     <div className="ov-tabs">
       <Link href="/home" className={'ov-tab' + (current === 'home' ? ' active' : '')}>Home</Link>
@@ -41,6 +47,7 @@ export default function OvTabs({ active }: { active?: 'home' | 'openview' | 'jou
       <a href="/index.html" className={'ov-tab' + (current === 'openview' ? ' active' : '')}>Openview</a>
       <Link href="/home/journal" className={'ov-tab' + (current === 'journal' ? ' active' : '')}>Journal</Link>
       <Link href="/home/wallet" className={'ov-tab' + (current === 'wallet' ? ' active' : '')}>Wallet</Link>
+      <Link href="/home/reports" className={'ov-tab' + (current === 'reports' ? ' active' : '')}>Reports</Link>
       <Link href="/home" className="ov-tabs-brand">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/assets/openview.png" alt="Openview" />

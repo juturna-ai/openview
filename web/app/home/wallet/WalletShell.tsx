@@ -40,16 +40,25 @@ export default function WalletShell() {
   // The Explorer is likewise mounted lazily on first visit then kept mounted, so switching back to it
   // keeps the last search on screen rather than repainting an empty hero.
   const [explorerMounted, setExplorerMounted] = useState(false);
+  // The two boards are separate MoversView instances. Mounting both up-front meant each ran its own
+  // 30s /api/market/cmc poll for the same data from first paint — two fetches and two 500-coin
+  // renders to show one board. Each is mounted on first visit, then kept mounted like the others.
+  const [leaderboardsMounted, setLeaderboardsMounted] = useState(false);
+  const [moversMounted, setMoversMounted] = useState(false);
   // Bumped on each Add Asset click; WalletView opens its modal on the change.
   const [addAssetSignal, setAddAssetSignal] = useState(0);
   // The asset whose detail page is open (opened from a board), or null for the board itself.
   const [selected, setSelected] = useState<AssetRef | null>(null);
 
-  // Warm the tracker's code-split chunk while the browser is idle, after the wallet has painted, so
-  // the first switch to it doesn't wait on a chunk download. Harmless if it never gets clicked.
+  // Warm the code-split chunks the user is most likely to open next, while the browser is idle and
+  // after the wallet has painted, so the first switch doesn't wait on a chunk download. Harmless if
+  // they never get clicked.
   useEffect(() => {
     if (embed) return;
-    const warm = () => void import('./WalletTrackerView');
+    const warm = () => {
+      void import('./WalletTrackerView');
+      void import('./MoversView');
+    };
     const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
     const id = w.requestIdleCallback ? w.requestIdleCallback(warm) : window.setTimeout(warm, 1500);
     return () => {
@@ -67,6 +76,8 @@ export default function WalletShell() {
   const handleViewChange = (v: WalletTab) => {
     if (v === 'tracker') setTrackerMounted(true);
     if (v === 'explorer') setExplorerMounted(true);
+    if (v === 'leaderboards') setLeaderboardsMounted(true);
+    if (v === 'movers') setMoversMounted(true);
     // Leaving a board that opened a detail page has to close it too, or Back would return to a
     // view the sidebar has already navigated away from.
     setSelected(null);
@@ -89,10 +100,10 @@ export default function WalletShell() {
     <div className="journal-shell">
       <Sidebar view={view} onViewChange={handleViewChange} onAddAsset={handleAddAsset} />
       <div className="journal-content">
-        {/* Both views stay mounted (the tracker once first visited); the inactive one is hidden with
-            display:none rather than unmounted, so a switch neither re-fetches nor loses state. The
-            boards are likewise hidden (not unmounted) while a detail page is open, so Back restores
-            exactly the board, page and sort the user left. */}
+        {/* Every view is mounted on first visit and then kept mounted; the inactive ones are hidden
+            with display:none rather than unmounted, so a switch neither re-fetches nor loses state.
+            The boards are likewise hidden (not unmounted) while a detail page is open, so Back
+            restores exactly the board, page and sort the user left. */}
         <div
           style={view === 'wallet' && !selected ? undefined : { display: 'none' }}
         >
@@ -108,12 +119,16 @@ export default function WalletShell() {
             <ExplorerView />
           </div>
         )}
-        <div style={view === 'leaderboards' && !selected ? undefined : { display: 'none' }}>
-          <MoversView mode="leaderboards" onSelect={setSelected} />
-        </div>
-        <div style={view === 'movers' && !selected ? undefined : { display: 'none' }}>
-          <MoversView mode="market" onSelect={setSelected} />
-        </div>
+        {leaderboardsMounted && (
+          <div style={view === 'leaderboards' && !selected ? undefined : { display: 'none' }}>
+            <MoversView mode="leaderboards" onSelect={setSelected} />
+          </div>
+        )}
+        {moversMounted && (
+          <div style={view === 'movers' && !selected ? undefined : { display: 'none' }}>
+            <MoversView mode="market" onSelect={setSelected} />
+          </div>
+        )}
         {selected && (
           <AssetDetailView asset={selected} onBack={() => setSelected(null)} />
         )}

@@ -422,3 +422,46 @@ in the browser.
 JSON as the test fixture. A logic test built on an assumed shape proves the code matches your
 assumption, not the API. And probe query params individually — a single bad one (`order=desc` here)
 can 000 the whole request while every other param looks fine.
+
+## Never `next build` against a running dev server — it clobbers `.next/`
+**Mistake:** ran `npx next build` to verify a perf change while `npm run dev` was live on 3333. The
+build overwrote `.next/` with production webpack chunks; the still-running dev process kept looking
+for its own dev chunks, hit `Cannot find module './682.js'` from `.next/server/webpack-runtime.js`,
+and 500'd every route. The user saw a white page and asked "why is website not loading" — a break I
+caused while "verifying," not a bug in the work. Recovery: stop the dev process, `rm -rf .next`,
+restart `npm run dev`.
+
+**Rule:** `next build` and `next dev` cannot share `.next/`. Never build against a live dev server —
+typecheck (`tsc --noEmit`) and lint prove compilation without touching the build dir. If a real
+production build is genuinely needed, stop the dev server first and restart it after, or use a
+separate `distDir`. Also: a dev server that dies with exit code 0 means *something else* took its
+build dir — check `.next/BUILD_ID` before blaming the code.
+
+## "Verified by inspection" is not verified — and a wrong test is worse than no test
+**Mistake (two parts, same session).** (1) Reported the refresh button as fixed with the caveat
+"verified by code inspection and typecheck only" because no browser was installed. The user asked
+"did you fix this?" — the honest answer required actually clicking it. `npx playwright install
+chromium` (without `--with-deps`, which needs sudo) worked fine; the excuse was never real.
+(2) The first browser test then reported `❌ refresh affordance broken` — but the *test* was wrong,
+not the code: it sampled the spinner 120 ms after the click, and the warm cache resolved faster than
+that, so the spinner had come and gone. Fix: `page.route()` to gate the API and hold the state open.
+
+**Rule:** if a claim is about UI behavior, drive the UI — install the browser rather than caveating.
+And when a UI test fails, suspect the test's *timing* before the code: for transient states (spinners,
+disabled, optimistic UI), block the network so the state is observable instead of racing it. Confirm
+a failure is real before reporting it — and confirm a "leak" is real too (a grep for `stack` matched
+the coin **Stacks (STX)**, not a stack trace).
+
+## Clamping a query param bounds one request; it does NOT bound the number of cache keys
+**Mistake:** added single-flight dedup to `/api/market/cmc` keyed by `limit`, and wrote a comment
+claiming "concurrent misses share one upstream pass." True only per-limit-value. `limit` was
+*clamped* to 100..1000 but then used directly as the cache/in-flight key, so `?limit=100,101,…,1000`
+minted ~900 distinct keys — every one missing the cache, bypassing single-flight, and buying its own
+full CMC listing pass off one trivial script. Verified live: 8 distinct limits → 8 upstream passes.
+Fixed by quantising onto the only two sizes the client can ask for (500 / 1000).
+
+**Rule:** any cache or in-flight map keyed off a caller-supplied value must **quantise** that value
+onto the finite set the app actually uses, not merely clamp its range. Clamping bounds the cost of
+one request; quantising bounds how many distinct keys exist. Check what the client can actually send
+(grep the callers) before picking the key. And keep perf comments honest about scope — per-instance
+module state collapses a herd within one warm server, never across serverless instances.

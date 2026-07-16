@@ -921,130 +921,135 @@
   /* alert price lines drawn by lightweight-charts createPriceLine - styled inline */
 
   /* ── Pair info card (right-click → View details) ── */
-  #pairCard{position:fixed; z-index:402; top:50%; left:50%; transform:translate(-50%,-50%);
+  .pair-card{position:fixed; z-index:402; top:50%; left:50%; transform:translate(-50%,-50%);
     width:560px; max-width:94vw; max-height:88vh; overflow-y:auto; overflow-x:hidden; background:var(--panel);
     border:1px solid var(--border); border-radius:14px; box-shadow:0 24px 64px #000e, 0 0 0 1px #ffffff0a inset;
     display:none; flex-direction:column;}
-  #pairCard.open{display:flex; animation:pcIn .16s ease-out;}
+  .pair-card.open{display:flex; animation:pcIn .16s ease-out;}
+  /* Second simultaneous card spawns offset from the first so it isn't buried under it.
+     Once dragged, pcDragWire pins explicit left/top and this margin no longer applies. */
+  .pair-card.stack1{margin-left:28px; margin-top:28px;}
+  /* The focused card floats above the other. */
+  .pair-card.front{z-index:403;}
   @keyframes pcIn{from{opacity:0; transform:translate(-50%,-46%) scale(.98);} to{opacity:1; transform:translate(-50%,-50%) scale(1);}}
-  #pairCard::-webkit-scrollbar{width:9px;}
-  #pairCard::-webkit-scrollbar-thumb{background:var(--border); border-radius:5px; border:2px solid var(--panel);}
+  .pair-card::-webkit-scrollbar{width:9px;}
+  .pair-card::-webkit-scrollbar-thumb{background:var(--border); border-radius:5px; border:2px solid var(--panel);}
   /* Header sits on a subtle gradient so the card reads as a "sheet". */
-  #pairCard .pc-head{display:flex; align-items:center; gap:11px; padding:16px 16px 14px;
+  .pair-card .pc-head{display:flex; align-items:center; gap:11px; padding:16px 16px 14px;
     background:linear-gradient(180deg,#ffffff08,transparent); border-bottom:1px solid var(--border);}
-  #pairCard .pc-ic{width:38px; height:38px; border-radius:50%; flex:none; object-fit:contain; background:#2a2e39;
+  .pair-card .pc-ic{width:38px; height:38px; border-radius:50%; flex:none; object-fit:contain; background:#2a2e39;
     color:#fff; font-size:14px; font-weight:700; display:flex; align-items:center; justify-content:center;
     box-shadow:0 0 0 1px #ffffff14;}
-  #pairCard .pc-tt{flex:1; min-width:0;}
-  #pairCard .pc-sym{font-size:16px; font-weight:700; color:var(--text); letter-spacing:.2px;
+  .pair-card .pc-tt{flex:1; min-width:0;}
+  .pair-card .pc-sym{font-size:16px; font-weight:700; color:var(--text); letter-spacing:.2px;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  #pairCard .pc-sub{font-size:11px; color:var(--muted); margin-top:2px; display:flex; align-items:center; gap:6px;}
-  #pairCard .pc-badge{font-size:9.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase;
+  .pair-card .pc-sub{font-size:11px; color:var(--muted); margin-top:2px; display:flex; align-items:center; gap:6px;}
+  .pair-card .pc-badge{font-size:9.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase;
     color:var(--accent); background:#2962ff1f; border:1px solid #2962ff33; padding:1px 6px; border-radius:4px;}
-  #pairCard .pc-x{cursor:pointer; color:var(--muted); font-size:18px; line-height:1; width:26px; height:26px;
+  .pair-card .pc-x{cursor:pointer; color:var(--muted); font-size:18px; line-height:1; width:26px; height:26px;
     display:flex; align-items:center; justify-content:center; border-radius:6px; flex:none;}
-  #pairCard .pc-x:hover{color:var(--text); background:var(--hover);}
+  .pair-card .pc-x:hover{color:var(--text); background:var(--hover);}
   /* Price block: big number + a change chip. */
-  #pairCard .pc-price{padding:14px 16px 16px; border-bottom:1px solid var(--border);
+  .pair-card .pc-price{padding:14px 16px 16px; border-bottom:1px solid var(--border);
     display:flex; align-items:center; gap:16px;}
-  #pairCard .pc-price-main{flex:none;}
-  #pairCard .pc-last{font-size:30px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-.5px; line-height:1;}
-  #pairCard .pc-chg{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700;
+  .pair-card .pc-price-main{flex:none;}
+  .pair-card .pc-last{font-size:30px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-.5px; line-height:1;}
+  .pair-card .pc-chg{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700;
     margin-top:9px; padding:3px 9px; border-radius:6px; font-variant-numeric:tabular-nums;}
-  #pairCard .pc-chg.up{color:var(--green); background:#26a69a1c;}
-  #pairCard .pc-chg.down{color:var(--red); background:#ef53501c;}
-  #pairCard .pc-desc{flex:1; min-width:0; text-align:left; font-size:12px; line-height:1.5; color:var(--text);}
-  #pairCard .pc-desc a{color:var(--accent,#2962ff); text-decoration:none; font-weight:600;}
-  #pairCard .pc-desc a:hover{text-decoration:underline;}
-  #pairCard .pc-desc .pc-site{display:block; margin-top:4px;}
-  #pairCard .pc-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:var(--border);}
-  #pairCard .pc-cell{background:var(--panel); padding:10px 14px; position:relative; transition:background .12s;}
-  #pairCard .pc-cell.has-help{cursor:help;}
-  #pairCard .pc-cell:not(.pc-fill):hover{background:var(--panel2);}
-  #pairCard .pc-cell.pc-fill{cursor:default;}
-  #pairCard .pc-k{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:600;
+  .pair-card .pc-chg.up{color:var(--green); background:#26a69a1c;}
+  .pair-card .pc-chg.down{color:var(--red); background:#ef53501c;}
+  .pair-card .pc-desc{flex:1; min-width:0; text-align:left; font-size:12px; line-height:1.5; color:var(--text);}
+  .pair-card .pc-desc a{color:var(--accent,#2962ff); text-decoration:none; font-weight:600;}
+  .pair-card .pc-desc a:hover{text-decoration:underline;}
+  .pair-card .pc-desc .pc-site{display:block; margin-top:4px;}
+  .pair-card .pc-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:1px; background:var(--border);}
+  .pair-card .pc-cell{background:var(--panel); padding:10px 14px; position:relative; transition:background .12s;}
+  .pair-card .pc-cell.has-help{cursor:help;}
+  .pair-card .pc-cell:not(.pc-fill):hover{background:var(--panel2);}
+  .pair-card .pc-cell.pc-fill{cursor:default;}
+  .pair-card .pc-k{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:600;
     display:flex; align-items:center; gap:4px;}
-  #pairCard .pc-cell.has-help .pc-k::after{content:"?"; font-size:8px; font-weight:700; width:11px; height:11px;
+  .pair-card .pc-cell.has-help .pc-k::after{content:"?"; font-size:8px; font-weight:700; width:11px; height:11px;
     display:inline-flex; align-items:center; justify-content:center; border-radius:50%; color:var(--muted);
     background:#ffffff12; opacity:0; transition:opacity .12s;}
-  #pairCard .pc-cell.has-help:hover .pc-k::after{opacity:.8;}
-  #pairCard .pc-v{font-size:13.5px; color:var(--text); font-weight:600; margin-top:3px; font-variant-numeric:tabular-nums;
+  .pair-card .pc-cell.has-help:hover .pc-k::after{opacity:.8;}
+  .pair-card .pc-v{font-size:13.5px; color:var(--text); font-weight:600; margin-top:3px; font-variant-numeric:tabular-nums;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  #pairCard .pc-v.up{color:var(--green);} #pairCard .pc-v.down{color:var(--red);}
-  #pairCard .pc-sec{padding:11px 16px 6px; font-size:10px; font-weight:700; color:var(--muted);
+  .pair-card .pc-v.up{color:var(--green);} .pair-card .pc-v.down{color:var(--red);}
+  .pair-card .pc-sec{padding:11px 16px 6px; font-size:10px; font-weight:700; color:var(--muted);
     text-transform:uppercase; letter-spacing:.6px; background:var(--panel); display:flex; align-items:center; gap:8px;}
-  #pairCard .pc-sec::after{content:""; flex:1; height:1px; background:var(--border);}
-  #pairCard .pc-foot{padding:12px 16px 14px; display:flex; gap:9px;}
-  #pairCard .pc-btn{flex:1; appearance:none; border:1px solid var(--border); background:var(--panel2);
+  .pair-card .pc-sec::after{content:""; flex:1; height:1px; background:var(--border);}
+  .pair-card .pc-foot{padding:12px 16px 14px; display:flex; gap:9px;}
+  .pair-card .pc-btn{flex:1; appearance:none; border:1px solid var(--border); background:var(--panel2);
     color:var(--text); font-size:12.5px; font-weight:600; padding:9px; border-radius:8px; cursor:pointer; transition:filter .12s, background .12s;}
-  #pairCard .pc-btn.primary{background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 2px 10px #2962ff40;}
-  #pairCard .pc-btn:hover{filter:brightness(1.14);}
-  #pairCard .pc-rsi-bar{height:6px; border-radius:4px; margin-top:7px; overflow:visible;
+  .pair-card .pc-btn.primary{background:var(--accent); border-color:var(--accent); color:#fff; box-shadow:0 2px 10px #2962ff40;}
+  .pair-card .pc-btn:hover{filter:brightness(1.14);}
+  .pair-card .pc-rsi-bar{height:6px; border-radius:4px; margin-top:7px; overflow:visible;
     background:linear-gradient(90deg,#26a69a 0%,#26a69a 30%,#565a66 30%,#565a66 70%,#ef5350 70%,#ef5350 100%); position:relative;}
-  #pairCard .pc-rsi-dot{position:absolute; top:-3px; width:12px; height:12px; border-radius:50%;
+  .pair-card .pc-rsi-dot{position:absolute; top:-3px; width:12px; height:12px; border-radius:50%;
     background:#fff; border:2px solid var(--panel); box-shadow:0 1px 4px #0008; transform:translateX(-50%);}
   /* Hover help box (data-help on a cell). */
-  #pairCard .pc-cell[data-help]:hover::before{content:attr(data-help); position:absolute; left:10px; top:calc(100% - 4px);
+  .pair-card .pc-cell[data-help]:hover::before{content:attr(data-help); position:absolute; left:10px; top:calc(100% - 4px);
     min-width:180px; max-width:240px; z-index:5; background:#0d0f16; color:#d1d4dc; font-size:11px; font-weight:400; line-height:1.45;
     letter-spacing:normal; text-transform:none; padding:8px 10px; border-radius:8px; border:1px solid var(--border);
     box-shadow:0 8px 24px #000b; white-space:normal; pointer-events:none;}
   /* cells in the rightmost column anchor the tip to their right edge so it stays on-card */
-  #pairCard .pc-grid>.pc-cell:nth-child(3n)[data-help]:hover::before{left:auto; right:10px;}
-  html.light #pairCard .pc-cell[data-help]:hover::before{background:#fff; color:#131722;}
+  .pair-card .pc-grid>.pc-cell:nth-child(3n)[data-help]:hover::before{left:auto; right:10px;}
+  html.light .pair-card .pc-cell[data-help]:hover::before{background:#fff; color:#131722;}
   /* Carousel: a horizontal track of full-width pages that slides on nav. */
-  #pairCard .pc-track{display:flex; width:300%; transition:transform .22s cubic-bezier(.4,0,.2,1);}
-  #pairCard .pc-page{width:33.3333%; flex:none;}
-  #pairCard.pg1 .pc-track{transform:translateX(-33.3333%);}
-  #pairCard.pg2 .pc-track{transform:translateX(-66.6667%);}
+  .pair-card .pc-track{display:flex; width:300%; transition:transform .22s cubic-bezier(.4,0,.2,1);}
+  .pair-card .pc-page{width:33.3333%; flex:none;}
+  .pair-card.pg1 .pc-track{transform:translateX(-33.3333%);}
+  .pair-card.pg2 .pc-track{transform:translateX(-66.6667%);}
   /* Edge arrows to flip pages. */
   /* Carousel arrows live in the header row, just left of the × close button. */
-  #pairCard .pc-arrow{position:absolute; top:22px; z-index:6; width:26px; height:26px;
+  .pair-card .pc-arrow{position:absolute; top:22px; z-index:6; width:26px; height:26px;
     display:flex; align-items:center; justify-content:center; border-radius:6px; cursor:pointer;
     background:transparent; border:none; color:var(--muted);}
-  #pairCard .pc-arrow:hover{background:var(--hover); color:var(--text);}
-  #pairCard .pc-arrow svg{width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;}
+  .pair-card .pc-arrow:hover{background:var(--hover); color:var(--text);}
+  .pair-card .pc-arrow svg{width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;}
   /* both arrows sit side-by-side left of the ×; disabled (dimmed) at the ends */
-  #pairCard .pc-arrow.left{right:74px;} #pairCard .pc-arrow.right{right:44px;}
-  #pairCard .pc-arrow.disabled{opacity:.25; pointer-events:none;}
+  .pair-card .pc-arrow.left{right:74px;} .pair-card .pc-arrow.right{right:44px;}
+  .pair-card .pc-arrow.disabled{opacity:.25; pointer-events:none;}
   /* Page dots in the footer. */
-  #pairCard .pc-dots{display:flex; gap:6px; align-items:center; justify-content:center; padding:2px 0 0;}
-  #pairCard .pc-dot{width:6px; height:6px; border-radius:50%; background:var(--border); cursor:pointer; transition:background .15s, width .15s;}
-  #pairCard .pc-dot.on{background:var(--accent); width:16px;}
+  .pair-card .pc-dots{display:flex; gap:6px; align-items:center; justify-content:center; padding:2px 0 0;}
+  .pair-card .pc-dot{width:6px; height:6px; border-radius:50%; background:var(--border); cursor:pointer; transition:background .15s, width .15s;}
+  .pair-card .pc-dot.on{background:var(--accent); width:16px;}
   /* RSI multi-timeframe page. */
-  #pairCard .pc-rsi-title{padding:14px 16px 4px; font-size:13px; font-weight:700; color:var(--text);}
-  #pairCard .pc-rsi-subtitle{padding:0 16px 12px; font-size:11px; color:var(--muted);}
-  #pairCard .pc-rsi-rows{padding:0 16px 8px; display:flex; flex-direction:column; gap:1px;}
-  #pairCard .pc-rsi-row{display:grid; grid-template-columns:46px 52px 1fr; align-items:center; gap:12px; padding:7px 0; border-top:1px solid var(--border);}
-  #pairCard .pc-rsi-row:first-child{border-top:none;}
-  #pairCard .pc-rsi-tf{font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.3px;}
-  #pairCard .pc-rsi-val{font-size:14px; font-weight:700; font-variant-numeric:tabular-nums;}
-  #pairCard .pc-rsi-val.ob{color:var(--red);} #pairCard .pc-rsi-val.os{color:var(--green);} #pairCard .pc-rsi-val.nt{color:var(--text);}
-  #pairCard .pc-rsi-track{position:relative; height:6px; border-radius:4px;
+  .pair-card .pc-rsi-title{padding:14px 16px 4px; font-size:13px; font-weight:700; color:var(--text);}
+  .pair-card .pc-rsi-subtitle{padding:0 16px 12px; font-size:11px; color:var(--muted);}
+  .pair-card .pc-rsi-rows{padding:0 16px 8px; display:flex; flex-direction:column; gap:1px;}
+  .pair-card .pc-rsi-row{display:grid; grid-template-columns:46px 52px 1fr; align-items:center; gap:12px; padding:7px 0; border-top:1px solid var(--border);}
+  .pair-card .pc-rsi-row:first-child{border-top:none;}
+  .pair-card .pc-rsi-tf{font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.3px;}
+  .pair-card .pc-rsi-val{font-size:14px; font-weight:700; font-variant-numeric:tabular-nums;}
+  .pair-card .pc-rsi-val.ob{color:var(--red);} .pair-card .pc-rsi-val.os{color:var(--green);} .pair-card .pc-rsi-val.nt{color:var(--text);}
+  .pair-card .pc-rsi-track{position:relative; height:6px; border-radius:4px;
     background:linear-gradient(90deg,#26a69a 0%,#26a69a 30%,#565a66 30%,#565a66 70%,#ef5350 70%,#ef5350 100%);}
-  #pairCard .pc-rsi-track .d{position:absolute; top:-3px; width:12px; height:12px; border-radius:50%;
+  .pair-card .pc-rsi-track .d{position:absolute; top:-3px; width:12px; height:12px; border-radius:50%;
     background:#fff; border:2px solid var(--panel); box-shadow:0 1px 4px #0008; transform:translateX(-50%);}
-  #pairCard .pc-rsi-row.pending .pc-rsi-val{color:var(--muted);}
+  .pair-card .pc-rsi-row.pending .pc-rsi-val{color:var(--muted);}
   /* SMA multi-timeframe page: TF rows × SMA columns matrix. */
-  #pairCard .pc-sma-wrap{padding:0 16px 8px; overflow-x:auto;}
-  #pairCard .pc-sma-wrap::-webkit-scrollbar{height:7px;}
-  #pairCard .pc-sma-wrap::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
-  #pairCard .pc-sma-tbl{width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums;}
-  #pairCard .pc-sma-tbl th, #pairCard .pc-sma-tbl td{padding:6px 6px; text-align:right; white-space:nowrap; font-size:11.5px;}
-  #pairCard .pc-sma-tbl th{position:sticky; top:0; color:var(--muted); font-weight:700; font-size:10px;
+  .pair-card .pc-sma-wrap{padding:0 16px 8px; overflow-x:auto;}
+  .pair-card .pc-sma-wrap::-webkit-scrollbar{height:7px;}
+  .pair-card .pc-sma-wrap::-webkit-scrollbar-thumb{background:var(--border); border-radius:4px;}
+  .pair-card .pc-sma-tbl{width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums;}
+  .pair-card .pc-sma-tbl th, .pair-card .pc-sma-tbl td{padding:6px 6px; text-align:right; white-space:nowrap; font-size:11.5px;}
+  .pair-card .pc-sma-tbl th{position:sticky; top:0; color:var(--muted); font-weight:700; font-size:10px;
     text-transform:uppercase; letter-spacing:.3px; background:var(--panel); border-bottom:1px solid var(--border);}
-  #pairCard .pc-sma-tbl th:first-child, #pairCard .pc-sma-tbl td:first-child{text-align:left; font-weight:700;
+  .pair-card .pc-sma-tbl th:first-child, .pair-card .pc-sma-tbl td:first-child{text-align:left; font-weight:700;
     color:var(--muted); position:sticky; left:0; background:var(--panel); z-index:1;}
-  #pairCard .pc-sma-tbl tbody td:first-child{color:var(--text);}
-  #pairCard .pc-sma-tbl tbody tr{border-top:1px solid var(--border);}
-  #pairCard .pc-sma-tbl tbody tr:hover td{background:var(--panel2);}
-  #pairCard .pc-sma-tbl tbody tr:hover td:first-child{background:var(--panel2);}
-  #pairCard .pc-sma-tbl td{color:var(--text); font-weight:600;}
+  .pair-card .pc-sma-tbl tbody td:first-child{color:var(--text);}
+  .pair-card .pc-sma-tbl tbody tr{border-top:1px solid var(--border);}
+  .pair-card .pc-sma-tbl tbody tr:hover td{background:var(--panel2);}
+  .pair-card .pc-sma-tbl tbody tr:hover td:first-child{background:var(--panel2);}
+  .pair-card .pc-sma-tbl td{color:var(--text); font-weight:600;}
   /* price above SMA = bullish (green), below = bearish (red) */
-  #pairCard .pc-sma-tbl td.above{color:var(--green);} #pairCard .pc-sma-tbl td.below{color:var(--red);}
-  #pairCard .pc-sma-tbl td.pending{color:var(--muted); font-weight:400;}
-  #pairCard .pc-sma-legend{padding:2px 16px 12px; font-size:10.5px; color:var(--muted); display:flex; gap:14px;}
-  #pairCard .pc-sma-legend b{font-weight:600;}
-  #pairCard .pc-sma-legend .g{color:var(--green);} #pairCard .pc-sma-legend .r{color:var(--red);}
+  .pair-card .pc-sma-tbl td.above{color:var(--green);} .pair-card .pc-sma-tbl td.below{color:var(--red);}
+  .pair-card .pc-sma-tbl td.pending{color:var(--muted); font-weight:400;}
+  .pair-card .pc-sma-legend{padding:2px 16px 12px; font-size:10.5px; color:var(--muted); display:flex; gap:14px;}
+  .pair-card .pc-sma-legend b{font-weight:600;}
+  .pair-card .pc-sma-legend .g{color:var(--green);} .pair-card .pc-sma-legend .r{color:var(--red);}
 </style>
 </head>
 <body>
@@ -1053,6 +1058,7 @@
   <a class="ov-tab active" href="/index.html" aria-current="page">Openview</a>
   <a class="ov-tab" href="/home/journal">Journal</a>
   <a class="ov-tab" href="/home/wallet">Wallet</a>
+  <a class="ov-tab" href="/home/reports">Reports</a>
   <a class="ov-tabs-brand" href="/home"><img src="/assets/openview.png" alt="Openview"><span>Openview</span></a>
 </div>
 <div id="app">
@@ -1157,7 +1163,7 @@
   <div id="alertDlg" class="dialog alertdlg"></div>
   <div id="scriptDlg" class="dialog scriptdlg"></div>
   <div id="symDlg" class="dialog symdlg"></div>
-  <div id="pairCard"></div>
+  <div id="pairCards"></div>
   <div id="dlgBackdrop"></div>
 
   <!-- Pine Editor — a DOCKED panel (TradingView's Pine Editor layout). It's a flex sibling of
@@ -3946,7 +3952,18 @@ function showRowMenu(sym, x, y){
 // 24h high/low/volume, spread/exchange/type, plus indicators computed from candles
 // (RSI 14, SMA 20/50, range position). Numbers come from the venue's ticker
 // (fetchRichStats) and a daily candle fetch; everything degrades gracefully to "—".
-const pairCard = document.getElementById("pairCard");
+// Up to PC_MAX cards can be open at once (web only — the embedded/mobile WebView keeps
+// a single card, see openPairInfoCard). Each card is an independent .pair-card node with
+// its own async-seq guard, lazy-page guards and drag state hung off the element itself,
+// so two symbols can be inspected side by side without clobbering each other.
+const pairCards = document.getElementById("pairCards");
+const PC_MAX = 2;
+const _pcOpen = [];                      // open cards, oldest first
+function pcAll(){ return _pcOpen.slice(); }
+// Bring a card to the front (only one .front at a time).
+function pcFocus(card){
+  _pcOpen.forEach(c=>c.classList.toggle("front", c===card));
+}
 
 // Rich single-leg 24h stats. Returns {last, open, high, low, vol, quoteVol, extra{}} or null.
 async function fetchRichStats(leg){
@@ -4050,9 +4067,32 @@ function fmtVol(v){ if(v==null||!isFinite(v)) return "—";
   if(a>=1e3) return (v/1e3).toFixed(2)+"K";
   return v.toLocaleString(undefined,{maximumFractionDigits:2}); }
 
-let _pairCardSeq = 0;
 function openPairInfoCard(sym){
-  const seq = ++_pairCardSeq;
+  // Embed (mobile WebView / grid pane) keeps the original single-card behaviour: reuse
+  // the one card rather than stacking. Multi-card is a desktop-only affordance.
+  const limit = IS_EMBED ? 1 : PC_MAX;
+
+  // Same symbol already open → just focus it instead of opening a duplicate.
+  const dupe = _pcOpen.find(c=>c._sym===sym);
+  if(dupe){ pcFocus(dupe); return; }
+
+  // At the cap: close the oldest to make room.
+  while(_pcOpen.length >= limit) closePairCard(_pcOpen[0]);
+
+  const card = document.createElement("div");
+  card.className = "pair-card";
+  if(_pcOpen.length) card.classList.add("stack1");   // offset the 2nd card off the 1st
+  card._sym = sym;
+  card._seq = 0;
+  card._rsiSym = null;
+  card._smaSym = null;
+  card._page = 0;
+  pairCards.appendChild(card);
+  _pcOpen.push(card);
+  pcFocus(card);
+  card.addEventListener("pointerdown", ()=>pcFocus(card));
+
+  const seq = ++card._seq;
   const isSpread = sym.includes("/");
   const base = isSpread ? "" : legBase(sym);
   const label = symLabel(sym);
@@ -4067,48 +4107,46 @@ function openPairInfoCard(sym){
 
   // Loading skeleton first; fills in as async data lands. Two carousel pages:
   // page 0 = details, page 1 = multi-timeframe RSI (lazy-loaded on first nav).
-  pairCard.classList.remove("pg1","pg2");
-  _rsiPageSym = null; _smaPageSym = null;   // reset lazy-page guards for the new symbol
-  pairCard.innerHTML =
+  card.classList.remove("pg1","pg2");
+  card.innerHTML =
       `<div class="pc-head">${icon}<div class="pc-tt"><div class="pc-sym">${escHtml(label)}</div>`
     +   `<div class="pc-sub"><span class="pc-badge">${escHtml(typeStr)}</span>${venue?escHtml(venue):""}</div></div>`
-    +   `<span class="pc-x" id="pcClose">×</span></div>`
-    + `<div class="pc-arrow left disabled" id="pcPrev" title="Previous page"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>`
-    + `<div class="pc-arrow right" id="pcNext" title="Next page"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>`
+    +   `<span class="pc-x" data-pc="pcClose">×</span></div>`
+    + `<div class="pc-arrow left disabled" data-pc="pcPrev" title="Previous page"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>`
+    + `<div class="pc-arrow right" data-pc="pcNext" title="Next page"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>`
     + `<div class="pc-track">`
-    +   `<div class="pc-page" id="pcPage0">`
-    +     `<div class="pc-price"><div class="pc-price-main"><div class="pc-last" id="pcLast">…</div><div class="pc-chg" id="pcChg"></div></div><div class="pc-desc" id="pcDesc" style="display:none"></div></div>`
-    +     `<div id="pcBody"><div style="padding:18px 16px;color:var(--muted);font-size:12px">Loading market data…</div></div>`
+    +   `<div class="pc-page" data-pc="pcPage0">`
+    +     `<div class="pc-price"><div class="pc-price-main"><div class="pc-last" data-pc="pcLast">…</div><div class="pc-chg" data-pc="pcChg"></div></div><div class="pc-desc" data-pc="pcDesc" style="display:none"></div></div>`
+    +     `<div data-pc="pcBody"><div style="padding:18px 16px;color:var(--muted);font-size:12px">Loading market data…</div></div>`
     +   `</div>`
-    +   `<div class="pc-page" id="pcPage1">`
+    +   `<div class="pc-page" data-pc="pcPage1">`
     +     `<div class="pc-rsi-title">RSI · Multi-timeframe</div>`
     +     `<div class="pc-rsi-subtitle">RSI(14) close across timeframes · &gt;70 overbought · &lt;30 oversold</div>`
-    +     `<div class="pc-rsi-rows" id="pcRsiRows"></div>`
+    +     `<div class="pc-rsi-rows" data-pc="pcRsiRows"></div>`
     +   `</div>`
-    +   `<div class="pc-page" id="pcPage2">`
+    +   `<div class="pc-page" data-pc="pcPage2">`
     +     `<div class="pc-rsi-title">SMAs · Multi-timeframe</div>`
     +     `<div class="pc-rsi-subtitle">Simple moving averages across timeframes</div>`
-    +     `<div class="pc-sma-wrap" id="pcSmaWrap"></div>`
+    +     `<div class="pc-sma-wrap" data-pc="pcSmaWrap"></div>`
     +     `<div class="pc-sma-legend"><span class="g">▲ price above SMA</span><span class="r">▼ price below SMA</span></div>`
     +   `</div>`
     + `</div>`
     + `<div class="pc-dots"><span class="pc-dot on" data-pg="0"></span><span class="pc-dot" data-pg="1"></span><span class="pc-dot" data-pg="2"></span></div>`
     + `<div class="pc-foot">`
-    +   `<button class="pc-btn primary" id="pcOpen">Open chart</button>`
-    +   `<button class="pc-btn" id="pcAlert">Add alert</button>`
+    +   `<button class="pc-btn primary" data-pc="pcOpen">Open chart</button>`
+    +   `<button class="pc-btn" data-pc="pcAlert">Add alert</button>`
     + `</div>`;
   // No backdrop: the card floats over the chart without dimming/blurring it, and can
   // be dragged around by its header (pcDragWire).
-  pairCard.classList.add("open");
-  pairCard.style.left = ""; pairCard.style.top = ""; pairCard.style.transform = "";  // reset to centered
-  document.getElementById("pcClose").onclick = closePairCard;
-  pcDragWire();
-  wirePairCardNav(sym, isSpread);
+  card.classList.add("open");
+  card.querySelector('[data-pc="pcClose"]').onclick = ()=>closePairCard(card);
+  pcDragWire(card);
+  wirePairCardNav(card, sym, isSpread);
 
   Promise.all([ isSpread ? Promise.resolve(null) : fetchRichStats(sym), fetchCardCandles(sym) ])
     .then(([stats, data])=>{
-      if(seq!==_pairCardSeq || !pairCard.classList.contains("open")) return;   // superseded / closed
-      renderPairCard(sym, stats, data, isSpread);
+      if(seq!==card._seq || !card.isConnected) return;   // superseded / closed
+      renderPairCard(card, sym, stats, data, isSpread);
     });
 }
 
@@ -4128,10 +4166,202 @@ const ASSET_INFO = {
   AVAX: { d:"Avalanche — a fast smart-contract platform. Core features: sub-second finality, customizable Subnets/app-chains, low fees, and EVM compatibility across its three-chain (X/C/P) architecture.", w:"https://www.avax.network" },
   LINK: { d:"Chainlink — the leading decentralized oracle network. Core features: tamper-proof real-world data feeds, verifiable randomness (VRF), and CCIP cross-chain messaging securing DeFi and enterprise contracts.", w:"https://chain.link" },
   MATIC:{ d:"Polygon — Ethereum scaling infrastructure. Core features: low-cost high-speed transactions, zk-rollup technology (Polygon zkEVM), the AggLayer for unified liquidity, and full EVM compatibility.", w:"https://polygon.technology" },
+  // POL replaced MATIC as Polygon's native token in the 2024 migration; both tickers still trade.
+  POL:  { d:"Polygon Ecosystem Token — the native token of Polygon, which replaced MATIC in the 2024 migration. Core features: gas and staking across Polygon chains, the AggLayer for unified cross-chain liquidity, and EVM compatibility.", w:"https://polygon.technology" },
   DOT:  { d:"Polkadot — a multichain interoperability network. Core features: a shared-security relay chain, parachains for specialized app-chains, cross-chain messaging (XCM), and on-chain governance.", w:"https://polkadot.network" },
   LTC:  { d:"Litecoin — an early peer-to-peer payments coin. Core features: fast 2.5-minute blocks, low fees, Scrypt proof-of-work, an 84M supply cap, and optional MimbleWimble privacy.", w:"https://litecoin.org" },
+
+  // ── Major layer-1s / layer-2s ──
+  BNB:  { d:"BNB — the native token of BNB Chain, launched by Binance. Core features: gas for BNB Smart Chain, exchange fee discounts, a recurring auto-burn reducing supply toward 100M, and a large EVM-compatible DeFi ecosystem.", w:"https://www.bnbchain.org" },
+  TRX:  { d:"TRON — a high-throughput content and payments layer-1. Core features: delegated proof-of-stake, near-zero fees, and one of the largest USDT settlement networks by transfer volume.", w:"https://tron.network" },
+  // TON was rebranded to GRAM in 2026; TON pairs no longer trade on Binance but the
+  // ticker is kept for historical charts. Both entries describe The Open Network.
+  TON:  { d:"Toncoin — the layer-1 originally designed by Telegram, since rebranded to Gram (GRAM). Core features: dynamic sharding for scale, sub-second finality, low fees, and deep integration with Telegram's messaging user base.", w:"https://ton.org" },
+  GRAM: { d:"Gram — the native token of The Open Network (TON), rebranded from Toncoin. Core features: gas and staking on TON's sharded layer-1, sub-second finality, low fees, and deep integration with Telegram's user base.", w:"https://ton.org" },
+  ATOM: { d:"Cosmos — the 'Internet of Blockchains' hub. Core features: Tendermint proof-of-stake, the Cosmos SDK for building app-chains, and IBC for trust-minimized cross-chain messaging.", w:"https://cosmos.network" },
+  XLM:  { d:"Stellar — a payments and asset-issuance network. Core features: the Stellar Consensus Protocol, 3–5 second settlement, negligible fees, and built-in fiat on/off-ramp anchors.", w:"https://stellar.org" },
+  HBAR: { d:"Hedera — an enterprise-grade public ledger. Core features: hashgraph consensus for high throughput and fast finality, predictable low fees, and governance by a council of large organizations.", w:"https://hedera.com" },
+  ALGO: { d:"Algorand — a pure proof-of-stake layer-1. Core features: instant finality with no forking, low fixed fees, and Algorand Virtual Machine smart contracts aimed at institutional settlement.", w:"https://algorand.co" },
+  ETC:  { d:"Ethereum Classic — the continuation of Ethereum's original chain after the 2016 DAO fork. Core features: proof-of-work security, an immutability-first 'code is law' ethos, and a capped emission schedule.", w:"https://ethereumclassic.org" },
+  BCH:  { d:"Bitcoin Cash — a 2017 Bitcoin fork focused on payments. Core features: larger blocks for cheap on-chain transactions, proof-of-work security, and a 21M supply cap.", w:"https://bch.info" },
+  SUI:  { d:"Sui — a high-performance layer-1 using the Move language. Core features: an object-centric data model, parallel execution of independent transactions, and sub-second finality.", w:"https://sui.io" },
+  APT:  { d:"Aptos — a Move-based layer-1 from ex-Meta Diem engineers. Core features: parallel execution via Block-STM, sub-second finality, and a focus on safe resource-oriented smart contracts.", w:"https://aptosfoundation.org" },
+  SEI:  { d:"Sei — a layer-1 optimized for trading. Core features: a native order-book matching engine, parallelized EVM execution, and sub-second finality targeting exchange-grade applications.", w:"https://www.sei.io" },
+  ARB:  { d:"Arbitrum — the largest Ethereum layer-2 by activity. Core features: optimistic rollup security inherited from Ethereum, sharply lower fees, full EVM equivalence, and DAO governance.", w:"https://arbitrum.io" },
+  OP:   { d:"Optimism — an Ethereum layer-2 and the OP Stack. Core features: optimistic rollup scaling, the Superchain of shared-standard chains, and retroactive public-goods funding.", w:"https://www.optimism.io" },
+  STX:  { d:"Stacks — a Bitcoin layer for smart contracts. Core features: Clarity contracts settling to Bitcoin, proof-of-transfer consensus, and BTC yield for stackers.", w:"https://www.stacks.co" },
+  FIL:  { d:"Filecoin — a decentralized storage network. Core features: verifiable proof-of-storage, an open market for storage deals, and IPFS-based content addressing.", w:"https://filecoin.io" },
+  ICP:  { d:"Internet Computer — a layer-1 hosting full applications on-chain. Core features: canister smart contracts, web-speed execution, reverse-gas so users pay no fees, and on-chain frontends.", w:"https://internetcomputer.org" },
+  VET:  { d:"VeChain — an enterprise supply-chain platform. Core features: a dual-token model (VET value, VTHO gas), proof-of-authority consensus, and product-provenance tracking.", w:"https://www.vechain.org" },
+
+  // ── DeFi ──
+  UNI:  { d:"Uniswap — the leading decentralized exchange protocol. Core features: automated market making, permissionless token listing, concentrated liquidity (v3), and UNI governance.", w:"https://uniswap.org" },
+  AAVE: { d:"Aave — a major decentralized lending market. Core features: over-collateralized borrowing, variable and stable rates, flash loans, and multi-chain deployments.", w:"https://aave.com" },
+  MKR:  { d:"Maker — the protocol behind the DAI stablecoin. Core features: over-collateralized DAI issuance, MKR governance over risk parameters, and real-world-asset collateral.", w:"https://makerdao.com" },
+  LDO:  { d:"Lido — the largest liquid-staking protocol. Core features: stake ETH without a 32-ETH minimum, receive liquid stETH usable across DeFi, and LDO governance.", w:"https://lido.fi" },
+  CRV:  { d:"Curve — a DEX optimized for like-priced assets. Core features: low-slippage stablecoin swaps, a vote-escrow (veCRV) emissions model, and deep stable liquidity.", w:"https://curve.finance" },
+  SNX:  { d:"Synthetix — a derivatives liquidity protocol. Core features: staker-backed synthetic assets, perpetual futures liquidity, and a debt-pool collateral model.", w:"https://synthetix.io" },
+  COMP: { d:"Compound — an algorithmic money market. Core features: pooled over-collateralized lending, utilization-based interest rates, and COMP governance.", w:"https://compound.finance" },
+  SUSHI:{ d:"SushiSwap — a community-run multi-chain DEX. Core features: AMM swaps, yield farming, and xSUSHI fee sharing for stakers.", w:"https://www.sushi.com" },
+  GRT:  { d:"The Graph — a decentralized indexing protocol. Core features: open subgraph APIs for querying blockchain data, and curator/indexer/delegator incentives.", w:"https://thegraph.com" },
+  RUNE: { d:"THORChain — a cross-chain liquidity network. Core features: native asset swaps across chains without wrapping, continuous liquidity pools, and RUNE-bonded security.", w:"https://thorchain.org" },
+
+  // ── Meme ──
+  SHIB: { d:"Shiba Inu — an Ethereum-based meme token. Core features: a large community-driven ecosystem, the Shibarium layer-2, and ShibaSwap decentralized exchange.", w:"https://shibatoken.com" },
+  PEPE: { d:"Pepe — an Ethereum meme coin built around the Pepe the Frog character. Core features: no-utility meme positioning, a fixed supply, and no transaction tax.", w:"https://www.pepe.vip" },
+  WIF:  { d:"dogwifhat — a Solana meme coin. Core features: a fixed supply, no formal roadmap or utility, and value driven purely by community and speculation.", w:"https://dogwifcoin.org" },
+  BONK: { d:"Bonk — a Solana community meme coin. Core features: a broad airdrop to Solana users, wide DeFi/NFT integration on Solana, and recurring supply burns.", w:"https://bonkcoin.com" },
+  FLOKI:{ d:"Floki — a meme token with utility ambitions. Core features: multi-chain (Ethereum/BNB) issuance, the Valhalla game, and staking/education products.", w:"https://floki.com" },
+
+  // ── Stablecoins ──
+  USDT: { d:"Tether — the largest stablecoin by market cap. Core features: a 1:1 US-dollar peg backed by reserves, multi-chain issuance, and the deepest quote liquidity in crypto.", w:"https://tether.to" },
+  USDC: { d:"USD Coin — a fully-reserved dollar stablecoin from Circle. Core features: a 1:1 dollar peg, monthly attestations, regulated reserve custody, and broad multi-chain support.", w:"https://www.circle.com/usdc" },
+  DAI:  { d:"DAI — a decentralized, over-collateralized stablecoin. Core features: a soft 1:1 dollar peg maintained by on-chain collateral vaults and MakerDAO governance rather than a bank issuer.", w:"https://sky.money" },
+  PAXG: { d:"PAX Gold — a gold-backed token from Paxos. Core features: each token represents one fine troy ounce of London Good Delivery gold held in custody, redeemable and transferable on-chain.", w:"https://paxos.com/paxgold" },
+
+  // ── Other majors ──
+  XMR:  { d:"Monero — the leading privacy coin. Core features: ring signatures, stealth addresses, and confidential amounts (RingCT) making sender, receiver, and amount private by default.", w:"https://www.getmonero.org" },
+  RENDER:{d:"Render — a decentralized GPU rendering network. Core features: an open marketplace matching idle GPUs to rendering and AI compute jobs, with on-chain payment settlement.", w:"https://rendernetwork.com" },
+  FET:  { d:"Artificial Superintelligence Alliance — a merged AI token (Fetch.ai, SingularityNET, Ocean). Core features: autonomous agent frameworks, decentralized AI services, and data marketplaces.", w:"https://superintelligence.io" },
+  IMX:  { d:"Immutable X — an Ethereum layer-2 for games. Core features: zk-rollup scaling, gas-free NFT minting and trading, and a shared order book for game assets.", w:"https://www.immutable.com" },
+  SAND: { d:"The Sandbox — a virtual-world platform. Core features: user-created voxel experiences, tokenized LAND parcels, and a creator marketplace.", w:"https://www.sandbox.game" },
+  MANA: { d:"Decentraland — a browser-based virtual world. Core features: tokenized LAND, MANA as the in-world currency, and DAO governance of the platform.", w:"https://decentraland.org" },
+  AXS:  { d:"Axie Infinity — a play-to-earn game economy. Core features: tradable Axie NFTs, the Ronin gaming sidechain, and AXS staking and governance.", w:"https://axieinfinity.com" },
+  CRO:  { d:"Cronos — the exchange-linked chain from Crypto.com. Core features: EVM and Cosmos IBC compatibility, low fees, and integration with Crypto.com's retail products.", w:"https://cronos.org" },
+  QNT:  { d:"Quant — enterprise blockchain interoperability. Core features: the Overledger gateway connecting distributed ledgers and existing banking infrastructure.", w:"https://quant.network" },
+  KAS:  { d:"Kaspa — a proof-of-work layer-1 using a blockDAG. Core features: the GHOSTDAG protocol allowing parallel blocks, high block rates, and fast confirmation while keeping PoW security.", w:"https://kaspa.org" },
+
+  // ── Established layer-1s / infrastructure ──
+  ZEC:  { d:"Zcash — a privacy-focused cryptocurrency forked from Bitcoin's codebase. Core features: optional shielded transactions using zk-SNARK zero-knowledge proofs, transparent addresses for compatibility, and a 21M supply cap.", w:"https://z.cash" },
+  DASH: { d:"Dash — a payments-focused cryptocurrency. Core features: InstantSend near-instant confirmations, PrivateSend coin mixing, and a masternode network funding on-chain governance and a treasury.", w:"https://www.dash.org" },
+  XTZ:  { d:"Tezos — a self-amending proof-of-stake layer-1. Core features: on-chain governance that upgrades the protocol without hard forks, liquid proof-of-stake baking, and formally verifiable Michelson contracts.", w:"https://tezos.com" },
+  EGLD: { d:"MultiversX (formerly Elrond) — a sharded proof-of-stake layer-1. Core features: adaptive state sharding, secure proof-of-stake consensus, and the WASM-based virtual machine.", w:"https://multiversx.com" },
+  NEO:  { d:"Neo — a smart-contract platform often called 'Chinese Ethereum'. Core features: dual-token model (NEO governance, GAS fees), delegated Byzantine Fault Tolerance consensus, and digital-identity tooling.", w:"https://neo.org" },
+  IOTA: { d:"IOTA — a distributed ledger for machine-to-machine and IoT payments. Core features: a feeless design, the Tangle DAG structure in earlier versions, and a move to a full proof-of-stake network.", w:"https://www.iota.org" },
+  ZIL:  { d:"Zilliqa — a sharded high-throughput layer-1. Core features: network sharding for parallel transaction processing, practical Byzantine Fault Tolerance consensus, and the Scilla smart-contract language.", w:"https://www.zilliqa.com" },
+  ONE:  { d:"Harmony — a sharded proof-of-stake layer-1. Core features: four-shard architecture, effective proof-of-stake, fast finality, and EVM compatibility with Ethereum bridges.", w:"https://www.harmony.one" },
+  CELO: { d:"Celo — a mobile-first blockchain for payments, now an Ethereum layer-2. Core features: phone-number-mapped addresses, stablecoin gas payments, and a focus on financial access in emerging markets.", w:"https://celo.org" },
+  KAVA: { d:"Kava — a Cosmos-based layer-1 with an EVM co-chain. Core features: dual Cosmos SDK and Ethereum execution environments, IBC interoperability, and native lending and stablecoin protocols.", w:"https://www.kava.io" },
+  ROSE: { d:"Oasis Network — a privacy-focused layer-1. Core features: confidential smart contracts via trusted execution environments, a separated consensus and ParaTime execution architecture, and data tokenization.", w:"https://oasis.net" },
+  AR:   { d:"Arweave — a permanent decentralized storage network. Core features: pay-once permanent storage via an endowment model, the blockweave data structure, and the permaweb of hosted applications.", w:"https://www.arweave.org" },
+  THETA:{ d:"Theta Network — a decentralized video delivery network. Core features: peer-to-peer bandwidth sharing for streaming, edge-node relaying, and a dual-token model (THETA governance, TFUEL operations).", w:"https://www.thetatoken.org" },
+  HNT:  { d:"Helium — a decentralized wireless network, now built on Solana. Core features: community-deployed hotspots providing LoRaWAN IoT and 5G coverage, with token rewards for verified network coverage.", w:"https://www.helium.com" },
+  XEC:  { d:"eCash (formerly Bitcoin Cash ABC) — a Bitcoin-derived payments chain. Core features: Avalanche post-consensus for fast finality, very low fees, and a small unit denomination.", w:"https://e.cash" },
+  FLOW: { d:"Flow — a layer-1 built for NFTs, games and consumer apps. Core features: a multi-role node architecture separating execution from consensus, the resource-oriented Cadence language, and upgradeable contracts.", w:"https://flow.com" },
+  TIA:  { d:"Celestia — a modular data-availability network. Core features: separating consensus and data availability from execution, data-availability sampling for light nodes, and letting rollups launch their own chains.", w:"https://celestia.org" },
+
+  // ── Restaking / liquid staking / DeFi ──
+  EIGEN:{ d:"EigenLayer — an Ethereum restaking protocol. Core features: restake staked ETH to secure additional services (actively validated services), shared security for new protocols, and operator delegation.", w:"https://www.eigenlayer.xyz" },
+  ETHFI:{ d:"Ether.fi — a decentralized liquid-staking protocol. Core features: non-custodial staking where users retain key control, the liquid eETH token, and integration with restaking.", w:"https://www.ether.fi" },
+  RPL:  { d:"Rocket Pool — a decentralized Ethereum staking protocol. Core features: run a node with far less than 32 ETH, the liquid rETH staking token, and a permissionless node-operator set.", w:"https://rocketpool.net" },
+  PENDLE:{d:"Pendle — a yield-trading protocol. Core features: tokenizing yield-bearing assets into separate principal and yield tokens, letting users trade future yield or lock in fixed rates.", w:"https://www.pendle.finance" },
+  MORPHO:{d:"Morpho — a decentralized lending network. Core features: permissionless isolated lending markets, curated vaults allocating deposits across markets, and improved rates over pooled lending.", w:"https://morpho.org" },
+  ENA:  { d:"Ethena — the protocol behind the USDe synthetic dollar. Core features: a delta-hedged collateral design using derivatives positions, and a staked sUSDe token distributing protocol yield.", w:"https://ethena.fi" },
+  ONDO: { d:"Ondo Finance — a real-world-asset tokenization protocol. Core features: tokenized US Treasuries and money-market exposure on-chain, institutional-grade structures, and regulated asset backing.", w:"https://ondo.finance" },
+  DYDX: { d:"dYdX — a decentralized perpetuals exchange. Core features: an on-chain central-limit order book, cross-margined perpetual futures, and a standalone Cosmos app-chain.", w:"https://dydx.xyz" },
+  GMX:  { d:"GMX — a decentralized perpetual and spot exchange. Core features: zero-price-impact swaps via a multi-asset liquidity pool, oracle-based pricing, and fee sharing with liquidity providers.", w:"https://gmx.io" },
+  SSV:  { d:"ssv.network — a distributed validator infrastructure protocol. Core features: splitting an Ethereum validator key across multiple operators for fault tolerance, reducing single-operator slashing risk.", w:"https://ssv.network" },
+  JST:  { d:"JUST — the lending and stablecoin protocol on TRON. Core features: over-collateralized USDJ issuance, the JustLend money market, and governance of system risk parameters.", w:"https://just.network" },
+  JTO:  { d:"Jito — a Solana liquid-staking and MEV protocol. Core features: the JitoSOL liquid-staking token, MEV rewards passed to stakers, and a validator client capturing block-space auctions.", w:"https://www.jito.network" },
+  PYTH: { d:"Pyth Network — a first-party financial oracle. Core features: price feeds published directly by exchanges and trading firms, sub-second updates, and pull-based delivery across many chains.", w:"https://www.pyth.network" },
+  ZRO:  { d:"LayerZero — an omnichain interoperability protocol. Core features: lightweight cross-chain messaging, configurable security via decentralized verifier networks, and broad chain coverage.", w:"https://layerzero.network" },
+  SYN:  { d:"Synapse — a cross-chain bridge and messaging protocol. Core features: an optimistic cross-chain messaging layer, a stable-asset liquidity pool for transfers, and broad chain support.", w:"https://synapseprotocol.com" },
+  LRC:  { d:"Loopring — an Ethereum layer-2 using zk-rollups. Core features: zero-knowledge proof scaling for trading and payments, an order-book DEX, and non-custodial asset control.", w:"https://loopring.org" },
+  SKL:  { d:"SKALE — an elastic multi-chain Ethereum network. Core features: zero gas fees for end users, application-specific elastic sidechains, and EVM compatibility.", w:"https://skale.space" },
+  ANKR: { d:"Ankr — a Web3 infrastructure provider. Core features: distributed RPC node services across many chains, liquid-staking products, and developer APIs.", w:"https://www.ankr.com" },
+  DODO: { d:"DODO — a decentralized exchange using a proactive market maker. Core features: an oracle-guided PMM algorithm concentrating liquidity near market price, and permissionless token issuance tools.", w:"https://dodoex.io" },
+  DEXE: { d:"DeXe — a decentralized social-trading and DAO protocol. Core features: copy-trading of on-chain portfolios, DAO creation and governance tooling, and trader performance tracking.", w:"https://dexe.network" },
+  FXS:  { d:"Frax Share — the governance token of the Frax ecosystem. Core features: the FRAX stablecoin, frxETH liquid staking, and the Fraxtal layer-2 network.", w:"https://frax.com" },
+  RIF:  { d:"Rootstock Infrastructure Framework — a services layer on Rootstock, Bitcoin's EVM sidechain. Core features: RIF Name Service, payment and storage services, all secured by Bitcoin merged mining.", w:"https://rootstock.io" },
+
+  // ── Gaming / metaverse / NFT / social ──
+  GALA: { d:"Gala — a blockchain gaming platform and token. Core features: player-owned in-game NFT assets, node operators supporting the network, and a portfolio of first-party games.", w:"https://gala.com" },
+  CHZ:  { d:"Chiliz — the chain behind sports fan tokens. Core features: the Socios fan-engagement platform, club-branded fan tokens granting voting perks, and a sports-focused EVM chain.", w:"https://www.chiliz.com" },
+  ENJ:  { d:"Enjin Coin — an NFT and gaming ecosystem. Core features: tokenized in-game items backed by ENJ, an SDK suite for game developers, and the Enjin blockchain.", w:"https://enjin.io" },
+  APE:  { d:"ApeCoin — the governance and utility token of the Bored Ape ecosystem. Core features: ApeCoin DAO governance, use across Yuga Labs games and metaverse products, and NFT-linked access.", w:"https://apecoin.com" },
+  BLUR: { d:"Blur — an NFT marketplace and aggregator aimed at professional traders. Core features: fast sweep and bidding tools, cross-marketplace aggregation, and a bid-pool liquidity model.", w:"https://blur.io" },
+  MAGIC:{ d:"Magic — the token behind the Treasure gaming ecosystem on Arbitrum. Core features: a shared currency across connected games, the Trove NFT marketplace, and community-built game integrations.", w:"https://treasure.lol" },
+  GMT:  { d:"STEPN (GMT) — the governance token of a move-to-earn fitness app. Core features: NFT sneakers earning rewards for verified movement, dual-token economics, and Solana-based asset trading.", w:"https://stepn.com" },
+  JASMY:{ d:"JasmyCoin — a Japanese IoT data-democracy project. Core features: the Personal Data Locker giving users custody of device data, and IoT device-to-blockchain integration.", w:"https://www.jasmy.co.jp" },
+  BAT:  { d:"Basic Attention Token — the token of the Brave browser's ad ecosystem. Core features: privacy-preserving opt-in ads, rewards paid to users for attention, and creator tipping.", w:"https://basicattentiontoken.org" },
+  WLD:  { d:"Worldcoin — a proof-of-personhood identity network. Core features: World ID verification via iris-scanning Orb hardware, zero-knowledge proofs preserving privacy, and the World App wallet.", w:"https://world.org" },
+  PENGU:{ d:"Pudgy Penguins (PENGU) — the token of the Pudgy Penguins NFT brand. Core features: a Solana-based community token, licensed consumer toys and merchandise, and NFT-linked IP.", w:"https://pudgypenguins.com" },
+  ORDI: { d:"ORDI — the first BRC-20 token, issued via the Ordinals protocol on Bitcoin. Core features: an experimental fungible-token standard inscribed on satoshis, with a fixed 21M supply.", w:"https://docs.ordinals.com" },
+  VIRTUAL:{d:"Virtuals Protocol — a platform for tokenized AI agents. Core features: co-owned autonomous agents that operate across games and social platforms, and agent-token launch infrastructure.", w:"https://www.virtuals.io" },
+  KAITO:{ d:"Kaito — an AI-driven crypto information platform. Core features: an information-search engine indexing crypto data and social sentiment, and 'yaps' rewards for attention and contribution.", w:"https://www.kaito.ai" },
+
+  // ── Stablecoins / tokenized commodities ──
+  FDUSD:{ d:"First Digital USD — a fully-reserved dollar stablecoin from First Digital, based in Hong Kong. Core features: a 1:1 dollar peg, reserves in cash and equivalents held in trust, and regular attestations.", w:"https://firstdigitallabs.com" },
+  XAUT: { d:"Tether Gold — a gold-backed token from Tether. Core features: each token represents one troy ounce of physical gold held in Swiss custody, with on-chain transferability and stated redeemability.", w:"https://gold.tether.to" },
+
+  // ── Researched additions (verified against official sites, 2026) ──
+  USD1: { d:"World Liberty Financial USD — a dollar stablecoin from World Liberty Financial. Core features: 1:1 USD redemption, reserves in cash and short-duration Treasuries custodied by BitGo, monthly attestations, and issuance on Ethereum and BNB Chain.", w:"https://worldlibertyfinancial.com/usd1" },
+  WLFI: { d:"World Liberty Financial — the governance token of the DeFi protocol behind the USD1 stablecoin. Core features: Snapshot-based proposal and voting rights, with voting power capped at 5% per holder.", w:"https://worldlibertyfinancial.com" },
+  RLUSD:{ d:"Ripple USD — an enterprise-focused dollar stablecoin issued by Ripple, native to the XRP Ledger and Ethereum. Core features: 1:1 redemption backed by cash and equivalents, BNY Mellon custody, and monthly reserve attestations.", w:"https://ripple.com/solutions/stablecoin/" },
+  XUSD: { d:"StraitsX USD — a dollar stablecoin issued by StraitsX, a licensed Major Payment Institution in Singapore. Core features: full reserve backing with 1:1 redemption, issued on Ethereum and BNB Chain.", w:"https://www.straitsx.com/xusd" },
+  OPN:  { d:"Opinion — the token of Opinion.Trade, an AI-driven on-chain prediction exchange. Core features: pays for premium data feeds and AI oracle queries, grants fee discounts, and enables governance voting.", w:"https://opinion.trade" },
+  RE:   { d:"Re Protocol — an on-chain marketplace connecting crypto capital to the traditional reinsurance industry. Core features: a fixed 1 billion supply, governance utility, and backing for tokenized reinsurance products such as reUSD.", w:"https://re.xyz" },
+  ALLO: { d:"Allora — a decentralized intelligence network combining multiple AI models into a self-improving system. Core features: coordination and incentive payments to model-providing participants, plus network governance.", w:"https://www.allora.network" },
+  PUMP: { d:"Pump.fun — a Solana token launchpad. Core features: no-code token creation, bonding-curve liquidity requiring no upfront pool, and permissionless Solana-native issuance.", w:"https://pump.fun" },
+  HOME: { d:"Defi App — a cross-chain DeFi super-app. Core features: gasless and bridgeless cross-chain swaps, perpetuals trading, and yield farming from one self-custodial interface.", w:"https://defi.app" },
+  XPL:  { d:"Plasma — a layer-1 purpose-built for stablecoin payments. Core features: zero-fee USDT transfers via a protocol-level paymaster, full EVM compatibility, and XPL for validator staking and gas.", w:"https://www.plasma.org" },
+  FF:   { d:"Falcon Finance — a universal collateralization protocol for synthetic assets and yield. Core features: staking for higher USDf yields and lower collateral requirements, governance voting, and a 10 billion max supply.", w:"https://falcon.finance" },
+  TREE: { d:"Treehouse — a decentralized fixed-income layer for digital assets. Core features: tAssets (liquid staking tokens capturing rate arbitrage) and DOR, an on-chain benchmark-rate mechanism.", w:"https://www.treehouse.finance" },
+  "0G": { d:"0G (Zero Gravity) — a layer-1 built as a decentralized operating system for AI. Core features: modular storage, compute, and data-availability layers designed for AI workloads and on-chain agents.", w:"https://0g.ai" },
+  TOWNS:{ d:"Towns Protocol — an open-source decentralized messaging protocol on Base. Core features: encrypted permissionless group chat 'Spaces' with smart-contract-backed membership and governance.", w:"https://www.towns.com" },
+  KITE: { d:"Kite — a payments blockchain for autonomous AI agents. Core features: agent identity and payment infrastructure, verifiable agent transactions, and governance voting.", w:"https://kite.ai" },
+  SXT:  { d:"Space and Time — a decentralized protocol for verifiable zero-knowledge SQL. Core features: proof-backed query results for smart contracts and AI agents, validator incentives, and community governance.", w:"https://www.spaceandtime.io" },
+  VANRY:{ d:"Vanar Chain — an EVM layer-1 that stores data, files and applications directly on-chain rather than via external servers or IPFS. Core features: VANRY pays gas, supports governance, and underpins its data-on-chain infrastructure.", w:"https://vanarchain.com" },
+  TRUMP:{ d:"Official Trump — a Solana memecoin launched in January 2025 by CIC Digital LLC, an affiliate of the Trump Organization. Core features: a fixed 1 billion supply, with no staking or governance utility.", w:"https://gettrumpmemes.com" },
+  ZBT:  { d:"ZEROBASE — a zero-knowledge prover network for verifiable computation. Core features: ZK-based privacy and on-chain yield infrastructure, distributed via Binance HODLer Airdrops.", w:"https://zerobase.pro" },
+  MEGA: { d:"MegaETH — a real-time Ethereum layer-2. Core features: sub-millisecond latency, a target above 100,000 transactions per second, and full EVM compatibility.", w:"https://www.megaeth.com" },
+  KAT:  { d:"Katana — a DeFi-focused Ethereum layer-2 incubated by Polygon Labs and GSR. Core features: deep integration with DeFi apps such as Sushi and Morpho, and Agglayer as its canonical bridge.", w:"https://katana.network" },
+  AIGENSYN:{d:"Gensyn — a decentralized machine-learning compute network. Core features: a permissionless marketplace for ML compute, staking, and cryptographic validation of off-chain computation.", w:"https://www.gensyn.ai" },
+  BANK: { d:"Lorenzo Protocol — an institutional-grade on-chain asset-management platform. Core features: a Financial Abstraction Layer tokenizing yield strategies into On-Chain Traded Funds, with veBANK vote-locking.", w:"https://www.lorenzo-protocol.xyz" },
+  HEI:  { d:"Heima — a chain-abstraction layer-1 built on Polkadot (formerly Litentry). Core features: unified multi-chain trading secured by TEE/SMPC, automatic liquidity routing, and gas payable in any token.", w:"https://www.heima.network" },
+  NFP:  { d:"NFPrompt — an AI-powered Web3 NFT creation and social platform. Core features: token-consuming AI image, video and music generation, staking for a share of platform fees, and governance.", w:"https://nfprompt.io" },
+  BAR:  { d:"FC Barcelona Fan Token — a Chiliz Chain fan token for FC Barcelona. Core features: club poll voting, VIP experience and ticket access, and rewards through the Socios.com app.", w:"https://www.socios.com" },
+  UTK:  { d:"Utrust (now xMoney) — the legacy token of the Utrust crypto-payments project, since merged into the xMoney ecosystem. Core features: originally a merchant payments protocol; upgradeable 1:1 to the newer XMN token.", w:"https://www.xmoney.com" },
+  WAVES:{ d:"Waves — a layer-1 platform founded in 2016 for issuing custom tokens. Core features: Leased Proof-of-Stake (Waves-NG) consensus, built-in token issuance, and a 100 million capped supply.", w:"https://waves.tech" },
+
+  // Binance 'bStocks' tokenized equities: BEP-20 tokens minted 1:1 against a real share
+  // held in regulated custody. Ticker = underlying + 'B' (e.g. MUB = Micron).
+  MUB:  { d:"Micron Technology (bStocks) — Binance's tokenized version of Micron Technology (MU) stock on BNB Chain. Core features: a BEP-20 token minted 1:1 against a share held in regulated custody, with proof-of-collateral and pass-through dividends.", w:"https://www.binance.com/en/price/micron-technology-bstocks-tokenized-stock" },
+
+  // ── Non-crypto (Yahoo-sourced): indices & ETFs ──
+  SPY:  { d:"SPDR S&P 500 ETF Trust — the oldest and most traded US ETF. Tracks the S&P 500 index of large-cap US companies. Core features: very deep liquidity, a 0.09% expense ratio, and heavy options activity.", w:"https://www.ssga.com/us/en/intermediary/etfs/spdr-sp-500-etf-trust-spy" },
+  QQQ:  { d:"Invesco QQQ Trust — tracks the Nasdaq-100 index of the largest non-financial Nasdaq companies. Core features: heavy technology weighting, deep liquidity, and a 0.20% expense ratio.", w:"https://www.invesco.com/qqq-etf/en/home.html" },
+  IWM:  { d:"iShares Russell 2000 ETF — tracks the Russell 2000 index of US small-cap companies. Core features: broad small-cap exposure and common use as a risk-appetite gauge.", w:"https://www.ishares.com/us/products/239710/" },
+  DIA:  { d:"SPDR Dow Jones Industrial Average ETF — tracks the price-weighted Dow Jones Industrial Average of 30 large US companies.", w:"https://www.ssga.com/us/en/intermediary/etfs/spdr-dow-jones-industrial-average-etf-trust-dia" },
+  GLD:  { d:"SPDR Gold Shares — the largest physically-backed gold ETF. Each share represents a fractional interest in gold bullion held in vaults.", w:"https://www.spdrgoldshares.com" },
+  SLV:  { d:"iShares Silver Trust — a physically-backed silver ETF holding bullion in custody on behalf of shareholders.", w:"https://www.ishares.com/us/products/239855/" },
+  VOO:  { d:"Vanguard S&P 500 ETF — tracks the S&P 500 at a very low cost. Core features: a 0.03% expense ratio and broad large-cap US equity exposure.", w:"https://investor.vanguard.com/investment-products/etfs/profile/voo" },
+  ARKK: { d:"ARK Innovation ETF — an actively managed fund concentrated in disruptive-innovation companies. Core features: high-conviction positions and notably higher volatility than broad-market ETFs.", w:"https://www.ark-funds.com/funds/arkk" },
+
+  // ── Non-crypto: mega-cap equities ──
+  AAPL: { d:"Apple Inc. — designs consumer hardware, software and services. Core products: iPhone, Mac, iPad, Watch, and a large high-margin Services segment. One of the largest companies by market cap.", w:"https://www.apple.com" },
+  MSFT: { d:"Microsoft Corporation — enterprise software and cloud. Core products: Windows, Office/Microsoft 365, the Azure cloud platform, and a major stake in OpenAI.", w:"https://www.microsoft.com" },
+  NVDA: { d:"NVIDIA Corporation — the dominant designer of GPUs and AI accelerators. Core products: data-center AI chips, GeForce gaming GPUs, and the CUDA software ecosystem.", w:"https://www.nvidia.com" },
+  GOOGL:{ d:"Alphabet Inc. — the parent of Google. Core businesses: Search and advertising, YouTube, Android, Google Cloud, and the DeepMind/Gemini AI efforts.", w:"https://abc.xyz" },
+  AMZN: { d:"Amazon.com Inc. — e-commerce and cloud computing. Core businesses: the retail marketplace, Amazon Web Services (the largest cloud provider), advertising, and Prime.", w:"https://www.amazon.com" },
+  META: { d:"Meta Platforms Inc. — social media and advertising. Core products: Facebook, Instagram, WhatsApp, and investment in Reality Labs and open-weight Llama AI models.", w:"https://www.meta.com" },
+  TSLA: { d:"Tesla Inc. — electric vehicles and energy. Core businesses: EV manufacturing, energy storage and solar, and development of autonomous driving software.", w:"https://www.tesla.com" },
+  NFLX: { d:"Netflix Inc. — a subscription streaming service. Core features: a global original-content library, an ad-supported tier, and expansion into live events and games.", w:"https://www.netflix.com" },
+  AMD:  { d:"Advanced Micro Devices — designs CPUs, GPUs and AI accelerators. Core products: Ryzen and EPYC processors, Radeon graphics, and Instinct data-center accelerators.", w:"https://www.amd.com" },
+  COIN: { d:"Coinbase Global — the largest publicly-traded US crypto exchange. Core businesses: retail and institutional trading, custody, staking, and the Base layer-2 network.", w:"https://www.coinbase.com" },
+  MSTR: { d:"Strategy (formerly MicroStrategy) — an enterprise analytics firm best known for holding Bitcoin as its primary treasury reserve asset, making it a widely-watched leveraged proxy for BTC.", w:"https://www.strategy.com" },
+
+  // ── Non-crypto: futures & FX (Yahoo strips the =F / =X suffix in legBase) ──
+  GC:   { d:"Gold Futures — exchange-traded contracts for delivery of gold, quoted in US dollars per troy ounce. Widely used as an inflation and safe-haven benchmark.", w:"https://www.cmegroup.com/markets/metals/precious/gold.html" },
+  SI:   { d:"Silver Futures — contracts for delivery of silver, quoted per troy ounce. Both a precious metal and an industrial input, historically more volatile than gold.", w:"https://www.cmegroup.com/markets/metals/precious/silver.html" },
+  CL:   { d:"Crude Oil (WTI) Futures — contracts for West Texas Intermediate light sweet crude, the main US oil benchmark, quoted in dollars per barrel.", w:"https://www.cmegroup.com/markets/energy/crude-oil/light-sweet-crude.html" },
+  NG:   { d:"Natural Gas Futures — Henry Hub contracts, the US natural-gas benchmark, quoted per million British thermal units. Known for strong seasonal swings.", w:"https://www.cmegroup.com/markets/energy/natural-gas/natural-gas.html" },
+  ES:   { d:"E-mini S&P 500 Futures — the most actively traded US equity index future, used for round-the-clock hedging and speculation on the S&P 500.", w:"https://www.cmegroup.com/markets/equities/sp/e-mini-sandp500.html" },
+  NQ:   { d:"E-mini Nasdaq-100 Futures — index futures on the Nasdaq-100, heavily weighted toward large-cap technology names.", w:"https://www.cmegroup.com/markets/equities/nasdaq/e-mini-nasdaq-100.html" },
+  DX:   { d:"US Dollar Index — measures the dollar against a basket of six major currencies (EUR, JPY, GBP, CAD, SEK, CHF). A standard gauge of broad dollar strength.", w:"https://www.ice.com/products/194/US-Dollar-Index-Futures" },
 };
-function renderPairCard(sym, stats, data, isSpread){
+function renderPairCard(card, sym, stats, data, isSpread){
+  const q = sel => card.querySelector(`[data-pc="${sel}"]`);
   const cached = PRICE_CACHE[sym] || {};
   // Price + change: prefer live ticker, fall back to the watchlist cache, then candles.
   // Use isFinite (not !=null): API fields are coerced with +x, so a missing field is NaN,
@@ -4144,15 +4374,15 @@ function renderPairCard(sym, stats, data, isSpread){
   let chgAbs = (open!=null && last!=null) ? (last-open) : num(cached.chgAbs);
   const up = (chgAbs??0) >= 0;
 
-  document.getElementById("pcLast").textContent = last!=null ? fmtPrice(last) : "—";
-  const chgEl = document.getElementById("pcChg");
+  q("pcLast").textContent = last!=null ? fmtPrice(last) : "—";
+  const chgEl = q("pcChg");
   if(chgAbs!=null && chgPct!=null){
     chgEl.className = "pc-chg "+(up?"up":"down");
     chgEl.textContent = `${up?"+":"−"}${fmtPrice(Math.abs(chgAbs))}  (${up?"+":"−"}${Math.abs(chgPct).toFixed(2)}%) · 24h`;
   } else chgEl.textContent = "";
 
   // Brief asset description + official site (single symbols only), centered under price.
-  const descEl = document.getElementById("pcDesc");
+  const descEl = q("pcDesc");
   if(descEl){
     const info = (!isSpread) ? ASSET_INFO[legBase(sym)] : null;
     if(info){
@@ -4214,7 +4444,7 @@ function renderPairCard(sym, stats, data, isSpread){
     pcCell("1Y Low",  lo52!=null&&isFinite(lo52)?fmtPrice(lo52):null),
   ]);
 
-  document.getElementById("pcBody").innerHTML =
+  q("pcBody").innerHTML =
       `<div class="pc-sec">Market · 24h</div>`
     + pcGrid([
         pcCell("24h High", high!=null?fmtPrice(high):null),
@@ -4236,48 +4466,47 @@ function renderPairCard(sym, stats, data, isSpread){
 const PC_RSI_TFS = ["1m","5m","15m","30m","1h","2h","4h","6h","12h","1d","1w","1M"];
 const PC_SMA_PERIODS = [7,25,99,150,200,300];
 const PC_PAGES = 3;
-let _pcPage = 0;
 function rsiClass(v){ return v>=70?"ob":v<=30?"os":"nt"; }
 function rsiTag(v){ return v>=70?" · Overbought":v<=30?" · Oversold":""; }
-function wirePairCardNav(sym, isSpread){
-  _pcPage = 0;
+function wirePairCardNav(card, sym, isSpread){
+  const q = sel => card.querySelector(`[data-pc="${sel}"]`);
+  card._page = 0;
   const go = pg=>{
     pg = Math.max(0, Math.min(PC_PAGES-1, pg));
-    _pcPage = pg;
-    pairCard.classList.toggle("pg1", pg===1);
-    pairCard.classList.toggle("pg2", pg===2);
-    const nx=document.getElementById("pcNext"), pv=document.getElementById("pcPrev");
+    card._page = pg;
+    card.classList.toggle("pg1", pg===1);
+    card.classList.toggle("pg2", pg===2);
+    const nx=q("pcNext"), pv=q("pcPrev");
     if(nx) nx.classList.toggle("disabled", pg>=PC_PAGES-1);
     if(pv) pv.classList.toggle("disabled", pg<=0);
-    pairCard.querySelectorAll(".pc-dot").forEach(d=>d.classList.toggle("on", +d.dataset.pg===pg));
-    if(pg===1) loadRsiPage(sym, isSpread);
-    if(pg===2) loadSmaPage(sym, isSpread);
+    card.querySelectorAll(".pc-dot").forEach(d=>d.classList.toggle("on", +d.dataset.pg===pg));
+    if(pg===1) loadRsiPage(card, sym, isSpread);
+    if(pg===2) loadSmaPage(card, sym, isSpread);
   };
-  const nx=document.getElementById("pcNext"), pv=document.getElementById("pcPrev");
-  if(nx) nx.onclick=()=>go(_pcPage+1);
-  if(pv) pv.onclick=()=>go(_pcPage-1);
-  pairCard.querySelectorAll(".pc-dot").forEach(d=> d.onclick=()=>go(+d.dataset.pg));
-  const openBtn=document.getElementById("pcOpen");
-  if(openBtn) openBtn.onclick = ()=>{ closePairCard(); const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click(); };
-  const alertBtn=document.getElementById("pcAlert");
-  if(alertBtn) alertBtn.onclick = ()=>{ closePairCard(); const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click();
+  const nx=q("pcNext"), pv=q("pcPrev");
+  if(nx) nx.onclick=()=>go(card._page+1);
+  if(pv) pv.onclick=()=>go(card._page-1);
+  card.querySelectorAll(".pc-dot").forEach(d=> d.onclick=()=>go(+d.dataset.pg));
+  const openBtn=q("pcOpen");
+  if(openBtn) openBtn.onclick = ()=>{ closePairCard(card); const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click(); };
+  const alertBtn=q("pcAlert");
+  if(alertBtn) alertBtn.onclick = ()=>{ closePairCard(card); const r=document.querySelector(`.row[data-sym="${cssEsc(sym)}"]`); if(r) r.click();
     if(typeof openAlertDialog==="function") setTimeout(openAlertDialog,150); };
 }
 // Compute RSI(14) for every timeframe, filling each row as its fetch lands.
-let _rsiPageSym = null;
-function loadRsiPage(sym, isSpread){
-  if(_rsiPageSym===sym) return;      // already loading/loaded for this symbol
-  _rsiPageSym = sym;
-  const rows = document.getElementById("pcRsiRows"); if(!rows) return;
+function loadRsiPage(card, sym, isSpread){
+  if(card._rsiSym===sym) return;      // already loading/loaded for this symbol
+  card._rsiSym = sym;
+  const rows = card.querySelector('[data-pc="pcRsiRows"]'); if(!rows) return;
   rows.innerHTML = PC_RSI_TFS.map(tf=>
     `<div class="pc-rsi-row pending" data-tf="${tf}"><span class="pc-rsi-tf">${(TF[tf]||{}).label||tf}</span>`
     +`<span class="pc-rsi-val">…</span><div class="pc-rsi-track"><span class="d" style="left:0%"></span></div></div>`).join("");
-  const seq = _pairCardSeq;          // tie to the currently-open card
+  const seq = card._seq;             // tie to this card's current symbol
   PC_RSI_TFS.forEach(tf=>{
     (isSpread ? fetchSpreadRsi(sym, tf) : fetchKlines(sym, tf).then(d=>rsiFromBars(d)))
       .then(v=>{
-        if(seq!==_pairCardSeq) return;                 // card changed/closed
-        const row = document.querySelector(`#pcRsiRows .pc-rsi-row[data-tf="${tf}"]`); if(!row) return;
+        if(seq!==card._seq || !card.isConnected) return;   // card changed/closed
+        const row = rows.querySelector(`.pc-rsi-row[data-tf="${tf}"]`); if(!row) return;
         row.classList.remove("pending");
         const val=row.querySelector(".pc-rsi-val"), dot=row.querySelector(".pc-rsi-track .d");
         if(v==null){ val.textContent="—"; val.className="pc-rsi-val nt"; return; }
@@ -4285,7 +4514,7 @@ function loadRsiPage(sym, isSpread){
         val.title = v.toFixed(1)+rsiTag(v);
         dot.style.left = Math.max(0,Math.min(100,v))+"%";
       })
-      .catch(()=>{ const row=document.querySelector(`#pcRsiRows .pc-rsi-row[data-tf="${tf}"]`);
+      .catch(()=>{ const row=rows.querySelector(`.pc-rsi-row[data-tf="${tf}"]`);
         if(row){ row.classList.remove("pending"); row.querySelector(".pc-rsi-val").textContent="—"; } });
   });
 }
@@ -4312,11 +4541,10 @@ async function fetchTfBars(sym, tf, isSpread){
 }
 // Compute SMA(7/25/99/150/200/300) for every timeframe → a TF×period matrix, each
 // cell colored by last-close vs that SMA. Rows fill as each TF's fetch lands.
-let _smaPageSym = null;
-function loadSmaPage(sym, isSpread){
-  if(_smaPageSym===sym) return;
-  _smaPageSym = sym;
-  const wrap = document.getElementById("pcSmaWrap"); if(!wrap) return;
+function loadSmaPage(card, sym, isSpread){
+  if(card._smaSym===sym) return;
+  card._smaSym = sym;
+  const wrap = card.querySelector('[data-pc="pcSmaWrap"]'); if(!wrap) return;
   const head = `<tr><th>TF</th>${PC_SMA_PERIODS.map(p=>{
     const ma = MAS.find(m=>m.p===p);
     return `<th${ma?` style="color:${ma.color}"`:""}>${p}</th>`;
@@ -4325,11 +4553,11 @@ function loadSmaPage(sym, isSpread){
     `<tr data-tf="${tf}"><td>${(TF[tf]||{}).label||tf}</td>`
     + PC_SMA_PERIODS.map(()=>`<td class="pending">…</td>`).join("") + `</tr>`).join("");
   wrap.innerHTML = `<table class="pc-sma-tbl"><thead>${head}</thead><tbody>${body}</tbody></table>`;
-  const seq = _pairCardSeq;
+  const seq = card._seq;
   PC_RSI_TFS.forEach(tf=>{
     fetchTfBars(sym, tf, isSpread).then(data=>{
-      if(seq!==_pairCardSeq) return;
-      const tr = document.querySelector(`#pcSmaWrap tr[data-tf="${tf}"]`); if(!tr) return;
+      if(seq!==card._seq || !card.isConnected) return;
+      const tr = wrap.querySelector(`tr[data-tf="${tf}"]`); if(!tr) return;
       const tds = tr.querySelectorAll("td"); // [0]=TF label, then one per period
       if(!data || !data.length){ PC_SMA_PERIODS.forEach((p,i)=>{ tds[i+1].textContent="—"; tds[i+1].className=""; }); return; }
       const closes = data.map(d=>d.close);
@@ -4343,37 +4571,48 @@ function loadSmaPage(sym, isSpread){
         cell.className = last>v ? "above" : last<v ? "below" : "";
         cell.title = `Price ${last>v?"above":last<v?"below":"at"} SMA${p}`;
       });
-    }).catch(()=>{ const tr=document.querySelector(`#pcSmaWrap tr[data-tf="${tf}"]`);
+    }).catch(()=>{ const tr=wrap.querySelector(`tr[data-tf="${tf}"]`);
       if(tr) tr.querySelectorAll("td").forEach((td,i)=>{ if(i>0){ td.textContent="—"; td.className=""; } }); });
   });
 }
 
-function closePairCard(){
-  pairCard.classList.remove("open");
+// Close one card (defaults to the most recently focused/opened) and drop it from the registry.
+function closePairCard(card){
+  card = card || _pcOpen[_pcOpen.length-1];
+  if(!card) return;
+  const i = _pcOpen.indexOf(card);
+  if(i>=0) _pcOpen.splice(i,1);
+  card._seq++;                 // invalidate any in-flight fetches for this card
+  card.remove();
+  // Whatever is left becomes the front card; the survivor drops its stack offset only
+  // if it has not been dragged (an explicit left/top wins over the margin anyway).
+  if(_pcOpen.length===1) _pcOpen[0].classList.remove("stack1");
+  if(_pcOpen.length) pcFocus(_pcOpen[_pcOpen.length-1]);
 }
-// Esc closes the card.
-document.addEventListener("keydown", e=>{ if(e.key==="Escape" && pairCard.classList.contains("open")) closePairCard(); });
+// Esc closes the front-most card (one per press).
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && _pcOpen.length) closePairCard(_pcOpen[_pcOpen.length-1]); });
 
 // Drag the card by its header. On first drag we switch from the centered transform to
 // absolute left/top so the card follows the cursor and stays where dropped (clamped
 // to the viewport). Ignores drags that start on the ×, arrows, or dots.
-function pcDragWire(){
-  const head = pairCard.querySelector(".pc-head"); if(!head) return;
+function pcDragWire(card){
+  const head = card.querySelector(".pc-head"); if(!head) return;
   head.style.cursor = "move";
   head.onpointerdown = e=>{
     if(e.button!==0 || e.target.closest(".pc-x, .pc-arrow, .pc-dot")) return;
-    const rect = pairCard.getBoundingClientRect();
-    // pin to pixel coords (drop the translate centering) at the current position
-    pairCard.style.transform = "none";
-    pairCard.style.left = rect.left + "px";
-    pairCard.style.top  = rect.top  + "px";
+    const rect = card.getBoundingClientRect();
+    // pin to pixel coords (drop the translate centering + stack offset) at the current position
+    card.style.transform = "none";
+    card.style.margin = "0";
+    card.style.left = rect.left + "px";
+    card.style.top  = rect.top  + "px";
     const dx = e.clientX - rect.left, dy = e.clientY - rect.top;
     const w = rect.width, h = rect.height;
     head.setPointerCapture(e.pointerId);
     const move = ev=>{
       const nx = Math.max(0, Math.min(window.innerWidth  - w, ev.clientX - dx));
       const ny = Math.max(0, Math.min(window.innerHeight - h, ev.clientY - dy));
-      pairCard.style.left = nx + "px"; pairCard.style.top = ny + "px";
+      card.style.left = nx + "px"; card.style.top = ny + "px";
     };
     const up = ()=>{ head.removeEventListener("pointermove", move); head.removeEventListener("pointerup", up); };
     head.addEventListener("pointermove", move);
@@ -5892,7 +6131,9 @@ dcanvas.addEventListener("wheel", e=>{
 
 function startPending(c){
   const tool=draw.tool;
-  const need=CLICKS[tool]||2;
+  // ?? not || — brush/polyline use 0 ("freehand, unbounded"), which || would
+  // discard as falsy and silently turn into a plain 2-point shape.
+  const need=CLICKS[tool]??2;
   if(need===1){ finishOneClick(tool,c); return; }
   if(need===0){ // freehand (brush) or click-to-add multi-point (polyline)
     draw.pending={ id:newId(), type:tool, pts:[c, {...c}], style:{...DEFAULT_STYLE}, freehand:(tool==="brush") };
@@ -6130,7 +6371,7 @@ window.addEventListener("mouseup", e=>{
   // finishing the creation gesture for a pending shape
   if(draw.pending){
     const pend=draw.pending;
-    const need=CLICKS[pend.type]||2;
+    const need=CLICKS[pend.type]??2;
     // Brush: a stroke is complete the moment the button is released.
     if(pend.freehand){ if(pend.pts.length>2) commitPending(); else { draw.pending=null; redraw(); } downPt=null; downMoved=false; return; }
     if(downMoved){
@@ -7258,7 +7499,13 @@ function drawShape(s, selected, hovered){
     case "pricelabel": drawPriceLabelTool(s,a); break;
   }
   if(selected || hovered){
-    for(const q of P) if(q.x!=null && (selected)) handle(q.x,q.y);
+    // Brush strokes hold dozens of sampled points — a handle per point would bury
+    // the stroke in dots. Show only the two ends (TradingView does the same).
+    if(selected && s.type==="brush"){
+      const ends=P.filter(q=>q.x!=null);
+      if(ends.length){ handle(ends[0].x,ends[0].y); const e=ends[ends.length-1]; if(ends.length>1) handle(e.x,e.y); }
+    }
+    else for(const q of P) if(q.x!=null && (selected)) handle(q.x,q.y);
     if(hovered && !selected && a.x!=null){ /* subtle hover dot */ dctx.save(); dctx.fillStyle="#2962ff"; dctx.beginPath(); dctx.arc(a.x,a.y,3,0,7); dctx.fill(); dctx.restore(); }
   }
 }
