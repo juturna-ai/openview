@@ -18,6 +18,9 @@ import { useEmbedWallet } from './useEmbedWallet';
 const WalletTrackerView = dynamic(() => import('./WalletTrackerView'), {
   loading: () => <p className="gl-page-loading">Loading…</p>,
 });
+const ExplorerView = dynamic(() => import('./ExplorerView'), {
+  loading: () => <p className="gl-page-loading">Loading…</p>,
+});
 const MoversView = dynamic(() => import('./MoversView'), {
   loading: () => <p className="gl-page-loading">Loading…</p>,
 });
@@ -34,6 +37,9 @@ export default function WalletShell() {
   // rather than unmounted — so switching Wallet ↔ Tracker is instant and neither view re-fetches
   // its data or loses its scroll/filter/panel state on every switch.
   const [trackerMounted, setTrackerMounted] = useState(false);
+  // The Explorer is likewise mounted lazily on first visit then kept mounted, so switching back to it
+  // keeps the last search on screen rather than repainting an empty hero.
+  const [explorerMounted, setExplorerMounted] = useState(false);
   // Bumped on each Add Asset click; WalletView opens its modal on the change.
   const [addAssetSignal, setAddAssetSignal] = useState(0);
   // The asset whose detail page is open (opened from a board), or null for the board itself.
@@ -60,6 +66,7 @@ export default function WalletShell() {
 
   const handleViewChange = (v: WalletTab) => {
     if (v === 'tracker') setTrackerMounted(true);
+    if (v === 'explorer') setExplorerMounted(true);
     // Leaving a board that opened a detail page has to close it too, or Back would return to a
     // view the sidebar has already navigated away from.
     setSelected(null);
@@ -94,6 +101,11 @@ export default function WalletShell() {
         {trackerMounted && (
           <div style={view === 'tracker' && !selected ? undefined : { display: 'none' }}>
             <WalletTrackerView />
+          </div>
+        )}
+        {explorerMounted && (
+          <div style={view === 'explorer' && !selected ? undefined : { display: 'none' }}>
+            <ExplorerView />
           </div>
         )}
         <div style={view === 'leaderboards' && !selected ? undefined : { display: 'none' }}>

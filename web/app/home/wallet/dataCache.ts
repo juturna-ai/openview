@@ -46,3 +46,19 @@ export function getMovers<T>(key: string): T | null {
 export function setMovers<T>(key: string, value: T) {
   movers.set(key, value);
 }
+
+// Last Explorer result, so re-entering the tab repaints the previous search instantly instead of an
+// empty hero. Keyed `chain:query`; holds only already-public on-chain data. Bounded so a long session
+// can't grow it unboundedly.
+const explorer = new Map<string, unknown>();
+const EXPLORER_CACHE_MAX = 40;
+export function getExplorerResult<T>(key: string): T | null {
+  return (explorer.get(key) as T) ?? null;
+}
+export function setExplorerResult<T>(key: string, value: T) {
+  if (explorer.size >= EXPLORER_CACHE_MAX && !explorer.has(key)) {
+    const oldest = explorer.keys().next().value;
+    if (oldest) explorer.delete(oldest);
+  }
+  explorer.set(key, value);
+}

@@ -369,6 +369,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   .ov-gstats { grid-template-columns: 1fr; }
 }
 .ov-gcard {
+  position: relative;
   background: transparent;
   border: none;
   border-radius: 14px;
@@ -378,6 +379,34 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+/* Hover explainer — a small popover describing what the card shows. Hidden until the card is
+   hovered/focused; positioned above the card so it never covers the value it explains. */
+.ov-gcard-explainer {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  left: 12px;
+  right: 12px;
+  z-index: 6;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  pointer-events: none;
+}
+.ov-gcard:hover .ov-gcard-explainer,
+.ov-gcard:focus-within .ov-gcard-explainer {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 .ov-gcard-head {
   display: flex;
@@ -2135,14 +2164,19 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 6px 12px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: var(--panel);
+  background: var(--bg);
   color: var(--muted);
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.gl-refresh-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.gl-refresh-btn:hover:not(:disabled),
+.gl-refresh-btn:active:not(:disabled) {
+  background: rgba(124, 92, 191, 0.14);
+  border-color: #7c5cbf;
+  color: #b79cff;
+}
 .gl-refresh-btn:disabled { opacity: 0.6; cursor: default; }
 .gl-updated { font-variant-numeric: tabular-nums; }
 .spinning { animation: glSpin 0.9s linear infinite; }
@@ -2262,8 +2296,15 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
    they blend into it: transparent idle pills and the dark-purple sidebar accent when active — not
    the shared blue. Scoped to .gl-class-tabs so Gainers & Losers / asset-detail keep their look. */
 .gl-class-tabs .gl-class-tab { background: transparent; }
-.gl-class-tabs .gl-class-tab:hover { background: var(--hover); }
-.gl-class-tabs .gl-class-tab.active {
+/* Idle-pill hover gets a faint purple tint; the active pill keeps its purple (a plain grey hover
+   would otherwise wipe the accent while the cursor is on it). */
+.gl-class-tabs .gl-class-tab:hover {
+  background: rgba(124, 92, 191, 0.10);
+  border-color: #7c5cbf;
+  color: #b79cff;
+}
+.gl-class-tabs .gl-class-tab.active,
+.gl-class-tabs .gl-class-tab.active:hover {
   border-color: #7c5cbf;
   background: rgba(124, 92, 191, 0.14);
   color: #b79cff;
@@ -3064,6 +3105,46 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wt-empty h2 { margin: 4px 0 0; font-size: 17px; font-weight: 600; color: var(--text); }
 .wt-empty p { margin: 0 0 8px; max-width: 380px; color: var(--muted); font-size: 13px; }
 .wt-empty .btn-primary { display: inline-flex; align-items: center; gap: 6px; }
+.wt-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 14px 0 4px;
+}
+.wt-pager-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.wt-pager-btn:hover:not(:disabled):not(.active) { background: var(--hover); color: var(--text); }
+.wt-pager-btn:disabled { opacity: 0.35; cursor: default; }
+.wt-pager-num.active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #a78bfa;
+}
+.wt-pager-gap {
+  min-width: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .wt-footer { margin: 0; color: var(--muted); font-size: 11px; }
 
 /* ── Right-click row menu ── */
@@ -3289,4 +3370,339 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   .wallet-stats-row { grid-template-columns: 1fr; }
   .wallet-asset-grid { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }
+}
+
+/* ══ Explorer (multi-chain transaction search) ══
+   Reuses the wallet dashboard tokens. Two states: a centered Blockscan-style hero before a search,
+   and a compact top bar + result panel once a search returns. */
+.exp-page { display: flex; flex-direction: column; gap: 20px; }
+
+.exp-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  /* Vertically-centered landing hero; collapses (see .compact) once a result shows. */
+  min-height: 46vh;
+  justify-content: center;
+  padding: 12px 0;
+}
+.exp-hero.compact {
+  min-height: 0;
+  justify-content: flex-start;
+  align-items: stretch;
+  padding: 0;
+  gap: 12px;
+}
+.exp-hero-head { text-align: center; display: flex; flex-direction: column; gap: 6px; }
+.exp-hero-title { margin: 0; font-size: clamp(26px, 4vw, 38px); font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
+.exp-hero-sub { margin: 0; font-size: 14px; color: var(--muted); }
+
+/* Wide search bar — the focal point. Compact variant shrinks it into the top bar. */
+.exp-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 680px;
+  padding: 6px 6px 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.exp-hero.compact .exp-search { max-width: none; }
+.exp-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(41, 98, 255, 0.15); }
+.exp-search-icon { display: inline-flex; color: var(--muted); flex-shrink: 0; }
+.exp-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 15px;
+  outline: none;
+}
+.exp-search-input::placeholder { color: var(--muted); }
+.exp-search-btn {
+  flex-shrink: 0;
+  padding: 9px 18px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.exp-search-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.exp-search-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Chain-family quick-filter pills, directly below the search bar. */
+.exp-family-pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.exp-hero.compact .exp-family-pills { justify-content: flex-start; }
+.exp-family-pill {
+  padding: 7px 15px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.exp-family-pill:hover { background: var(--hover); color: var(--text); }
+.exp-family-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Sub-row to pick a specific EVM chain (they share the 0x…40 address format). */
+.exp-evm-subrow { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.exp-hero.compact .exp-evm-subrow { justify-content: flex-start; }
+.exp-evm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--bg);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.exp-evm-chip:hover { background: var(--hover); color: var(--text); }
+.exp-evm-chip.active { border-color: var(--accent); color: var(--text); }
+
+.exp-error { margin: 0; color: var(--red); font-size: 13px; text-align: center; }
+
+/* Result panel */
+.exp-result { display: flex; flex-direction: column; gap: 12px; }
+.exp-result-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+}
+.exp-result-head-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.exp-result-kind { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.exp-result-addr {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.exp-result-addr-text { overflow-wrap: anywhere; word-break: break-all; font-variant-numeric: tabular-nums; }
+.exp-result-addr:hover { color: var(--accent); }
+
+.exp-deeplink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.exp-deeplink:hover { background: var(--hover); color: var(--text); }
+.exp-deeplink.big { padding: 10px 16px; font-size: 13px; }
+
+/* Transaction timeline */
+.exp-tx-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.exp-tx-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.12s ease;
+}
+.exp-tx-row:last-child { border-bottom: none; }
+.exp-tx-row:hover { background: var(--hover); }
+.exp-tx-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(120, 123, 134, 0.15);
+  color: var(--muted);
+}
+.exp-tx-arrow.in { background: rgba(38, 166, 154, 0.14); color: var(--green); }
+.exp-tx-arrow.out { background: rgba(239, 83, 80, 0.14); color: var(--red); }
+.exp-tx-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.exp-tx-line1 { display: flex; align-items: center; gap: 8px; }
+.exp-tx-method { font-weight: 600; font-size: 13px; }
+.exp-tx-failed { font-size: 11px; font-weight: 600; color: var(--red); background: rgba(239, 83, 80, 0.12); padding: 1px 6px; border-radius: 4px; }
+.exp-tx-line2 { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+.exp-tx-hash { font-variant-numeric: tabular-nums; }
+.exp-tx-cp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exp-tx-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
+.exp-tx-value { font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; }
+.exp-tx-value.in { color: var(--green); }
+.exp-tx-value.out { color: var(--red); }
+.exp-tx-time { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+
+/* Single-tx detail */
+.exp-tx-detail { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.exp-detail-row { display: flex; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.exp-detail-row:last-child { border-bottom: none; }
+.exp-detail-label { width: 110px; flex-shrink: 0; color: var(--muted); font-weight: 600; }
+.exp-detail-val { color: var(--text); min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.exp-status { text-transform: capitalize; font-weight: 600; }
+.exp-status.success { color: var(--green); }
+.exp-status.failed { color: var(--red); }
+.exp-status.pending { color: var(--muted); }
+
+.exp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 40px 24px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  text-align: center;
+}
+.exp-empty p { margin: 0; color: var(--muted); font-size: 13px; max-width: 420px; }
+
+/* Net Worth (address header, right side) */
+.exp-networth { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; margin-left: auto; }
+.exp-networth-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.exp-networth-value { font-size: 22px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* Portfolio | Transactions tabs */
+.exp-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.exp-tab {
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.exp-tab:hover { color: var(--text); }
+.exp-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+/* Multi-chain Token-Holdings breakdown cards (EVM addresses) */
+.exp-breakdown { display: flex; flex-direction: column; gap: 12px; margin-bottom: 4px; }
+.exp-breakdown-head { display: flex; align-items: center; gap: 10px; }
+.exp-breakdown-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.exp-breakdown-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+}
+.exp-breakdown-loading { font-size: 11px; color: var(--muted); margin-left: auto; }
+.exp-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.exp-breakdown-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.exp-breakdown-card-top { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.exp-breakdown-card-name { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exp-breakdown-card-count { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.exp-breakdown-card-val { font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.exp-breakdown-card-pct { font-size: 12px; font-weight: 500; color: var(--muted); }
+.exp-breakdown-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 68px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.exp-breakdown-toggle:hover { background: var(--hover); color: var(--text); border-color: var(--muted); }
+
+/* Token holdings table */
+.exp-holdings { display: flex; flex-direction: column; gap: 10px; }
+.exp-holdings-meta { font-size: 12px; color: var(--muted); }
+.exp-holdings-table { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.exp-holdings-head,
+.exp-holdings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) 1fr 1fr 1.2fr 1.2fr;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+}
+.exp-holdings-head {
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.exp-holdings-row { border-bottom: 1px solid var(--border); font-size: 13px; }
+.exp-holdings-row:last-child { border-bottom: none; }
+.exp-holdings-row:hover { background: var(--hover); }
+.exp-h-pct, .exp-h-price, .exp-h-amount, .exp-h-value { text-align: right; font-variant-numeric: tabular-nums; }
+.exp-h-value { font-weight: 600; }
+.exp-h-token { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.exp-token-icon { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; object-fit: cover; background: var(--panel); }
+.exp-h-token-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.exp-h-token-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exp-h-token-sym { font-size: 11px; color: var(--muted); }
+
+@media (max-width: 620px) {
+  .exp-search { flex-wrap: wrap; }
+  .exp-result-header { flex-wrap: wrap; }
+  .exp-networth { margin-left: 0; align-items: flex-start; order: 2; }
+  .exp-deeplink { order: 3; }
+  .exp-detail-label { width: 84px; }
+  /* Drop Portfolio % and Price on narrow screens; keep Token / Amount / Value. */
+  .exp-holdings-head, .exp-holdings-row { grid-template-columns: minmax(0, 2fr) 1.1fr 1.1fr; }
+  .exp-h-pct, .exp-h-price { display: none; }
 }

@@ -397,3 +397,28 @@ that seeding them immediately exposed.
 **Rule:** when porting, port it. If part of the source's behaviour seems like a bad default, implement
 it and *flag the concern* — don't silently drop it. Reserve unilateral omissions for things that are
 broken, unsafe, or impossible, not things I merely disagree with.
+
+## useEffect fetch keyed off its own loading flag → permanent spinner
+**Mistake:** the Explorer's Portfolio fetch effect listed `portfolio.loading`/`portfolio.loaded` in
+its dependency array and called `setPortfolio(loading:true)` inside it. Setting the flag re-ran the
+effect; the re-run's cleanup set `cancelled = true` (and later aborted the request), so the original
+fetch completed but its `if (cancelled) return` discarded the result — "Loading holdings…" forever.
+Compiled fine, passed typecheck, and the API returned 200 in ~1.7s; only clicking it in the browser
+revealed the hang.
+
+**Rule:** a data-fetch `useEffect` must be keyed off the **request identity** (here `chain:address`),
+never off the loading/loaded state it mutates. Setting state you also depend on re-invokes the effect
+and cancels the in-flight work. Verify async UI by driving the actual browser flow, not just the API —
+a 200 from curl says nothing about whether the component's state ever updates.
+
+## A keyless API's real response shape ≠ what you assumed — capture a fixture first
+**Mistake:** wrote the Explorer's NEAR normalizer against guessed field names (`signer_account_id`,
+`&order=desc`) without hitting nearblocks once. Live, `&order=desc` made the host drop the connection
+(HTTP 000 → "Lookup failed"), and the real fields were `predecessor_account_id` / `actions[].method`.
+It compiled, typechecked, and the logic test passed against my invented fixture — all green, zero txns
+in the browser.
+
+**Rule:** before writing a normalizer for an external endpoint, `curl` it once and paste the *actual*
+JSON as the test fixture. A logic test built on an assumed shape proves the code matches your
+assumption, not the API. And probe query params individually — a single bad one (`order=desc` here)
+can 000 the whole request while every other param looks fine.

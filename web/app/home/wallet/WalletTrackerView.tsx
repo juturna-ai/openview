@@ -329,6 +329,36 @@ export default function WalletTrackerView() {
   const visible = useMemo(() => filterByChain(wallets, chainFilter), [wallets, chainFilter]);
   const counts = useMemo(() => chainCounts(wallets), [wallets]);
 
+  // Paginate the visible list — 20 rows per page. Balances/prices are still fetched for the whole
+  // portfolio (see fetchOrder); only the render is capped.
+  const PER_PAGE = 20;
+  const [page, setPage] = useState(0);
+  const pageCount = Math.max(1, Math.ceil(visible.length / PER_PAGE));
+  // Reset to the first page whenever the filter changes or the list shrinks below the current page.
+  useEffect(() => {
+    setPage(0);
+  }, [chainFilter]);
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(pageCount - 1);
+  }, [page, pageCount]);
+  const paged = useMemo(
+    () => visible.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE),
+    [visible, page],
+  );
+  // Windowed page numbers: always show first & last, the current page ± 1, with '…' gaps between.
+  // Values are 0-based page indices; '…' marks a collapsed range.
+  const pageItems = useMemo<(number | '…')[]>(() => {
+    if (pageCount <= 7) return Array.from({ length: pageCount }, (_, i) => i);
+    const set = new Set<number>([0, pageCount - 1, page, page - 1, page + 1]);
+    const pages = [...set].filter((p) => p >= 0 && p < pageCount).sort((a, b) => a - b);
+    const out: (number | '…')[] = [];
+    for (let i = 0; i < pages.length; i++) {
+      if (i > 0 && pages[i] - pages[i - 1] > 1) out.push('…');
+      out.push(pages[i]);
+    }
+    return out;
+  }, [page, pageCount]);
+
   // A filter pill per chain that actually has wallets — an "Avalanche (0)" pill leading to an empty
   // list is a dead end. If the selected chain's last wallet is removed, fall back to All so the user
   // is never stranded staring at an empty tracker.
@@ -650,7 +680,7 @@ export default function WalletTrackerView() {
             </button>
           </div>
         ) : (
-          visible.map((w) => {
+          paged.map((w) => {
             const cfg = getChain(w.chain);
             if (!cfg) return null;
             const bal = balances[key(w)]?.balance ?? 0;
@@ -742,6 +772,44 @@ export default function WalletTrackerView() {
           })
         )}
       </div>
+
+      {visible.length > PER_PAGE && (
+        <div className="wt-pager" role="navigation" aria-label="Wallet list pages">
+          <button
+            className="wt-pager-btn wt-pager-arrow"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            aria-label="Previous page"
+          >
+            <Icon name="chevron-left" size={16} />
+          </button>
+          {pageItems.map((it, i) =>
+            it === '…' ? (
+              <span key={`gap-${i}`} className="wt-pager-gap">
+                …
+              </span>
+            ) : (
+              <button
+                key={it}
+                className={'wt-pager-btn wt-pager-num' + (it === page ? ' active' : '')}
+                onClick={() => setPage(it)}
+                aria-label={`Page ${it + 1}`}
+                aria-current={it === page ? 'page' : undefined}
+              >
+                {it + 1}
+              </button>
+            ),
+          )}
+          <button
+            className="wt-pager-btn wt-pager-arrow"
+            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+            disabled={page >= pageCount - 1}
+            aria-label="Next page"
+          >
+            <Icon name="chevron-right" size={16} />
+          </button>
+        </div>
+      )}
 
       <p className="wt-footer">
         Native balances via public RPCs and Blockscout. Prices from CoinGecko. Auto-refreshes every

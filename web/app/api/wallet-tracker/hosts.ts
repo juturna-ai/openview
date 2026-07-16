@@ -16,6 +16,14 @@ export const BLOCKSCOUT_HOSTS: Record<string, string> = {
   base: 'base.blockscout.com',
   polygon: 'polygon.blockscout.com',
   optimism: 'explorer.optimism.io',
+  // Additional EVM chains (verified keyless Blockscout v2 instances).
+  gnosis: 'gnosis.blockscout.com',
+  celo: 'celo.blockscout.com',
+  scroll: 'scroll.blockscout.com',
+  zksync: 'zksync.blockscout.com',
+  mode: 'explorer.mode.network',
+  unichain: 'unichain.blockscout.com',
+  zora: 'explorer.zora.energy',
 };
 
 // Moralis `chain` query values for the EVM chains that have no healthy Blockscout instance.

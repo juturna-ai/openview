@@ -57,11 +57,15 @@ export interface SeriesPoint {
 }
 
 async function fetchMarketCapSeries(): Promise<SeriesPoint[]> {
-  // `interval` is what unlocks this endpoint (it 500s without one) and `count` sets the density —
-  // without `count` it caps at 10 points and the sparkline looks jagged. 180 pts over 24h ≈ 8-min
-  // spacing, matching CMC's own smooth line. convertId 2781 = USD.
+  // 4-year daily series for the sparkline's hover-scrub. `range` caps at ~400 points (~13 months),
+  // so we pass an explicit `timeStart`/`timeEnd` window (unix seconds) with `interval=1d` instead —
+  // that returns the full ~1460 daily points. `interval` is also what unlocks this endpoint (it
+  // 500s without one). convertId 2781 = USD. The ▼/▲ badge stays the 24h change from the *latest*
+  // endpoint; only this series is long-range.
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - 4 * 365 * 86_400;
   const d = (await fetchJSON(
-    'https://api.coinmarketcap.com/data-api/v3/global-metrics/quotes/historical?range=1D&convertId=2781&interval=5m&count=180',
+    `https://api.coinmarketcap.com/data-api/v3/global-metrics/quotes/historical?convertId=2781&interval=1d&timeStart=${start}&timeEnd=${end}`,
   )) as { data?: { quotes?: { timestamp?: string; quote?: { totalMarketCap?: number }[] }[] } };
   return (d?.data?.quotes ?? [])
     .map((row) => {

@@ -49,6 +49,15 @@ const CHAINS: Record<string, ChainCfg> = {
   optimism: { rpc: 'https://optimism-rpc.publicnode.com', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
   base: { rpc: 'https://base-rpc.publicnode.com', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
   avalanche: { rpc: 'https://avalanche-c-chain-rpc.publicnode.com', type: 'evm', decimals: 18, cgId: 'avalanche-2', native: 'AVAX' },
+  // Additional EVM chains — balance via their keyless Blockscout instance (see BLOCKSCOUT_HOSTS),
+  // RPC as fallback. cgId is the CoinGecko id for the native token's USD price.
+  gnosis: { rpc: 'https://rpc.gnosischain.com', type: 'evm', decimals: 18, cgId: 'xdai', native: 'XDAI' },
+  celo: { rpc: 'https://forno.celo.org', type: 'evm', decimals: 18, cgId: 'celo', native: 'CELO' },
+  scroll: { rpc: 'https://rpc.scroll.io', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
+  zksync: { rpc: 'https://mainnet.era.zksync.io', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
+  mode: { rpc: 'https://mainnet.mode.network', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
+  unichain: { rpc: 'https://mainnet.unichain.org', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
+  zora: { rpc: 'https://rpc.zora.energy', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
   solana: { rpc: 'https://api.mainnet-beta.solana.com', type: 'solana', decimals: 9, cgId: 'solana', native: 'SOL' },
   tron: { rpc: 'https://api.trongrid.io', type: 'tron', decimals: 6, cgId: 'tron', native: 'TRX' },
   // rpc.mainnet.near.org was deprecated and now returns HTTP 429 + a "STOP USING IT" warning for

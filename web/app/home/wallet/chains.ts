@@ -34,6 +34,15 @@ export const CHAINS: Chain[] = [
   { id: 'bittensor', label: 'Bittensor', symbol: 'TAO', color: '#000000', explorer: 'https://taostats.io/account/', cgId: 'bittensor' },
   { id: 'injective', label: 'Injective', symbol: 'INJ', color: '#0082fa', explorer: 'https://explorer.injective.network/account/', cgId: 'injective-protocol' },
   { id: 'hedera', label: 'Hedera', symbol: 'HBAR', color: '#000000', explorer: 'https://hashscan.io/mainnet/account/', cgId: 'hedera-hashgraph' },
+  // Additional EVM chains — widen the Explorer's multi-chain Token-Holdings breakdown. cgId must
+  // match the route's CHAINS map. No inline chain artwork yet, so ChainIcon shows the letter badge.
+  { id: 'gnosis', label: 'Gnosis', symbol: 'XDAI', color: '#04795b', explorer: 'https://gnosisscan.io/address/', cgId: 'xdai' },
+  { id: 'celo', label: 'Celo', symbol: 'CELO', color: '#fcff52', explorer: 'https://celoscan.io/address/', cgId: 'celo' },
+  { id: 'scroll', label: 'Scroll', symbol: 'ETH', color: '#ffeeda', explorer: 'https://scrollscan.com/address/', cgId: 'ethereum' },
+  { id: 'zksync', label: 'zkSync Era', symbol: 'ETH', color: '#8c8dfc', explorer: 'https://era.zksync.network/address/', cgId: 'ethereum' },
+  { id: 'mode', label: 'Mode', symbol: 'ETH', color: '#dffe00', explorer: 'https://explorer.mode.network/address/', cgId: 'ethereum' },
+  { id: 'unichain', label: 'Unichain', symbol: 'ETH', color: '#f50db4', explorer: 'https://unichain.blockscout.com/address/', cgId: 'ethereum' },
+  { id: 'zora', label: 'Zora', symbol: 'ETH', color: '#000000', explorer: 'https://explorer.zora.energy/address/', cgId: 'ethereum' },
 ];
 
 export function getChain(id: string): Chain | undefined {

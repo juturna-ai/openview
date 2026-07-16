@@ -18,13 +18,9 @@ function fmtMarketCap(v: number | null): string {
 const fmtTooltipMc = (v: number): string =>
   v >= 1e12 ? `$${(v / 1e12).toFixed(3)}T` : v >= 1e9 ? `$${(v / 1e9).toFixed(2)}B` : `$${v.toLocaleString()}`;
 
-const fmtTooltipTime = (t: number): { date: string; time: string } => {
-  const d = new Date(t);
-  return {
-    date: d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric', year: 'numeric' }),
-    time: d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
-  };
-};
+// Daily series → date only (no clock; the time-of-day would be meaningless noise).
+const fmtTooltipDate = (t: number): string =>
+  new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
 // Market-cap sparkline with a hover crosshair + tooltip (follows the cursor to the nearest point).
 // Colour is driven by `up` (the authoritative 24h % change), NOT the series endpoints — a 24h window
@@ -65,7 +61,6 @@ function Sparkline({ data, up }: { data: SeriesPoint[]; up: boolean }) {
 
   const hp = hover != null ? data[hover] : null;
   const hx = hover != null ? xPct(hover) : 0;
-  const tip = hp ? fmtTooltipTime(hp.t) : null;
 
   return (
     <div
@@ -102,8 +97,7 @@ function Sparkline({ data, up }: { data: SeriesPoint[]; up: boolean }) {
             style={{ left: `${hx}%`, transform: `translateX(${hx > 60 ? '-100%' : '0'})` }}
           >
             <div className="ov-mc-tip-time">
-              <span>{tip?.date}</span>
-              <span className="ov-mc-tip-clock">{tip?.time}</span>
+              <span>{fmtTooltipDate(hp.t)}</span>
             </div>
             <div className="ov-mc-tip-price">
               <span className="ov-mc-tip-swatch" style={{ background: color }} />
@@ -177,6 +171,10 @@ export default function GlobalStats() {
 
       {/* Fear & Greed */}
       <div className="ov-gcard">
+        <div className="ov-gcard-explainer" role="tooltip">
+          Scores market sentiment 0 (Extreme Fear) to 100 (Extreme Greed) from volatility, momentum,
+          volume, social media and BTC dominance. Extreme fear can signal a buy; extreme greed, a top.
+        </div>
         <div className="ov-gcard-head">
           Fear &amp; Greed <span className="ov-gcard-chev">›</span>
         </div>
@@ -208,6 +206,10 @@ export default function GlobalStats() {
 
       {/* Altcoin Season */}
       <div className="ov-gcard">
+        <div className="ov-gcard-explainer" role="tooltip">
+          Share of the top 100 coins that beat Bitcoin over 90 days. 75+ means Altcoin Season, 25 or
+          below means Bitcoin Season.
+        </div>
         <div className="ov-gcard-head">
           Altcoin Season <span className="ov-gcard-chev">›</span>
         </div>
