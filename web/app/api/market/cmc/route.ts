@@ -47,7 +47,11 @@ export interface Coin {
   change30d: number | null;
   volume: number | null;
   marketCap: number | null;
+  circulatingSupply: number | null;
+  maxSupply: number | null;
   thumb: string;
+  /** 7-day closing prices for the row sparkline; empty until the chart fetch fills it in. */
+  sparkline7d: number[];
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -63,6 +67,9 @@ interface RawListingCoin {
   symbol?: string;
   name?: string;
   slug?: string;
+  circulatingSupply?: number;
+  maxSupply?: number;
+  totalSupply?: number;
   quotes?: { price?: number; percentChange1h?: number; percentChange24h?: number; percentChange7d?: number; percentChange30d?: number; volume24h?: number; marketCap?: number }[];
 }
 
@@ -81,7 +88,12 @@ function mapListingCoin(c: RawListingCoin): Coin {
     change30d: num(q.percentChange30d),
     volume: num(q.volume24h),
     marketCap: num(q.marketCap),
+    circulatingSupply: num(c.circulatingSupply),
+    // Coins with no hard cap (uncapped supply) report maxSupply 0 upstream — treat that as "no cap"
+    // so the supply bar shows as full rather than dividing by zero.
+    maxSupply: num(c.maxSupply) && (c.maxSupply as number) > 0 ? num(c.maxSupply) : null,
     thumb: thumbFor(c.id),
+    sparkline7d: [],
   };
 }
 
@@ -92,6 +104,57 @@ async function fetchListing(limit: number): Promise<Coin[]> {
     `&cryptoType=all&tagType=all&audited=false`;
   const res = (await fetchJSON(url)) as { data?: { cryptoCurrencyList?: RawListingCoin[] } };
   return (res?.data?.cryptoCurrencyList ?? []).map(mapListingCoin);
+}
+
+/* ── 7d sparklines ──
+ *
+ * The listing endpoint carries no price history — only a single 7d %. CMC's own frontend draws each
+ * row's mini-chart from a per-coin chart call, so we do the same, but only for the coins that fit on
+ * the leaderboard's first page (SPARKLINE_COUNT) — fetching 500 charts every poll would hammer
+ * upstream and get rate-limited. Each series is downsampled to keep the payload light, and the whole
+ * map is cached on a longer TTL than the listing (7d shape barely moves minute-to-minute). */
+
+const SPARKLINE_COUNT = 100;
+const SPARKLINE_POINTS = 24;
+const SPARKLINE_TTL_MS = 5 * 60_000;
+const SPARKLINE_CONCURRENCY = 8;
+
+let sparklineCache: { at: number; map: Record<number, number[]> } | null = null;
+
+async function fetchSparkline(id: number): Promise<number[]> {
+  const url = `https://api.coinmarketcap.com/data-api/v3/cryptocurrency/detail/chart?id=${id}&range=7D`;
+  const res = (await fetchJSON(url)) as { data?: { points?: Record<string, { v?: number[] }> } };
+  const points = res?.data?.points ?? {};
+  const times = Object.keys(points).sort((a, b) => Number(a) - Number(b));
+  const prices: number[] = [];
+  for (const t of times) {
+    const v = points[t]?.v?.[0];
+    if (typeof v === 'number' && Number.isFinite(v)) prices.push(v);
+  }
+  if (prices.length <= SPARKLINE_POINTS) return prices;
+  const step = Math.ceil(prices.length / SPARKLINE_POINTS);
+  const out: number[] = [];
+  for (let i = 0; i < prices.length; i += step) out.push(prices[i]);
+  if (out[out.length - 1] !== prices[prices.length - 1]) out.push(prices[prices.length - 1]);
+  return out;
+}
+
+/** Fetch 7d sparklines for the first-page coins, capped concurrency, failing soft per coin. */
+async function fetchSparklines(ids: number[]): Promise<Record<number, number[]>> {
+  const map: Record<number, number[]> = {};
+  let i = 0;
+  async function worker() {
+    while (i < ids.length) {
+      const id = ids[i++];
+      try {
+        map[id] = await fetchSparkline(id);
+      } catch {
+        // A dead chart just leaves that row without a sparkline — never blank the whole board.
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(SPARKLINE_CONCURRENCY, ids.length) }, worker));
+  return map;
 }
 
 /* ── spotlight: trending / most visited / recently added ── */
@@ -129,7 +192,10 @@ function mapSpotlightCoin(c: RawSpotlightCoin): Coin {
     change30d: num(p.priceChange30d),
     volume: num(p.volume24h),
     marketCap: num(c.marketCap) ?? num(c.selfReportedMarketCap),
+    circulatingSupply: null,
+    maxSupply: null,
     thumb: thumbFor(c.id),
+    sparkline7d: [],
   };
 }
 
@@ -201,6 +267,23 @@ export async function GET(req: Request) {
     fetchSpotlight().catch(() => ({ trending: [], mostVisited: [], recentlyAdded: [] })),
     fetchFearGreed().catch(() => null),
   ]);
+
+  // 7d sparklines for the first-page coins, on their own longer TTL so the every-30s listing poll
+  // doesn't re-fetch 100 charts each time. Reuses the last map on a cache hit (or on failure).
+  if (coins.length > 0) {
+    const now = Date.now();
+    if (!sparklineCache || now - sparklineCache.at >= SPARKLINE_TTL_MS) {
+      const topIds = coins.slice(0, SPARKLINE_COUNT).map((c) => c.id);
+      const map = await fetchSparklines(topIds).catch(() => ({} as Record<number, number[]>));
+      // Don't overwrite a good map with a total failure — keep the previous series on screen.
+      if (Object.keys(map).length > 0 || !sparklineCache) sparklineCache = { at: now, map };
+    }
+    const map = sparklineCache?.map ?? {};
+    for (const c of coins) {
+      const s = map[c.id];
+      if (s) c.sparkline7d = s;
+    }
+  }
 
   const payload: CmcPayload = {
     coins,

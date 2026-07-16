@@ -2,19 +2,26 @@
 
 import dynamic from 'next/dynamic';
 import React, { useEffect, useState } from 'react';
+import type { AssetRef } from './AssetDetailView';
 import Sidebar, { type WalletTab } from './Sidebar';
 import WalletView from './WalletView';
 import { useEmbedWallet } from './useEmbedWallet';
 
 // Sidebar + content, mirroring JournalShell. The sidebar owns the active view; Add Asset always
 // routes to the wallet, since that's where the modal lives. The leaderboards / gainers-losers
-// boards moved out to the top-level Assets tab (/home/assets).
+// boards live here alongside the wallet and tracker.
 //
 // The tracker view is code-split: it pulls in its own data layer and isn't needed for the wallet's
 // first paint. But once the wallet has painted we warm its chunk on idle (see the effect below), so
 // the first switch to it is instant instead of paying a chunk round-trip.
 
 const WalletTrackerView = dynamic(() => import('./WalletTrackerView'), {
+  loading: () => <p className="gl-page-loading">Loading…</p>,
+});
+const MoversView = dynamic(() => import('./MoversView'), {
+  loading: () => <p className="gl-page-loading">Loading…</p>,
+});
+const AssetDetailView = dynamic(() => import('./AssetDetailView'), {
   loading: () => <p className="gl-page-loading">Loading…</p>,
 });
 
@@ -29,6 +36,8 @@ export default function WalletShell() {
   const [trackerMounted, setTrackerMounted] = useState(false);
   // Bumped on each Add Asset click; WalletView opens its modal on the change.
   const [addAssetSignal, setAddAssetSignal] = useState(0);
+  // The asset whose detail page is open (opened from a board), or null for the board itself.
+  const [selected, setSelected] = useState<AssetRef | null>(null);
 
   // Warm the tracker's code-split chunk while the browser is idle, after the wallet has painted, so
   // the first switch to it doesn't wait on a chunk download. Harmless if it never gets clicked.
@@ -51,6 +60,9 @@ export default function WalletShell() {
 
   const handleViewChange = (v: WalletTab) => {
     if (v === 'tracker') setTrackerMounted(true);
+    // Leaving a board that opened a detail page has to close it too, or Back would return to a
+    // view the sidebar has already navigated away from.
+    setSelected(null);
     setView(v);
   };
 
@@ -71,14 +83,27 @@ export default function WalletShell() {
       <Sidebar view={view} onViewChange={handleViewChange} onAddAsset={handleAddAsset} />
       <div className="journal-content">
         {/* Both views stay mounted (the tracker once first visited); the inactive one is hidden with
-            display:none rather than unmounted, so a switch neither re-fetches nor loses state. */}
-        <div style={view === 'wallet' ? undefined : { display: 'none' }}>
+            display:none rather than unmounted, so a switch neither re-fetches nor loses state. The
+            boards are likewise hidden (not unmounted) while a detail page is open, so Back restores
+            exactly the board, page and sort the user left. */}
+        <div
+          style={view === 'wallet' && !selected ? undefined : { display: 'none' }}
+        >
           <WalletView addAssetSignal={addAssetSignal} />
         </div>
         {trackerMounted && (
-          <div style={view === 'tracker' ? undefined : { display: 'none' }}>
+          <div style={view === 'tracker' && !selected ? undefined : { display: 'none' }}>
             <WalletTrackerView />
           </div>
+        )}
+        <div style={view === 'leaderboards' && !selected ? undefined : { display: 'none' }}>
+          <MoversView mode="leaderboards" onSelect={setSelected} />
+        </div>
+        <div style={view === 'movers' && !selected ? undefined : { display: 'none' }}>
+          <MoversView mode="market" onSelect={setSelected} />
+        </div>
+        {selected && (
+          <AssetDetailView asset={selected} onBack={() => setSelected(null)} />
         )}
       </div>
     </div>

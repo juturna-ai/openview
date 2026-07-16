@@ -357,6 +357,128 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   letter-spacing: 0.01em;
   color: var(--muted);
 }
+/* ── Home global-stats row (Market Cap / Fear & Greed / Altcoin Season) ── */
+.ov-gstats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+  margin: 4px 0 20px;
+}
+@media (max-width: 900px) {
+  .ov-gstats { grid-template-columns: 1fr; }
+}
+.ov-gcard {
+  background: transparent;
+  border: none;
+  border-radius: 14px;
+  padding: 14px 16px;
+  text-align: left;
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ov-gcard-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+.ov-gcard-chev { color: var(--muted); font-weight: 400; }
+.ov-gcard-row { display: flex; align-items: baseline; gap: 8px; }
+.ov-gcard-value { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1; }
+.ov-gcard-change { font-size: 13px; font-weight: 600; }
+.ov-gcard-change.up { color: var(--green); }
+.ov-gcard-change.down { color: var(--red); }
+.ov-gcard-denom { font-size: 14px; color: var(--muted); }
+.ov-mc-spark { position: relative; width: 100%; height: 56px; margin-top: auto; }
+.ov-mc-spark > svg { display: block; width: 100%; height: 100%; }
+/* Vertical crosshair that tracks the cursor. */
+.ov-mc-crosshair {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+/* The point marker riding the line. */
+.ov-mc-dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+/* Floating tooltip: date + time, then the value. Flips to the left of the crosshair past 60% so it
+   never overflows the card's right edge. */
+.ov-mc-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  min-width: 150px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.ov-mc-tip-time {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ov-mc-tip-clock { color: var(--muted); font-weight: 500; }
+.ov-mc-tip-price {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ov-mc-tip-price strong { color: var(--text); font-weight: 700; }
+.ov-mc-tip-swatch { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+/* Fear & Greed gauge */
+.ov-gcard-fg { display: flex; align-items: center; gap: 12px; }
+.ov-fg-gauge { width: 92px; height: auto; flex: none; }
+.ov-fg-info { display: flex; flex-direction: column; gap: 2px; }
+.ov-fg-info .ov-gcard-value { font-size: 28px; }
+.ov-fg-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+/* Altcoin Season bar */
+.ov-alt-bar { position: relative; margin-top: 2px; }
+.ov-alt-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #f7931a 0%, #f0c040 35%, #6aa0e0 65%, #3b6fd4 100%);
+}
+.ov-alt-knob {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2px solid var(--bg);
+  transform: translate(-50%, -50%);
+}
+.ov-alt-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
 /* ── Home footer (© / Powered by Juturna / Privacy) ── */
 .ov-footer {
   position: relative;
@@ -1988,6 +2110,10 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .gl-page-subtitle { margin: 0; font-size: 13px; color: var(--muted); }
 .gl-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .gl-controls-left { display: flex; gap: 4px; }
+/* Leaderboard mode: refresh button sits just above the GlobalStats cards, so drop the page-gap
+   below it and zero the cards' own bottom margin — the table then butts right up to the cards. */
+.gl-controls-lb { margin-bottom: -12px; }
+.gl-controls-lb + .ov-gstats { margin-bottom: 0; }
 .gl-cat-btn {
   padding: 6px 14px;
   border: 1px solid var(--border);
@@ -2132,6 +2258,16 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   background: rgba(59, 130, 246, 0.14);
   color: #3b82f6;
 }
+/* Leaderboards asset-class tabs (crypto/stocks/etfs/commodities) sit on the wallet dashboard, so
+   they blend into it: transparent idle pills and the dark-purple sidebar accent when active — not
+   the shared blue. Scoped to .gl-class-tabs so Gainers & Losers / asset-detail keep their look. */
+.gl-class-tabs .gl-class-tab { background: transparent; }
+.gl-class-tabs .gl-class-tab:hover { background: var(--hover); }
+.gl-class-tabs .gl-class-tab.active {
+  border-color: #7c5cbf;
+  background: rgba(124, 92, 191, 0.14);
+  color: #b79cff;
+}
 
 /* ── Leaderboard pagination (100 per page, up to 500) ── */
 .gl-pagination {
@@ -2254,6 +2390,42 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .gl-sentiment-fill { height: 100%; border-radius: 2px; }
 .gl-bullish-text { color: #16c784; font-size: 11px; }
 .gl-bearish-text { color: #ea3943; font-size: 11px; }
+
+/* ── Leaderboard crypto-only columns: Circulating Supply / Sentiment / 7d sparkline ── */
+.gl-th-supply, .gl-td-supply { text-align: right; }
+.gl-td-supply {
+  font-variant-numeric: tabular-nums;
+  min-width: 132px;
+}
+.gl-supply-val { display: block; }
+.gl-supply-bar {
+  width: 100%;
+  max-width: 120px;
+  height: 4px;
+  margin: 5px 0 0 auto;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.gl-supply-fill { height: 100%; border-radius: 2px; background: var(--muted); }
+
+.gl-th-sent, .gl-td-sent { text-align: right; }
+.gl-sent-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.gl-sent-label { font-size: 12px; font-weight: 600; }
+.gl-sent-neutral { color: var(--muted); }
+.gl-sent-bar {
+  width: 72px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.gl-sent-fill { height: 100%; border-radius: 2px; }
+
+.gl-th-spark, .gl-td-spark { text-align: right; }
+.gl-td-spark { width: 108px; }
+.gl-spark { display: inline-block; vertical-align: middle; }
+.gl-spark-empty { color: var(--muted); }
 
 /* ── Fear & Greed gauge ── */
 .gl-fg-card {

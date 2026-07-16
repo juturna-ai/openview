@@ -8,11 +8,13 @@ import { Icon } from './icons';
 // wallet's three views. Reuses the journal's .journal-sidebar / .nav-item styles so the two
 // dashboards stay visually identical, including the resize handle and collapse toggle.
 
-export type WalletTab = 'wallet' | 'tracker';
+export type WalletTab = 'wallet' | 'tracker' | 'leaderboards' | 'movers';
 
 const NAV: { id: WalletTab; label: string; icon: string }[] = [
   { id: 'wallet', label: 'Wallet', icon: 'wallet' },
   { id: 'tracker', label: 'Wallet Tracker', icon: 'radar' },
+  { id: 'leaderboards', label: 'Leaderboards', icon: 'trophy' },
+  { id: 'movers', label: 'Gainers & Losers', icon: 'bar-chart' },
 ];
 
 interface Props {

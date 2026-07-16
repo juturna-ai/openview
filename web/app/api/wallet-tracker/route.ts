@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { BLOCKSCOUT_HOSTS, MORALIS_CHAINS } from './hosts';
+import { BLOCKSCOUT_HOSTS, MORALIS_CHAINS, parseFtMetadata } from './hosts';
 
 // On-chain wallet tracker — ported from Reach's `walletTracker:*` IPC handlers (electron/main.js).
 //
@@ -14,7 +14,17 @@ import { BLOCKSCOUT_HOSTS, MORALIS_CHAINS } from './hosts';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-type ChainType = 'evm' | 'solana' | 'tron' | 'near';
+type ChainType =
+  | 'evm'
+  | 'solana'
+  | 'tron'
+  | 'near'
+  | 'hyperliquid'
+  | 'cardano'
+  | 'sui'
+  | 'bittensor'
+  | 'injective'
+  | 'hedera';
 
 interface ChainCfg {
   rpc: string;
@@ -41,7 +51,27 @@ const CHAINS: Record<string, ChainCfg> = {
   avalanche: { rpc: 'https://avalanche-c-chain-rpc.publicnode.com', type: 'evm', decimals: 18, cgId: 'avalanche-2', native: 'AVAX' },
   solana: { rpc: 'https://api.mainnet-beta.solana.com', type: 'solana', decimals: 9, cgId: 'solana', native: 'SOL' },
   tron: { rpc: 'https://api.trongrid.io', type: 'tron', decimals: 6, cgId: 'tron', native: 'TRX' },
-  near: { rpc: 'https://rpc.mainnet.near.org', type: 'near', decimals: 24, cgId: 'near', native: 'NEAR' },
+  // rpc.mainnet.near.org was deprecated and now returns HTTP 429 + a "STOP USING IT" warning for
+  // every call, which surfaced as "0.00000000 NEAR / $0.00" on every NEAR wallet. FastNEAR is the
+  // provider NEAR's own deprecation notice points to — keyless, and it serves both view_account
+  // (balances) and call_function (ft_metadata) used by the token detail.
+  near: { rpc: 'https://free.rpc.fastnear.com', type: 'near', decimals: 24, cgId: 'near', native: 'NEAR' },
+  // ── Chains added beyond Reach's original ten. All keyless, native-balance-only (no token detail):
+  // none has a keyless multi-asset index comparable to Blockscout/Moralis, so their detail view shows
+  // the native coin row only, same as Solana/Tron do for priced tokens.
+  //
+  // Hyperliquid uses EVM-format 0x addresses but is NOT an EVM RPC chain — its balance comes from the
+  // L1 `info` API, and `.total` there is ALREADY a human-readable decimal string (see getBalance), so
+  // `decimals` is 0 and fromUnits is never applied to it. Don't "fix" this to 18.
+  hyperliquid: { rpc: 'https://api.hyperliquid.xyz/info', type: 'hyperliquid', decimals: 0, cgId: 'hyperliquid', native: 'HYPE' },
+  cardano: { rpc: 'https://api.koios.rest/api/v1', type: 'cardano', decimals: 6, cgId: 'cardano', native: 'ADA' },
+  sui: { rpc: 'https://fullnode.mainnet.sui.io:443', type: 'sui', decimals: 9, cgId: 'sui', native: 'SUI' },
+  // Bittensor has no keyless HTTP endpoint — balance comes via @polkadot/api over WS, lazily loaded
+  // from ./polkadot so no other chain pays that dependency's cost. `rpc` is the WS URL for reference.
+  bittensor: { rpc: 'wss://entrypoint-finney.opentensor.ai:443', type: 'bittensor', decimals: 9, cgId: 'bittensor', native: 'TAO' },
+  injective: { rpc: 'https://sentry.lcd.injective.network', type: 'injective', decimals: 18, cgId: 'injective-protocol', native: 'INJ' },
+  // Hedera — account ids are `0.0.N`, balance via the keyless public Mirror Node REST API (tinybar).
+  hedera: { rpc: 'https://mainnet-public.mirrornode.hedera.com', type: 'hedera', decimals: 8, cgId: 'hedera-hashgraph', native: 'HBAR' },
 };
 
 const UA =
@@ -102,6 +132,19 @@ function validAddress(address: string, type: ChainType): boolean {
   if (type === 'solana') return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
   if (type === 'tron') return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
   if (type === 'near') return /^[a-z0-9._-]{2,64}$/.test(address);
+  // Hyperliquid uses standard EVM 0x+40hex addresses.
+  if (type === 'hyperliquid') return /^0x[a-fA-F0-9]{40}$/.test(address);
+  // Sui addresses are 0x + 32 bytes (64 hex) — distinct length from EVM's 40, so unambiguous.
+  if (type === 'sui') return /^0x[a-fA-F0-9]{64}$/.test(address);
+  // Cardano Shelley bech32 payment addresses (addr1…). Loose min-length check, no checksum — a
+  // malformed one simply fails upstream at Koios, matching the NEAR validator's looseness.
+  if (type === 'cardano') return /^addr1[a-z0-9]{20,}$/.test(address);
+  // Injective bech32 (inj1…).
+  if (type === 'injective') return /^inj1[a-z0-9]{20,}$/.test(address);
+  // Bittensor SS58 addresses start with 5 and are ~47–48 base58 chars.
+  if (type === 'bittensor') return /^5[1-9A-HJ-NP-Za-km-z]{46,47}$/.test(address);
+  // Hedera account id: shard.realm.num, e.g. 0.0.12345.
+  if (type === 'hedera') return /^\d{1,10}\.\d{1,10}\.\d{1,12}$/.test(address);
   return false;
 }
 
@@ -161,6 +204,60 @@ async function getBalance(address: string, chain: string) {
     });
     const amount = (res.result as { amount?: string })?.amount || '0';
     return { balance: fromUnits(BigInt(amount), cfg.decimals) };
+  }
+
+  if (cfg.type === 'hyperliquid') {
+    // Spot HYPE balance from the L1 info API. `.total` is already a human-readable decimal string —
+    // NOT raw base units — so it's parsed directly and never divided (cfg.decimals is 0 here).
+    const res = (await rpc('https://api.hyperliquid.xyz/info', {
+      type: 'spotClearinghouseState',
+      user: address,
+    })) as { balances?: { coin?: string; total?: string }[] };
+    const hype = res?.balances?.find((b) => b.coin === 'HYPE');
+    return { balance: parseFloat(hype?.total ?? '0') || 0 };
+  }
+
+  if (cfg.type === 'cardano') {
+    const res = (await rpc(`${cfg.rpc}/address_info`, { _addresses: [address] })) as unknown as {
+      balance?: string;
+    }[];
+    const lovelace = Array.isArray(res) ? res[0]?.balance : undefined;
+    return { balance: fromUnits(BigInt(lovelace || '0'), cfg.decimals) };
+  }
+
+  if (cfg.type === 'sui') {
+    const res = await rpc(cfg.rpc, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'suix_getBalance',
+      params: [address, '0x2::sui::SUI'],
+    });
+    const mist = (res.result as { totalBalance?: string })?.totalBalance || '0';
+    return { balance: fromUnits(BigInt(mist), cfg.decimals) };
+  }
+
+  if (cfg.type === 'injective') {
+    const res = (await fetchJSON(
+      `${cfg.rpc}/cosmos/bank/v1beta1/balances/${address}`,
+    )) as { balances?: { denom?: string; amount?: string }[] };
+    const inj = res?.balances?.find((b) => b.denom === 'inj');
+    return { balance: fromUnits(BigInt(inj?.amount || '0'), cfg.decimals) };
+  }
+
+  if (cfg.type === 'hedera') {
+    const res = (await fetchJSON(`${cfg.rpc}/api/v1/accounts/${address}`)) as {
+      balance?: { balance?: number };
+    };
+    // Mirror Node returns the balance in tinybar as a JSON number; safe as a Number (< 2^53 for any
+    // real HBAR holding) so it's divided directly rather than via BigInt.
+    return { balance: (res?.balance?.balance ?? 0) / 10 ** cfg.decimals };
+  }
+
+  if (cfg.type === 'bittensor') {
+    // Lazy import so no other chain's request loads @polkadot/api (a large dependency). getTaoBalance
+    // degrades to 0 on any WS/connect failure, matching the empty-result fallback used elsewhere.
+    const { getTaoBalance } = await import('./polkadot');
+    return { balance: await getTaoBalance(address) };
   }
 
   return { balance: 0 };
@@ -421,8 +518,137 @@ async function getTokens(address: string, chain: string) {
     return { tokens, totalUsd: 0 };
   }
 
-  // Near has no token endpoint in Reach either — native balance only.
-  return { tokens: [], totalUsd: 0 };
+  if (cfg.type === 'near') {
+    return getNearTokens(address, chain, cfg);
+  }
+
+  // hyperliquid/cardano/sui/bittensor/injective: no keyless token index, so the detail view is the
+  // priced native coin only. getBalance already knows how to read each of these.
+  return getNativeOnlyTokens(address, chain, cfg);
+}
+
+/**
+ * Detail view for a chain with no token-enumeration source: a single native-coin row, priced off
+ * CoinGecko, which drives Total Value. Used by the five chains added beyond Reach's ten (hyperliquid,
+ * cardano, sui, bittensor, injective) — each has a keyless native-balance lookup in getBalance but no
+ * keyless multi-asset index to list held tokens.
+ */
+async function getNativeOnlyTokens(address: string, chain: string, cfg: ChainCfg) {
+  const { balance } = await getBalance(address, chain);
+  const prices = (await getPrices()) as Record<string, { usd?: number }>;
+  const nativePrice = prices?.[cfg.cgId]?.usd ?? 0;
+  const tokens: TrackedToken[] = [
+    {
+      symbol: cfg.native,
+      name: cfg.native,
+      balance,
+      usdValue: balance * nativePrice,
+      price: nativePrice,
+      type: 'native',
+      thumb: '',
+      contractAddress: '',
+    },
+  ];
+  return { tokens, totalUsd: balance * nativePrice };
+}
+
+/**
+ * NEAR token detail: the native NEAR balance (priced off CoinGecko) plus any NEP-141 fungible tokens
+ * the address holds. NEAR has no single "list an account's tokens" RPC, so the FT contract list comes
+ * from FastNEAR's keyless index; each contract's symbol/decimals then come from its own ft_metadata
+ * view call. Like Solana SPL / Tron TRC-20 here, NEP-141 tokens carry no USD price (no rate feed), so
+ * they show a balance only — the native NEAR row is the priced one that drives Total Value.
+ */
+async function getNearTokens(address: string, chain: string, cfg: ChainCfg) {
+  const { balance } = await getBalance(address, chain);
+  const prices = (await getPrices()) as Record<string, { usd?: number }>;
+  const nativePrice = prices?.[cfg.cgId]?.usd ?? 0;
+
+  const tokens: TrackedToken[] = [
+    {
+      symbol: cfg.native,
+      name: cfg.native,
+      balance,
+      usdValue: balance * nativePrice,
+      price: nativePrice,
+      type: 'native',
+      thumb: '',
+      contractAddress: '',
+    },
+  ];
+
+  // FastNEAR's FT index — keyless. Degrade to native-only if it's down rather than failing the panel.
+  let list: { contract_id?: string; balance?: string }[] = [];
+  try {
+    const res = (await fetchJSON(
+      `https://api.fastnear.com/v1/account/${address}/ft`,
+    )) as { tokens?: { contract_id?: string; balance?: string }[] };
+    list = Array.isArray(res?.tokens) ? res.tokens : [];
+  } catch {
+    return packTokens(tokens);
+  }
+
+  // Cap the metadata fan-out: a spammy account can list hundreds of dust/airdrop contracts, and each
+  // costs an ft_metadata RPC. Fetch metadata for at most NEAR_TOKEN_LIMIT non-zero balances.
+  const holdings = list.filter((t) => t.contract_id && t.balance && t.balance !== '0');
+  const metas = await Promise.all(
+    holdings.slice(0, NEAR_TOKEN_LIMIT).map((t) => nearFtMeta(cfg.rpc, t.contract_id as string)),
+  );
+
+  holdings.slice(0, NEAR_TOKEN_LIMIT).forEach((t, i) => {
+    const meta = metas[i];
+    if (!meta) return;
+    // FastNEAR balances are integer strings; guard the BigInt cast so one malformed entry skips its
+    // row instead of throwing out of the whole NEAR detail fetch.
+    let bal: number;
+    try {
+      bal = fromUnits(BigInt(t.balance as string), meta.decimals);
+    } catch {
+      return;
+    }
+    if (bal <= 0) return;
+    tokens.push({
+      symbol: meta.symbol,
+      name: meta.name || meta.symbol,
+      balance: bal,
+      usdValue: 0,
+      price: 0,
+      type: 'NEP-141',
+      thumb: meta.icon,
+      contractAddress: t.contract_id as string,
+    });
+  });
+
+  return packTokens(tokens);
+}
+
+/** Most NEP-141 contracts to resolve metadata for per wallet — keeps the ft_metadata fan-out bounded. */
+const NEAR_TOKEN_LIMIT = 50;
+
+/** Read a NEP-141 contract's ft_metadata (symbol/name/decimals/icon) via a view call. null on error. */
+async function nearFtMeta(
+  rpcUrl: string,
+  contractId: string,
+): Promise<{ symbol: string; name: string; decimals: number; icon: string } | null> {
+  try {
+    const res = await rpc(rpcUrl, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'query',
+      params: {
+        request_type: 'call_function',
+        finality: 'final',
+        account_id: contractId,
+        method_name: 'ft_metadata',
+        args_base64: 'e30=', // "{}"
+      },
+    });
+    // The contract's return value arrives as a byte array of the JSON-encoded metadata.
+    const bytes = (res.result as { result?: number[] })?.result;
+    return parseFtMetadata(bytes, contractId);
+  } catch {
+    return null;
+  }
 }
 
 // CoinGecko's free tier rate-limits hard, and every tracked wallet refresh asks for the same handful

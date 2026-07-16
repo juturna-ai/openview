@@ -354,7 +354,24 @@ export default function WalletTrackerView() {
   // already fetched and hammer the same rate-limited endpoints, which is the failure this guard
   // exists to prevent. Prioritisation is a nice-to-have; not melting the RPCs is not.
   const fetchOrder = useMemo(() => {
-    if (chainFilter === ALL_CHAINS) return wallets;
+    if (chainFilter === ALL_CHAINS) {
+      // The seed list is grouped by chain (ethereum … near), so a straight pass fetches NEAR — the
+      // last group — only after ~90s, leaving every NEAR wallet at "0.00000000 NEAR / $0.00" for a
+      // minute on load, which reads as broken. Round-robin across chains instead so each chain gets
+      // its first balances early and no chain is starved at the tail. Same set, interleaved order.
+      const byChain = new Map<string, TrackedWallet[]>();
+      for (const w of wallets) {
+        const g = byChain.get(w.chain);
+        if (g) g.push(w);
+        else byChain.set(w.chain, [w]);
+      }
+      const groups = [...byChain.values()];
+      const interleaved: TrackedWallet[] = [];
+      for (let i = 0; interleaved.length < wallets.length; i++) {
+        for (const g of groups) if (i < g.length) interleaved.push(g[i]);
+      }
+      return interleaved;
+    }
     const onScreen = new Set(visible.map((w) => w.id));
     return [...visible, ...wallets.filter((w) => !onScreen.has(w.id))];
   }, [wallets, visible, chainFilter]);

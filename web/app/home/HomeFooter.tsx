@@ -11,8 +11,7 @@ export default function HomeFooter({ year }: { year: number }) {
   const pathname = usePathname();
   if (
     pathname?.startsWith('/home/journal') ||
-    pathname?.startsWith('/home/wallet') ||
-    pathname?.startsWith('/home/assets')
+    pathname?.startsWith('/home/wallet')
   )
     return null;
   return (

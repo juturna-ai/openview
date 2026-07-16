@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AssetRef } from './AssetDetailView';
+import GlobalStats from '../GlobalStats';
 import CoinIcon from './CoinIcon';
 import { getMovers, setMovers } from './dataCache';
 import MarketIcon from './MarketIcon';
@@ -31,6 +32,9 @@ interface Coin {
   change30d: number | null;
   volume: number | null;
   marketCap: number | null;
+  circulatingSupply: number | null;
+  maxSupply: number | null;
+  sparkline7d: number[];
   thumb: string;
 }
 
@@ -80,8 +84,12 @@ interface LeaderRow {
   cmcRank: number | null;
   price: number | null;
   change24h: number | null;
+  change7d: number | null;
   marketCap: number | null;
   volume: number | null;
+  circulatingSupply: number | null;
+  maxSupply: number | null;
+  sparkline7d: number[];
   thumb: string;
 }
 
@@ -112,7 +120,7 @@ type TabKey =
   | 'sentiment';
 
 type ChangeKey = 'change1h' | 'change24h' | 'change7d' | 'change30d';
-type SortKey = 'cmcRank' | 'price' | 'volume' | 'marketCap' | ChangeKey;
+type SortKey = 'cmcRank' | 'price' | 'volume' | 'marketCap' | 'circulatingSupply' | ChangeKey;
 
 // The market tab row. Leaderboards is deliberately absent — it's a left-sidebar destination of its
 // own now, so listing it here too would give it two competing entry points.
@@ -213,7 +221,62 @@ const fmtMcap = (v: number | null): string => {
   return `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 };
 
+/** Whole-token supply count (no dollar sign) — B/M/K like volume, but a plain number. */
+const fmtSupply = (v: number | null): string => {
+  if (v == null) return '—';
+  if (v >= 1e12) return `${(v / 1e12).toFixed(2)}T`;
+  if (v >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
+  return v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+};
+
 const fgColor = (v: number) => (v >= 50 ? '#16c784' : v >= 25 ? '#f5c518' : '#ea3943');
+
+/** Inline 7d price sparkline. Colored by net direction (last vs first), green up / red down. */
+function Sparkline({ data }: { data: number[] }) {
+  if (!data || data.length < 2) return <span className="gl-spark-empty">—</span>;
+  const w = 96;
+  const h = 28;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const span = max - min || 1;
+  const step = w / (data.length - 1);
+  const pts = data
+    .map((v, i) => `${(i * step).toFixed(1)},${(h - ((v - min) / span) * h).toFixed(1)}`)
+    .join(' ');
+  const up = data[data.length - 1] >= data[0];
+  return (
+    <svg className="gl-spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={up ? '#16c784' : '#ea3943'}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** Momentum-derived sentiment (same heuristic as the Community Sentiment tab): a +25% 24h move reads
+ *  as fully bullish. No accurate keyless per-coin sentiment feed exists, so this is the honest signal. */
+function SentimentCell({ pct }: { pct: number | null }) {
+  if (pct == null) return <span className="gl-sent-neutral">—</span>;
+  const s = Math.min(100, Math.max(0, 50 + pct * 2));
+  const bullish = s >= 50;
+  const label = s >= 55 ? 'Bullish' : s <= 45 ? 'Bearish' : 'Neutral';
+  const color = label === 'Neutral' ? 'var(--muted)' : bullish ? '#16c784' : '#ea3943';
+  return (
+    <div className="gl-sent-cell">
+      <span className="gl-sent-label" style={{ color }}>{label}</span>
+      <div className="gl-sent-bar">
+        <div className="gl-sent-fill" style={{ width: `${s.toFixed(0)}%`, background: color }} />
+      </div>
+    </div>
+  );
+}
 
 function ChangePill({ pct }: { pct: number | null }) {
   if (pct == null) return <span className="gl-change-pill">—</span>;
@@ -415,6 +478,10 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
     return src.slice(0, LEADERBOARD_MAX).map((r, i) => ({
       ...r,
       cmcRank: i + 1,
+      change7d: null,
+      circulatingSupply: null,
+      maxSupply: null,
+      sparkline7d: [],
       thumb: '',
       key: r.symbol,
     }));
@@ -522,12 +589,19 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
               {sortableTh('change24h', '24h %', 'gl-th-change')}
               {sortableTh('marketCap', MCAP_LABEL[cls], 'gl-th-mcap')}
               {sortableTh('volume', 'Volume(24h)', 'gl-th-volume')}
+              {cls === 'crypto' && (
+                <>
+                  {sortableTh('circulatingSupply', 'Circulating Supply', 'gl-th-supply')}
+                  <th className="gl-th-sent">Sentiment</th>
+                  <th className="gl-th-spark">7d Price%</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
             {sorted.length === 0 ? (
               <tr>
-                <td className="gl-td-empty" colSpan={6}>
+                <td className="gl-td-empty" colSpan={cls === 'crypto' ? 9 : 6}>
                   {loading ? 'Loading…' : 'No data available'}
                 </td>
               </tr>
@@ -558,6 +632,31 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
                   </td>
                   <td className="gl-td-mcap">{fmtMcap(c.marketCap)}</td>
                   <td className="gl-td-volume">{fmtVol(c.volume)}</td>
+                  {cls === 'crypto' && (
+                    <>
+                      <td className="gl-td-supply">
+                        <span className="gl-supply-val">
+                          {fmtSupply(c.circulatingSupply)} {c.symbol}
+                        </span>
+                        {c.circulatingSupply != null && c.maxSupply != null && (
+                          <div className="gl-supply-bar">
+                            <div
+                              className="gl-supply-fill"
+                              style={{
+                                width: `${Math.min(100, (c.circulatingSupply / c.maxSupply) * 100).toFixed(1)}%`,
+                              }}
+                            />
+                          </div>
+                        )}
+                      </td>
+                      <td className="gl-td-sent">
+                        <SentimentCell pct={c.change24h} />
+                      </td>
+                      <td className="gl-td-spark">
+                        <Sparkline data={c.sparkline7d} />
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))
             )}
@@ -748,7 +847,7 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
         </div>
       )}
 
-      <div className="gl-controls">
+      <div className={'gl-controls' + (isLB ? ' gl-controls-lb' : '')}>
         <div className="gl-controls-left">
           {isGL && (
             <>
@@ -792,6 +891,10 @@ export default function MoversView({ mode = 'market', onSelect }: Props = {}) {
           {updatedAt && <span className="gl-updated">{updatedAt.toLocaleTimeString()}</span>}
         </button>
       </div>
+
+      {/* Market-snapshot cards (Market Cap / Fear & Greed / Altcoin Season) — crypto board only.
+          Rendered after the controls row so the refresh button sits above the Altcoin Season card. */}
+      {isLB && assetClass === 'crypto' && <GlobalStats />}
 
       {tab === 'leaderboards' && (
         <>

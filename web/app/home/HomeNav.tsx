@@ -16,11 +16,10 @@ const LINKS = [
 
 export default function HomeNav() {
   const pathname = usePathname();
-  // Journal / Wallet / Assets are standalone dashboards — no heading nav row.
+  // Journal / Wallet are standalone dashboards — no heading nav row.
   if (
     pathname?.startsWith('/home/journal') ||
-    pathname?.startsWith('/home/wallet') ||
-    pathname?.startsWith('/home/assets')
+    pathname?.startsWith('/home/wallet')
   )
     return null;
   return (

@@ -26,6 +26,14 @@ export const CHAINS: Chain[] = [
   { id: 'solana', label: 'Solana', symbol: 'SOL', color: '#9945ff', explorer: 'https://solscan.io/account/', cgId: 'solana' },
   { id: 'tron', label: 'Tron', symbol: 'TRX', color: '#ef0027', explorer: 'https://tronscan.org/#/address/', cgId: 'tron' },
   { id: 'near', label: 'NEAR', symbol: 'NEAR', color: '#000000', explorer: 'https://nearblocks.io/address/', cgId: 'near' },
+  // Chains added beyond Reach's original ten — native-balance-only (no token detail). cgId must match
+  // the route's CHAINS map.
+  { id: 'hyperliquid', label: 'Hyperliquid', symbol: 'HYPE', color: '#50d2c1', explorer: 'https://app.hyperliquid.xyz/explorer/address/', cgId: 'hyperliquid' },
+  { id: 'cardano', label: 'Cardano', symbol: 'ADA', color: '#0033ad', explorer: 'https://cardanoscan.io/address/', cgId: 'cardano' },
+  { id: 'sui', label: 'Sui', symbol: 'SUI', color: '#4da2ff', explorer: 'https://suiscan.xyz/mainnet/account/', cgId: 'sui' },
+  { id: 'bittensor', label: 'Bittensor', symbol: 'TAO', color: '#000000', explorer: 'https://taostats.io/account/', cgId: 'bittensor' },
+  { id: 'injective', label: 'Injective', symbol: 'INJ', color: '#0082fa', explorer: 'https://explorer.injective.network/account/', cgId: 'injective-protocol' },
+  { id: 'hedera', label: 'Hedera', symbol: 'HBAR', color: '#000000', explorer: 'https://hashscan.io/mainnet/account/', cgId: 'hedera-hashgraph' },
 ];
 
 export function getChain(id: string): Chain | undefined {
@@ -150,8 +158,18 @@ export function detectChain(address: string): string | null {
   const a = address.trim();
   if (!a) return null;
   if (a.startsWith('T') && a.length === 34) return 'tron';
+  // Sui's 0x+64hex must be checked before the EVM 0x+40hex rule (different lengths, so no overlap, but
+  // order makes the intent clear). Hyperliquid also uses 0x+40hex and so is indistinguishable from an
+  // Ethereum address — it isn't auto-detected; the user picks it from the dropdown.
+  if (/^0x[a-fA-F0-9]{64}$/.test(a)) return 'sui';
   if (/^0x[a-fA-F0-9]{40}$/.test(a)) return 'ethereum';
   if (a.endsWith('.near') || a.endsWith('.testnet')) return 'near';
+  if (/^addr1[a-z0-9]{20,}$/.test(a)) return 'cardano';
+  if (/^inj1[a-z0-9]{20,}$/.test(a)) return 'injective';
+  if (/^\d{1,10}\.\d{1,10}\.\d{1,12}$/.test(a)) return 'hedera';
+  // Bittensor SS58 (starts with 5, ~47–48 base58 chars). Checked before Solana: it's longer than
+  // Solana's 44-char max so the two don't overlap, but the explicit branch documents the distinction.
+  if (/^5[1-9A-HJ-NP-Za-km-z]{46,47}$/.test(a)) return 'bittensor';
   if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)) return 'solana';
   return null;
 }
@@ -188,9 +206,10 @@ export interface TrackedWallet {
 export const TRACKED_KEY = 'ov_tracked_wallets';
 
 /**
- * The seeded whale set: the ~20 largest verified public wallets on each of the 10 supported chains
- * (173 in total — some chains have fewer than 20 addresses that are both publicly identified and
- * hold a meaningful native balance, and padding those out would have meant inventing addresses).
+ * The seeded whale set: the largest verified public wallets on each supported chain (231 in total —
+ * some chains have fewer than 20 addresses that are both publicly identified and hold a meaningful
+ * native balance, and padding those out would have meant inventing addresses; Bittensor has none, as
+ * its holders' TAO is bonded to subnets so the liquid balance the tracker reads is ~0).
  *
  * Every entry was checked against /api/wallet-tracker before being committed: it passes that chain's
  * address validator AND returns a non-zero native balance. That bar exists because a wrong address
@@ -374,6 +393,78 @@ export const DEFAULT_WALLETS: Omit<TrackedWallet, 'id'>[] = [
   { address: 'blockdaemon.poolv1.near', chain: 'near', label: 'Blockdaemon Staking Pool' },
   { address: 'stakely_io.poolv1.near', chain: 'near', label: 'Stakely.io Staking Pool' },
   { address: 'operator.meta-pool.near', chain: 'near', label: 'Meta Pool Operator' },
+  // Chains added beyond Reach's ten. Every address here was verified live (passes the chain's validator
+  // AND returned a non-zero native balance via /api/wallet-tracker) before commit. Where a chain's top
+  // holders can't be labelled (no keyless label source), they're seeded as unlabelled "Whale N" — the
+  // address and balance are real, only the entity name is unknown. Bittensor is NOT seeded: its holders'
+  // TAO is bonded to subnets, so `system.account.free` reads ~0 and every seed would render $0.00.
+  //
+  // Sui — top holders by live SUI balance (Sui fullnode RPC). First five are labelled exchange wallets.
+  { address: '0x60dd01bc037e2c1ea2aaf02187701f9f4453ba323338d2f2f521957065b0984d', chain: 'sui', label: 'Bybit Hot Wallet' },
+  { address: '0x935029ca5219502a47ac9b69f556ccf6e2198b5e7815cf50f68846f723739cbd', chain: 'sui', label: 'Binance Hot Wallet' },
+  { address: '0x62f36b79d7ea8ae189491854edd9318b29c75346792177b230a95f333ffa53ad', chain: 'sui', label: 'Gate.io' },
+  { address: '0x1f7b27844f2c4a0262b2c481f7ab956d10ace524c5a7b06c3742cfb8701db714', chain: 'sui', label: 'HTX' },
+  { address: '0xd5ccdf77cab59778ad6c6d599af3819b0281c3fe434f7df4b82290620331bb01', chain: 'sui', label: 'KuCoin' },
+  { address: '0x15610fa7ee546b96cb580be4060fae1c4bb15eca87f9a0aa931512bad445fc76', chain: 'sui', label: 'Sui Whale 1' },
+  { address: '0x432875d9abcd8d3ed46e344b7dbeae952d014e8c26fc650e7503417a292cf43d', chain: 'sui', label: 'Sui Whale 2' },
+  { address: '0x7d819ea06c8dea160dce6a7df62ba3413762f05377087315441f57239198d2ac', chain: 'sui', label: 'Sui Whale 3' },
+  { address: '0xf8b7b95d01ae79756fc3d1bc58675e59a17f07cdafe3d31ea57425adbec2d43f', chain: 'sui', label: 'Sui Whale 4' },
+  { address: '0x533decc3978e2f8f2230d0d4246e81991125404e88699f699499a1aa7b3f82ec', chain: 'sui', label: 'Sui Whale 5' },
+  { address: '0x45d5eef09fbf5042a04933a77c7202d2f1d5f363b5ed2bb1b6a1fb73e5c5629d', chain: 'sui', label: 'Sui Whale 6' },
+  { address: '0xca7bdbdad05c10f3da6f88a05b431829559d4aa362f2cbf7958e282205f708e6', chain: 'sui', label: 'Sui Whale 7' },
+  { address: '0xc38df8a75e00aa4afdfb0a3c0aa5638a7fda340ab1b9e533649a34ba30a4ad68', chain: 'sui', label: 'Sui Whale 8' },
+  { address: '0x9b4bef32c443109177a1b6ad3aa792157b3b57bdc544078a1a0b1bba08db93bd', chain: 'sui', label: 'Sui Whale 9' },
+  { address: '0x7f6626f0787309355b4b85de40596f5b096050eab5b9061dcb9001df961b3bfb', chain: 'sui', label: 'Sui Whale 10' },
+  // Hyperliquid — protocol addresses (assistance fund, HLP vault), verified via the info API.
+  { address: '0xfefefefefefefefefefefefefefefefefefefefe', chain: 'hyperliquid', label: 'Hyperliquid Assistance Fund' },
+  { address: '0xdfc24b077bc1425ad1dea75bcb6f8158e10df303', chain: 'hyperliquid', label: 'Hyperliquidity Provider (HLP)' },
+  // Cardano — top ADA holders by live balance (Koios). Unlabelled: no keyless entity-label source.
+  { address: 'addr1q8elqhkuvtyelgcedpup58r893awhg3l87a4rz5d5acatuj9y84nruafrmta2rewd5l46g8zxy4l49ly8kye79ddr3ksqal35g', chain: 'cardano', label: 'Cardano Whale 1' },
+  { address: 'addr1q9cp6hfrsvqc0jn9eeskdtk3l7usqaa35lm925f7usqtzhnsr4wj8qcpsl9xtnnpv6hdrlaeqpmmrflk24gnaeqqk90qjgxgeq', chain: 'cardano', label: 'Cardano Whale 2' },
+  { address: 'addr1q87rcd9232jtucgfjgczqcx735q2q6ajjdd7frft96xzhqkqtalsh5zgnmh0yzfthdjwlctpneg8eqm9wdcg75xp8yvsvqz54r', chain: 'cardano', label: 'Cardano Whale 3' },
+  { address: 'addr1q8hsff3uwtphx7dtya7unjwjwug52e5jvqp09je6pwqx8k4jvuxrw2x5rr7e258a33yzkrhhlrrc5ezvd2z7qtdq0gasme44c9', chain: 'cardano', label: 'Cardano Whale 4' },
+  { address: 'addr1qy5q5v0hqu4y8wjxhkjcx0dprxuqv0j3u4ysrcycgma6hernmsp6xq38ycpv85av20trkz82tyvw9ncy3td2kzk2z7wsq24f9j', chain: 'cardano', label: 'Cardano Whale 5' },
+  { address: 'addr1qxwn5rd6ad92md23vpazl73mq92gyww756cjwyptcv77ljya8gxm46624k64zcr69larkq25sguaaf43yugzhseaalyqad8n24', chain: 'cardano', label: 'Cardano Whale 6' },
+  { address: 'addr1qywcgx5rejl4ush2zzdtlrzlgsec6hty66f4w0w0nlp0nfqassdg8n9ltepw5yy6h7x973pn34wkf45n2u7ul87zlxjq6mluvc', chain: 'cardano', label: 'Cardano Whale 7' },
+  { address: 'addr1qyju7eknfum5enypcrqu6lwyazugm9m3cz9kd9klg7pn6gf9eandxnehfnxgrsxpe47uf69c3kthrsytv6td73ur85ssy54xh5', chain: 'cardano', label: 'Cardano Whale 8' },
+  { address: 'addr1q99j4v4tplxmxt4md3r6chjwt0sfeq23z740s3zk5cdhccl7xy874vgy876lvf7r6nagq59pmrd4wdy6mc0jv0zfdfhsqnehxv', chain: 'cardano', label: 'Cardano Whale 9' },
+  { address: 'addr1qyjfzgs74e90e7yk5yw7gey0ct35su6qmjsufpjc9w9t0ljf6fs0lrl9v94vqc0aw07wpt7l8l4q354l2az77ca82v2svfvlhl', chain: 'cardano', label: 'Cardano Whale 10' },
+  { address: 'addr1q8ypxk34mqy59rcz73frl6c5a3kgnhd6vuds4whhnrzdwregnyfxeht3kxughmn8jgcq69txqtlyvs73fkglnh5yj3pq2xqylr', chain: 'cardano', label: 'Cardano Whale 11' },
+  { address: 'addr1qyh2mgk5m2m4cyvyfsyx05eku9d869xfpddr2vexcx3ccr3w4k3dfk4htsgcgnqgvlfndc26052vjz66x5ejdsdr3s8qsjp7za', chain: 'cardano', label: 'Cardano Whale 12' },
+  { address: 'addr1qyq7a3dg7ejlg3t0h3pxarxxx6j064w70su8qg5w6g9emxx2vhfja7n77uulmuyex4nxkl3k37wf0w504gzzu9pq2m2sf7ew7h', chain: 'cardano', label: 'Cardano Whale 13' },
+  { address: 'addr1q9lnc0jsh3f76hmapmsf8m7d6a32gm993gyhjspfvjgpdatl8sl9p0zna40h6rhqj0hum4mz53k2tzsf09qzjeyszm6s6n08gw', chain: 'cardano', label: 'Cardano Whale 14' },
+  { address: 'addr1qy8jevkuf8dj5ytdv336m425kscnp8e3kejglxfgdrf7zzk3wzw4kgc03shtx7prwwa7j695cc9u6kj8qp72kkv4yvhq8w9ga9', chain: 'cardano', label: 'Cardano Whale 15' },
+  // Hedera — top HBAR accounts by live balance (Mirror Node). Treasury/fee + council consensus nodes.
+  { address: '0.0.652978', chain: 'hedera', label: 'Hedera Whale 1' },
+  { address: '0.0.2', chain: 'hedera', label: 'Hedera Treasury' },
+  { address: '0.0.98', chain: 'hedera', label: 'Hedera Fee Collection' },
+  { address: '0.0.4', chain: 'hedera', label: 'Council Node — Swirlds' },
+  { address: '0.0.8', chain: 'hedera', label: 'Council Node — Google' },
+  { address: '0.0.15', chain: 'hedera', label: 'Council Node — Deutsche Telekom' },
+  { address: '0.0.14', chain: 'hedera', label: 'Council Node — IBM' },
+  { address: '0.0.18', chain: 'hedera', label: 'Council Node — Dentons' },
+  { address: '0.0.9', chain: 'hedera', label: 'Council Node — Zain Group' },
+  { address: '0.0.29', chain: 'hedera', label: 'Council Node — Aberdeen' },
+  { address: '0.0.10', chain: 'hedera', label: 'Council Node — Magalu' },
+  { address: '0.0.35', chain: 'hedera', label: 'Council Node — Arrow Electronics' },
+  { address: '0.0.7', chain: 'hedera', label: 'Council Node — Nomura' },
+  { address: '0.0.28', chain: 'hedera', label: 'Council Node — Ubisoft' },
+  { address: '0.0.20', chain: 'hedera', label: 'Council Node — Australian Payments Plus' },
+  // Injective — top native-INJ bank-balance holders (LCD). The largest are protocol module accounts
+  // (staking pools, distribution, auction, gov); the rest are labelled validator operator wallets. Most
+  // INJ wealth sits in the staking module as delegations, so liquid validator balances are small but
+  // real. No keyless source labels exchange/foundation wallets, so these documented accounts are used.
+  { address: 'inj1fl48vsnmsdzcv85q5d2q4z5ajdha8yu3lj7tt0', chain: 'injective', label: 'Bonded Tokens Pool' },
+  { address: 'inj1tygms3xhhs3yv487phx3dw4a95jn7t7ltjz6am', chain: 'injective', label: 'Not-Bonded Tokens Pool' },
+  { address: 'inj1jv65s3grqf6v6jl3dp4t6c9t9rk99cd8dkncm8', chain: 'injective', label: 'Community Pool' },
+  { address: 'inj1j4yzhgjm00ch3h0p9kel7g8sp6g045qf32pzlj', chain: 'injective', label: 'Auction Module' },
+  { address: 'inj19a77dzm2lrxt2gehqca3nyzq077kq7qsl2wxq3', chain: 'injective', label: 'SCV-Security Validator' },
+  { address: 'inj1da0shwz2mcup5rxkykquc9a7mh4s2hke23stau', chain: 'injective', label: 'FalconX Validator' },
+  { address: 'inj1yljq5pdnx84kkg30jfmz6ddu4eyp7twyknhswd', chain: 'injective', label: 'Core ONE Validator' },
+  { address: 'inj1nm48eujr28u3htqrjumfwhytn63rmca2k97n70', chain: 'injective', label: 'Nansen Validator' },
+  { address: 'inj1g4d6dmvnpg7w7yugy6kplndp7jpfmf3k5d9ak9', chain: 'injective', label: 'Figment Validator' },
+  { address: 'inj1rqqpyuka5dxulzjslnzjld2ltcw5095r5f88w6', chain: 'injective', label: 'Innovating Capital Validator' },
+  { address: 'inj1lsuqpgm8kgwpq96ewyew26xnfwyn3lh3y7knzj', chain: 'injective', label: 'Binance Staking Validator' },
 ];
 
 /** Seeded wallets carry a `default-N` id; anything else in storage was added by the user. */
@@ -384,8 +475,11 @@ const SEED_ID_PREFIX = 'default-';
  * existing user's stale seed set can be migrated forward — see loadTracked.
  *   1 → Reach's original 20 (Ethereum-heavy)
  *   2 → 173 wallets, ~20 per chain across all 10 chains
+ *   3 → added hyperliquid/cardano/sui/bittensor/injective support; +8 verified seeds on the new chains
+ *   4 → added Hedera; filled the new chains' seeds to 231 total (Sui/Cardano/Hedera whales, Injective
+ *       module+validator accounts). Bittensor stays unseeded — its holders' TAO is bonded, so free ≈ 0.
  */
-export const SEED_VERSION = 2;
+export const SEED_VERSION = 4;
 export const SEED_VERSION_KEY = 'ov_tracked_seed_version';
 
 export function defaultWallets(): TrackedWallet[] {
