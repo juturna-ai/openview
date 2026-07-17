@@ -11,12 +11,51 @@ export default function ContactForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
+  // Firing the mailto: gives no callback, and on a machine with no mail client it silently
+  // no-ops — so we always show a confirmation panel with a copyable address as the fallback
+  // path, rather than leaving the user unsure whether anything happened.
+  const [sent, setSent] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const subject = encodeURIComponent(`Openview contact — ${name || 'no name'}`);
     const body = encodeURIComponent(`From: ${name} <${email}>\n\n${message}`);
     window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
+    setSent(true);
+  }
+
+  async function copyEmail() {
+    try {
+      await navigator.clipboard.writeText(CONTACT_EMAIL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked — the address is shown in the text regardless */
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="ov-form ov-form-sent" role="status">
+        <p>
+          Your mail app should have opened with the message ready to send. If nothing opened, email
+          us directly at{' '}
+          <button type="button" className="ov-link-btn" onClick={copyEmail}>
+            {CONTACT_EMAIL}
+          </button>
+          {copied && <span className="ov-copied"> copied</span>}.
+        </p>
+        <button
+          type="button"
+          className="ov-btn"
+          style={{ alignSelf: 'flex-start' }}
+          onClick={() => setSent(false)}
+        >
+          Back
+        </button>
+      </div>
+    );
   }
 
   return (

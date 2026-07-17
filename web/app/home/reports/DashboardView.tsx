@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import CoinIcon from '../wallet/CoinIcon';
 import { Icon } from '../wallet/icons';
 import { getFeed, setFeed } from './dataCache';
@@ -262,11 +262,17 @@ export default function DashboardView({ onOpenPeriod }: { onOpenPeriod: (p: Peri
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState(true);
 
+  // Latest-load-wins: on a first empty-cache visit the mount fetch and a manual
+  // Refresh can overlap, and the slower (staler) one must not overwrite the result.
+  const loadSeq = useRef(0);
+
   const load = useCallback(async (signal?: AbortSignal) => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const res = await fetch('/api/reports/list?limit=20', { signal });
       const d = res.ok ? await res.json() : null;
+      if (seq !== loadSeq.current) return;
       const list = (d?.reports ?? []) as FeedReport[];
       setConfigured(d?.configured !== false);
 
@@ -280,6 +286,7 @@ export default function DashboardView({ onOpenPeriod }: { onOpenPeriod: (p: Peri
       const live = await fetch('/api/reports/preview?period=daily', { signal })
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null);
+      if (seq !== loadSeq.current) return;
       if (live) {
         setFeed([live]);
         setReports([live]);
@@ -287,7 +294,7 @@ export default function DashboardView({ onOpenPeriod }: { onOpenPeriod: (p: Peri
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') return;
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, []);
 

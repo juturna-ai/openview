@@ -637,3 +637,12 @@ button permanently inert for the session — the count visibly reverted while th
 dead. Lesson: extract the rollback into a single function called from every failure path (non-2xx,
 network throw, AND an unparseable 2xx body), so it's impossible to undo half the update. If an
 optimistic update touches N pieces of state, the rollback must touch the same N.
+
+## A reference screenshot is a style sample, not a spec expansion (2026-07-17)
+Asked for tabs "All / Crypto / Stocks & more (+ exchange sub-row)", the user then sent a
+TradingView screenshot saying "something like this" — and I replaced their tab list with
+TradingView's full category set (Stocks/Funds/Futures/Forex/Indices pills). They had to
+correct me: the screenshot illustrated the *look*, and even that wasn't wanted ("keep the
+old button style"). Lesson: when the user enumerates UI items, implement exactly that
+enumeration; a reference image only changes what they say it changes. If it seems to imply
+more, ask one question rather than importing the whole design.

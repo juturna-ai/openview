@@ -1,30 +1,15 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { computePnl } from './trades';
 import type { AssetClass, Trade, TradeDirection, TradeType } from './trades';
 
 // Add-trade dialog, opened from the calendar's right-click context menu. The date is fixed to the
-// cell that was clicked; everything else is entered here. P&L is derived from entry/exit/size unless
-// the trade is left open, in which case it is forced to 0 (see the model notes in trades.ts).
+// cell that was clicked; everything else is entered here. P&L is derived from entry/exit/margin ×
+// leverage unless the trade is left open, in which case it is forced to 0 (see the model notes in
+// trades.ts).
 
 const ASSET_CLASSES: AssetClass[] = ['stocks', 'futures', 'forex', 'crypto', 'options'];
-
-/**
- * Realized P&L from price movement, net of commissions. Quantity comes from position size
- * (notional USD) divided by entry price, so a $10k long from 100 → 110 nets $1,000.
- */
-function computePnl(
-  entry: number,
-  exit: number,
-  size: number,
-  direction: TradeDirection,
-  commissions: number,
-): number {
-  if (!entry || !size) return -commissions;
-  const qty = size / entry;
-  const move = direction === 'long' ? exit - entry : entry - exit;
-  return qty * move - commissions;
-}
 
 interface Props {
   /** 'YYYY-MM-DD' — the calendar cell the user right-clicked. */
@@ -60,15 +45,16 @@ export default function TradeModal({ dateKey, onSave, onClose }: Props) {
     return Number.isFinite(n) ? n : 0;
   };
 
+  const leverage = num(margin) || 1;
   const preview = isOpen
     ? 0
-    : computePnl(num(entry), num(exit), num(size), direction, num(commissions));
+    : computePnl(num(entry), num(exit), num(size), direction, num(commissions), leverage);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!symbol.trim()) return;
     const entryPrice = num(entry);
-    const sizeUsd = num(size);
+    const marginUsd = num(size);
     onSave({
       trade_date: dateKey,
       symbol: symbol.trim().toUpperCase(),
@@ -76,12 +62,14 @@ export default function TradeModal({ dateKey, onSave, onClose }: Props) {
       asset_class: assetClass,
       entry_price: entryPrice,
       exit_price: isOpen ? 0 : num(exit),
-      position_size: sizeUsd,
+      position_size: marginUsd,
       pnl: preview,
       commissions: num(commissions),
-      margin: num(margin) || 1,
+      margin: leverage,
       trade_type: tradeType,
-      amount_asset: tradeType === 'spot' && entryPrice ? sizeUsd / entryPrice : null,
+      // Quantity of the underlying = notional (margin × leverage) / entry, spot only.
+      amount_asset:
+        tradeType === 'spot' && entryPrice ? (marginUsd * leverage) / entryPrice : null,
       is_open: isOpen,
       setup_tag: setupTag.trim() || null,
       notes: notes.trim() || null,
@@ -170,7 +158,7 @@ export default function TradeModal({ dateKey, onSave, onClose }: Props) {
           </label>
 
           <label className="trade-field">
-            <span>Position Size (USD)</span>
+            <span>Margin (USD)</span>
             <input
               type="number"
               step="any"

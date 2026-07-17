@@ -488,7 +488,12 @@ export default function WalletTrackerView() {
     }
   };
 
+  // Monotonic id per openDetail call — a stale response (wallet A resolving after
+  // the user already clicked wallet B) must not overwrite B's panel.
+  const detailSeq = useRef(0);
+
   const openDetail = async (w: TrackedWallet) => {
+    const seq = ++detailSeq.current;
     setDetail(w);
     setTokens([]);
     setTokensTotal(0);
@@ -507,14 +512,15 @@ export default function WalletTrackerView() {
         totalCount?: number;
         tooMany?: boolean;
       };
+      if (seq !== detailSeq.current) return;
       setTokens(data.tokens ?? []);
       setTokensTotal(data.totalUsd ?? 0);
       setTokenCount(data.totalCount ?? data.tokens?.length ?? 0);
       setTokensTooMany(Boolean(data.tooMany));
     } catch {
-      setTokens([]);
+      if (seq === detailSeq.current) setTokens([]);
     } finally {
-      setTokensLoading(false);
+      if (seq === detailSeq.current) setTokensLoading(false);
     }
   };
 

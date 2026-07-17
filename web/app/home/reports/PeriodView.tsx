@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import CoinIcon from '../wallet/CoinIcon';
 import { Icon } from '../wallet/icons';
 import { getReport, setReport } from './dataCache';
@@ -123,14 +123,20 @@ export default function PeriodView({ period }: { period: Period }) {
    * The fallback is what keeps this working before the database is configured (and if a cron run is
    * ever missed) — the tab shows a real report either way, it just isn't persisted or shareable.
    */
+  // Latest-load-wins: on a first empty-cache visit the mount fetch and a manual
+  // Refresh can overlap, and the slower (staler) one must not overwrite the result.
+  const loadSeq = useRef(0);
+
   const load = useCallback(
     async (signal?: AbortSignal) => {
+      const seq = ++loadSeq.current;
       setLoading(true);
       setError(false);
       try {
         const stored = await fetch(`/api/reports/list?period=${period}&limit=1`, { signal })
           .then((r) => (r.ok ? r.json() : null))
           .catch(() => null);
+        if (seq !== loadSeq.current) return;
 
         const hit = stored?.reports?.[0] as Report | undefined;
         if (hit) {
@@ -142,13 +148,14 @@ export default function PeriodView({ period }: { period: Period }) {
         const res = await fetch(`/api/reports/preview?period=${period}`, { signal });
         if (!res.ok) throw new Error(String(res.status));
         const data = (await res.json()) as Report;
+        if (seq !== loadSeq.current) return;
         setReport(period, data);
         setReportState(data);
       } catch (e) {
         if ((e as Error)?.name === 'AbortError') return;
-        setError(true);
+        if (seq === loadSeq.current) setError(true);
       } finally {
-        setLoading(false);
+        if (seq === loadSeq.current) setLoading(false);
       }
     },
     [period],

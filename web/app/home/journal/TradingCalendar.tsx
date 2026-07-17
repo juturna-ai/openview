@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import TradeModal from './TradeModal';
-import { addTrade, loadTrades, type Trade } from './trades';
+import { addTrade, deleteTrade, loadTrades, type Trade } from './trades';
 
 // Monthly trading calendar — a port of the Reach desktop app's TradingMonthView
 // (src/components/Trading/TradingMonthView.jsx). Same layout and class names: four stat cards
@@ -117,6 +117,8 @@ export default function TradingCalendar({ newTradeSignal = 0 }: { newTradeSignal
   const [menu, setMenu] = useState<{ x: number; y: number; key: string } | null>(null);
   // The day key the add-trade modal is open for, or null when closed.
   const [modalKey, setModalKey] = useState<string | null>(null);
+  // The day key whose trade-list (manage/delete) panel is open, or null when closed.
+  const [manageKey, setManageKey] = useState<string | null>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -184,6 +186,16 @@ export default function TradingCalendar({ newTradeSignal = 0 }: { newTradeSignal
     setTrades(addTrade(trade));
     setModalKey(null);
   }, []);
+
+  const handleDelete = useCallback((id: number) => {
+    setTrades(deleteTrade(id));
+  }, []);
+
+  // Trades on the day the manage panel is open for, in entry order.
+  const manageTrades = useMemo(
+    () => (manageKey ? trades.filter((t) => t.trade_date === manageKey) : []),
+    [manageKey, trades],
+  );
 
   const stats = useMemo(() => {
     if (!date) return null;
@@ -563,11 +575,76 @@ export default function TradingCalendar({ newTradeSignal = 0 }: { newTradeSignal
           >
             + Add Trade
           </button>
+          {stats.dailyPnl[menu.key] && (
+            <button
+              type="button"
+              onClick={() => {
+                setManageKey(menu.key);
+                setMenu(null);
+              }}
+            >
+              Manage Trades…
+            </button>
+          )}
         </div>
       )}
 
       {modalKey && (
         <TradeModal dateKey={modalKey} onSave={handleSave} onClose={() => setModalKey(null)} />
+      )}
+
+      {manageKey && (
+        <div className="trade-modal-backdrop" onMouseDown={() => setManageKey(null)}>
+          <div
+            className="trade-modal trade-manage"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Manage trades"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="trade-modal-header">
+              <h2>Trades</h2>
+              <span className="trade-modal-date">{manageKey}</span>
+              <button
+                type="button"
+                className="trade-modal-close"
+                onClick={() => setManageKey(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div className="trade-manage-body">
+              {manageTrades.length === 0 ? (
+                <p className="trade-manage-empty">No trades left on this day.</p>
+              ) : (
+                <ul className="trade-manage-list">
+                  {manageTrades.map((t) => (
+                    <li key={t.id} className="trade-manage-row">
+                      <span className="trade-manage-sym">{t.symbol}</span>
+                      <span className={`trade-manage-dir ${t.direction}`}>{t.direction}</span>
+                      <span
+                        className={`trade-manage-pnl ${
+                          t.is_open ? '' : t.pnl >= 0 ? 'profit' : 'loss'
+                        }`}
+                      >
+                        {t.is_open ? 'open' : formatPnl(t.pnl)}
+                      </span>
+                      <button
+                        type="button"
+                        className="trade-manage-del"
+                        onClick={() => handleDelete(t.id)}
+                        aria-label={`Delete ${t.symbol} trade`}
+                      >
+                        Delete
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -18,7 +18,7 @@ export interface Trade {
   asset_class: AssetClass;
   entry_price: number;
   exit_price: number;
-  /** Notional size in USD. */
+  /** Margin (collateral) in USD; notional exposure = position_size × margin (leverage). */
   position_size: number;
   /** Realized P&L, already net of commissions. 0 while the trade is open. */
   pnl: number;
@@ -108,4 +108,27 @@ export function deleteTrade(id: number): Trade[] {
   const next = loadTrades().filter((t) => t.id !== id);
   saveTrades(next);
   return next;
+}
+
+/**
+ * Realized P&L from price movement, net of commissions.
+ *
+ * `size` is the **margin** (collateral committed), and `leverage` multiplies it into the notional
+ * exposure — so a $1k margin at 10× moving 100→110 nets the same as a $10k un-leveraged position
+ * ($1,000). Quantity of the underlying is (margin × leverage) / entry. An open trade has no P&L; a
+ * trade with no entry/size has only its commission cost.
+ */
+export function computePnl(
+  entry: number,
+  exit: number,
+  size: number,
+  direction: TradeDirection,
+  commissions: number,
+  leverage = 1,
+): number {
+  if (!entry || !size) return -commissions;
+  const lev = leverage > 0 ? leverage : 1;
+  const qty = (size * lev) / entry;
+  const move = direction === 'long' ? exit - entry : entry - exit;
+  return qty * move - commissions;
 }

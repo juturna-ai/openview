@@ -419,6 +419,10 @@
   .row .ic{width:20px; height:20px; border-radius:50%; flex-shrink:0; object-fit:contain;
     background:#2a2e39; color:#fff; font-size:9px; display:flex; align-items:center;
     justify-content:center; font-weight:700;}
+  /* Logos that are a black glyph on transparent (ONDO, IO, TRUTH…) vanish against the dark disc
+     above, and they serve 200 so the onerror chain can't catch them. A light disc + inset makes the
+     mark read, the same way CMC's own dark theme renders them. Applied per-ticker via DARK_LOGO. */
+  img.ic.on-light, img.pc-ic.on-light{background:#f5f6fa; padding:2px;}
   /* Spread icons: two diagonal halves (leg A top-left, leg B bottom-right) inside the
      circle. Each half is the full icon, clipped to a triangle; the polygons stop just
      short of the diagonal so the container background reads as a thin seam. */
@@ -764,7 +768,10 @@
   .symdlg .symsearch input{flex:1;background:transparent;border:none;outline:none;color:#d1d4dc;
     font-size:14px;padding:10px 0;}
   .symdlg .symsearch input::placeholder{color:var(--muted);}
-  .symdlg .symtabs{display:flex;gap:2px;margin-top:10px;border-bottom:1px solid var(--border);}
+  .symdlg .symtabs{display:flex;flex-wrap:wrap;gap:2px;margin-top:10px;border-bottom:1px solid var(--border);}
+  /* Exchange sub-row: only exists while the Crypto tab is active. */
+  .symdlg .symtabs.symsub{display:none;margin-top:2px;}
+  .symdlg .symtabs.symsub.open{display:flex;}
   .symdlg .symtab{appearance:none;background:transparent;border:none;cursor:pointer;color:var(--muted);
     font-size:12px;font-weight:500;padding:7px 9px;border-bottom:2px solid transparent;margin-bottom:-1px;
     border-radius:4px 4px 0 0;white-space:nowrap;}
@@ -1297,6 +1304,14 @@ const EX = {
   COINBASE: { id:"COINBASE", label:"Coinbase" },
   BINANCE:  { id:"BINANCE",  label:"Binance"  },
   BYBIT:    { id:"BYBIT",    label:"Bybit"    },
+  // Spot-only venues added for catalog breadth (legs KRAKEN:0GEUR, OKX:BTC-USDT,
+  // KUCOIN:BTC-USDT, GATE:BTC_USDT, MEXC:BTCUSDT — each venue's own native id,
+  // so the kline/ticker fetchers can pass `rest` through unmodified).
+  KRAKEN:   { id:"KRAKEN",   label:"Kraken"   },
+  OKX:      { id:"OKX",      label:"OKX"      },
+  KUCOIN:   { id:"KUCOIN",   label:"KuCoin"   },
+  GATE:     { id:"GATE",     label:"Gate.io"  },
+  MEXC:     { id:"MEXC",     label:"MEXC"     },
   // Yahoo Finance covers everything else TradingView lists: stocks, ETFs, forex,
   // commodities/metals, indices. Leg form is YF:<yahooSymbol> (YF:AAPL, YF:GC=F,
   // YF:EURUSD=X, YF:^GSPC). Routed through the CORS proxy.
@@ -1305,6 +1320,14 @@ const EX = {
 // Per-exchange interval strings keyed by our TF base granularity (seconds).
 const BINANCE_IV = {60:"1m",300:"5m",900:"15m",3600:"1h",21600:"6h",86400:"1d"};
 const BYBIT_IV   = {60:"1",  300:"5", 900:"15", 3600:"60",21600:"360",86400:"D"};
+// Kraken interval param is MINUTES; it has no 6h, so the 21600s base fetches 4h
+// bars and aggregate() rolls them into the 6h/12h buckets (same trick YAHOO_IV
+// uses with daily bars — imperfect bucketing beats no data).
+const KRAKEN_IV  = {60:1, 300:5, 900:15, 3600:60, 21600:240, 86400:1440};
+const OKX_IV     = {60:"1m",300:"5m",900:"15m",3600:"1H",21600:"6H",86400:"1D"};
+const KUCOIN_IV  = {60:"1min",300:"5min",900:"15min",3600:"1hour",21600:"6hour",86400:"1day"};
+const GATE_IV    = {60:"1m",300:"5m",900:"15m",3600:"1h",21600:"4h",86400:"1d"};   // no 6h → 4h rolled up
+const MEXC_IV    = {60:"1m",300:"5m",900:"15m",3600:"60m",21600:"4h",86400:"1d"};  // "60m" not "1h"; no 6h
 // Yahoo chart endpoint: {interval, range}. Range is capped per interval to the
 // deepest window Yahoo serves at THAT resolution — asking range=max with a daily
 // interval silently downsamples to quarterly bars, so we cap daily at 10y (true
@@ -1325,6 +1348,11 @@ function resolveLeg(leg){
     const rest = isPerp ? restRaw.slice(0,-2) : restRaw;          // BTCUSDT
     if(ex==="BINANCE") return { exchange:EX.BINANCE, rest, isPerp, leg };
     if(ex==="BYBIT")   return { exchange:EX.BYBIT,   rest, isPerp, leg };
+    if(ex==="KRAKEN")  return { exchange:EX.KRAKEN,  rest, isPerp:false, leg };
+    if(ex==="OKX")     return { exchange:EX.OKX,     rest, isPerp:false, leg };
+    if(ex==="KUCOIN")  return { exchange:EX.KUCOIN,  rest, isPerp:false, leg };
+    if(ex==="GATE")    return { exchange:EX.GATE,    rest, isPerp:false, leg };
+    if(ex==="MEXC")    return { exchange:EX.MEXC,    rest, isPerp:false, leg };
   }
   // default: Coinbase spot product id (BTC-USD)
   return { exchange:EX.COINBASE, rest:leg, isPerp:false, leg };
@@ -1333,10 +1361,13 @@ function resolveLeg(leg){
 function legBase(leg){
   const r = resolveLeg(leg);
   if(r.exchange.id==="COINBASE") return r.rest.split("-")[0];
+  // OKX/KuCoin ids are BASE-QUOTE like Coinbase; Gate uses BASE_QUOTE.
+  if(r.exchange.id==="OKX" || r.exchange.id==="KUCOIN") return r.rest.split("-")[0];
+  if(r.exchange.id==="GATE") return r.rest.split("_")[0];
   // Yahoo symbol IS the ticker (AAPL, SPY); strip Yahoo's class suffixes for logos
   if(r.exchange.id==="YAHOO") return r.rest.replace(/[=^].*$/,"").split(".")[0] || r.rest;
-  // BINANCE/BYBIT rest is BASEQUOTE; strip a known quote suffix
-  const m = r.rest.match(/^(.*?)(USDT|USDC|USD|BTC|ETH|EUR|TRY|FDUSD|DAI)$/);
+  // BINANCE/BYBIT/KRAKEN/MEXC rest is BASEQUOTE; strip a known quote suffix
+  const m = r.rest.match(/^(.*?)(USDT|USDC|USD|BTC|ETH|EUR|GBP|TRY|FDUSD|DAI|JPY)$/);
   return m ? m[1] : r.rest;
 }
 // Human label for a leg, e.g. "BTCUSDT.P", "BTC-USD", or "AAPL".
@@ -1504,15 +1535,195 @@ const FLAG_COLORS=["#ef5350","#ff9800","#ffd600","#26a69a","#42a5f5","#ab47bc"];
 function setSymbolFlag(sym,col){ if(col) SYMBOL_FLAGS[sym]=col; else delete SYMBOL_FLAGS[sym]; saveFlags(); buildWatchlist(); }
 function allSymbols(){ return [...new Set(GROUPS.flatMap(g=>g.symbols))]; }
 
-// Coin logos from CoinCap's free icon CDN (BASE symbol, lowercased).
-// ASTER isn't on CoinCap → falls back to a letter circle.
-const NO_LOGO = new Set(["ASTER","NIL"]);
-// encodeURIComponent so a hostile base (from an old persisted symbol) can't break out
-// of the src attribute / inject markup when this URL lands in an <img src>.
-function logoForBase(base){ return `https://assets.coincap.io/assets/icons/${encodeURIComponent(String(base).toLowerCase())}@2x.png`; }
-function logoUrl(sym){
-  const base = legBase(sym).toLowerCase();
-  return `https://assets.coincap.io/assets/icons/${base}@2x.png`;
+// Coin logos. Primary source is CoinMarketCap's logo CDN, keyed by numeric coin id via the
+// symbol→id map served by /api/market/coinlogos (see that route for why it's server-side).
+// CoinCap's ticker-keyed CDN stays as the fallback for anything absent from the map: it only
+// resolves when a coin's CoinCap id equals its ticker, which is why newly-listed and long-tail
+// coins used to render as bare letter circles.
+//
+// CMC_IDS starts empty and fills in asynchronously; every icon path below is written to work
+// before it lands (falls back to CoinCap, then to a letter circle), so a slow or failed map fetch
+// degrades exactly to the old behaviour rather than breaking the list.
+let CMC_IDS = null;
+let CMC_LOGO_BASE = "https://s2.coinmarketcap.com/static/img/coins/64x64/", CMC_LOGO_EXT = ".png";
+// NO_LOGO is now empty: both former entries (ASTER, NIL) resolve through CMC. Kept as the hook for
+// any coin that genuinely has no logo anywhere, so it skips a guaranteed-404 request.
+const NO_LOGO = new Set();
+
+// encodeURIComponent so a hostile base (from an old persisted symbol) can't break out of the src
+// attribute / inject markup when this URL lands in an <img src>. The CMC branch is id-keyed, so a
+// number from our own map — nothing user-controlled reaches the URL.
+function coincapForBase(base){ return `https://assets.coincap.io/assets/icons/${encodeURIComponent(String(base).toLowerCase())}@2x.png`; }
+// Single URL for a base (used by non-<img> callers). iconHtml() is the richer path — it can retry
+// CoinCap when CMC 404s, which a bare URL can't. Shares cmcIdFor() so both agree on the ticker.
+function logoForBase(base){
+  const id = cmcIdFor(String(base).toUpperCase());
+  if(typeof id === "number") return `${CMC_LOGO_BASE}${id}${CMC_LOGO_EXT}`;
+  return coincapForBase(base);
+}
+
+// Fetch the map once, then repaint any icons already on screen. Fails soft: on error the engine
+// simply keeps using CoinCap + letter circles.
+(async function loadCoinLogoMap(){
+  try{
+    const r = await fetch("/api/market/coinlogos", { cache:"force-cache" });
+    if(!r.ok) return;
+    const j = await r.json();
+    if(!j || !j.ids || typeof j.ids !== "object") return;
+    CMC_IDS = j.ids;
+    if(typeof j.base === "string" && j.base) CMC_LOGO_BASE = j.base;
+    if(typeof j.ext === "string") CMC_LOGO_EXT = j.ext;
+    // Rebuild the watchlist so rows drawn before the map arrived pick up their real logos.
+    if(typeof buildWatchlist === "function") buildWatchlist();
+  }catch{ /* offline / route down → CoinCap fallback stands */ }
+})();
+
+// One icon renderer for every call site (watchlist rows, search dialog, spread chips, pair card).
+//
+// The chain is CMC → CoinCap → letter circle. It matters that it's a chain: each source covers
+// coins the other misses, so an <img> that 404s on CMC retries CoinCap before giving up. Previously
+// each site inlined a single onerror that jumped straight to the letter circle, so one miss was
+// terminal.
+//
+// Escaping: `cls` is a literal from our own call sites; the URL is either a numeric id from our map
+// or an encodeURIComponent'd ticker; the initial goes through escHtml (which escapes & < > " but
+// NOT '). The letter circle gets built twice on purpose — `letterAttr` quotes its attributes with
+// ' so it can be embedded inside the double-quoted onerror without closing it early, and its quotes
+// are then backslash-escaped for the JS string literal. Using the double-quoted form there would
+// terminate the attribute and emit broken markup.
+// Some venues (MEXC especially) label a market with a display name that wraps the real ticker in
+// parens — GOLD(PAXG), GOLD(XAUT), SPACEX(PRE). The inner ticker is the coin; the outer word is
+// marketing. Looking up the outer word is worse than a miss: "GOLD" resolves to an unrelated coin,
+// so both gold markets would show the same wrong logo. Prefer the inner ticker, fall back to the
+// whole string.
+// Perp markets quote small-unit coins in bundles and fold the multiplier into the ticker —
+// 1000BONK, 10000SATS, 1000000BABYDOGE. The coin is the part after the multiplier.
+// The direct lookup ALWAYS runs first, because 1INCH is itself a coin (CMC id 8104) and stripping
+// its leading digit would ask for the non-existent "INCH". The pattern is deliberately narrow —
+// `1` followed by only zeros — so 1INCH / 1SOL / 11BIT are never touched.
+function stripMultiplier(b){
+  const m = b.match(/^10{2,}([A-Z0-9]+)$/);
+  return m ? m[1] : null;
+}
+
+// Some CMC logos are a black glyph on transparent — invisible against the dark icon disc. They
+// serve HTTP 200, so the onerror chain can't detect them; the ticker has to be named.
+//
+// Two different problems, two different fixes:
+//
+// CMC_BAD_LOGO — CoinCap has *brighter, full-colour* art for these, so skipping the CMC rung is a
+// straight upgrade. Measured mean luminance of the visible pixels (0=black, 255=white):
+//   1INCH  CMC 0.0  → CoinCap 161.3
+//   WLD    CMC 0.0  → CoinCap 193.2
+const CMC_BAD_LOGO = new Set(["1INCH","WLD"]);
+
+// DARK_LOGO — the mark genuinely IS a black glyph and no source has a lighter one (CoinCap 404s or
+// is just as dark). Blocklisting them would trade a real logo for a letter circle, which is worse,
+// so they keep the logo and get a light disc behind it instead (`.ic.on-light`, mirroring how CMC's
+// own dark theme renders these). Measured <20 luminance across MEXC's top 200; SOL/DOT sit at 20-45
+// and are fine as-is, hence the cutoff.
+const DARK_LOGO = new Set(["UPC","LAB","ONDO","SEDA","BP","TRUTH","IO"]);
+
+// CMC id for a ticker, trying the venue's ticker spellings in order of trustworthiness.
+function cmcIdFor(b){
+  if(!CMC_IDS || CMC_BAD_LOGO.has(b)) return undefined;
+  const at = (k)=> (k && typeof CMC_IDS[k] === "number") ? CMC_IDS[k] : undefined;
+  // 1. Exact — always wins, so real digit-leading coins (1INCH) beat the strip below.
+  let id = at(b);
+  if(id !== undefined) return id;
+  // 2. Display name wrapping the real ticker: GOLD(PAXG), SPACEX(PRE). The outer word is
+  //    marketing and often collides with an unrelated coin ("GOLD"), so the inner ticker wins.
+  const paren = b.match(/^[^(]*\(([^)]+)\)$/);
+  id = at(paren && paren[1]);
+  if(id !== undefined) return id;
+  // 3. Perp multiplier bundle: 1000BONK → BONK.
+  return at(stripMultiplier(b));
+}
+
+// Non-crypto logo sources. `YF:` legs are Yahoo symbols — US equities/ETFs, FX pairs (EURUSD=X)
+// and indices (^GSPC) — none of which are on any coin CDN, so they were guaranteed letter circles.
+//   equities/ETFs → parqet's keyless logo CDN (404s cleanly on an unknown ticker, so the chain falls through)
+//   FX            → country flag, since ISO-4217's first two letters are the ISO-3166 country for
+//                   nearly every currency (AED→ae, MXN→mx, BRL→br). EUR→eu is served too.
+function stockLogo(t){ return `https://assets.parqet.com/logos/symbol/${encodeURIComponent(t)}?format=png`; }
+function flagLogo(ccy){ return `https://flagcdn.com/w80/${encodeURIComponent(ccy.slice(0,2).toLowerCase())}.png`; }
+
+// The two ISO-4217 codes of an FX leg (YF:EURUSD=X → ["EUR","USD"]), or null if not an FX pair.
+// Metal legs (XAU/XAG) aren't countries, so they're left to the single-flag/letter path.
+function fxPair(leg){
+  const r = leg ? resolveLeg(String(leg)) : null;
+  if(!r || r.exchange.id !== "YAHOO") return null;
+  const m = String(r.rest).toUpperCase().match(/^([A-Z]{3})([A-Z]{3})=X$/);
+  if(!m) return null;
+  if(m[1].startsWith("X") || m[2].startsWith("X")) return null;  // XAU/XAG etc. — no flag
+  return [m[1], m[2]];
+}
+
+// Ordered list of candidate logo URLs for a base ticker, best source first. `leg` (optional) is the
+// full symbol, which is what tells us the asset class — a bare base can't distinguish a stock from
+// a coin of the same name.
+function logoChain(b, leg){
+  const out = [];
+  const r = leg ? resolveLeg(String(leg)) : null;
+  if(r && r.exchange.id === "YAHOO"){
+    const y = String(r.rest).toUpperCase();
+    if(y.startsWith("^")) return out;                 // index: no logo anywhere → letter circle
+    const fx = y.match(/^([A-Z]{3})([A-Z]{3})=X$/);   // EURUSD=X → flag of the BASE currency
+    if(fx){ out.push(flagLogo(fx[1])); return out; }
+    if(y.endsWith("=F")) return out;                  // futures (CL=F): no logo source
+    out.push(stockLogo(b));                           // plain equity/ETF ticker
+    return out;
+  }
+  // Crypto: CMC id first (broadest, covers new listings), then CoinCap's ticker-keyed CDN.
+  const id = cmcIdFor(b);
+  if(typeof id === "number") out.push(`${CMC_LOGO_BASE}${id}${CMC_LOGO_EXT}`);
+  out.push(coincapForBase(b));
+  // A multiplier bundle with no CMC id can still hit CoinCap under the stripped ticker.
+  const stripped = stripMultiplier(b);
+  if(stripped) out.push(coincapForBase(stripped));
+  return out;
+}
+
+// Render an icon: walk logoChain(), degrading to a letter circle only when every source 404s.
+function iconHtml(base, cls="ic", leg){
+  const b = String(base||"").toUpperCase();
+  const initial = escHtml(b[0] || "?");
+  const letter = `<span class="${cls}" style="background:#2962ff">${initial}</span>`;
+  if(!b || NO_LOGO.has(b)) return letter;
+
+  // FX pair → split circle of the two countries' flags (base top-left, quote bottom-right), so
+  // USDMXN and MXNUSD read differently at a glance. Reuses the .split/.half geometry from
+  // splitIconHtml. Each half falls back to the 3-letter code on a flag 404.
+  const fx = fxPair(leg);
+  if(fx){
+    const flagHalf = (ccy, side)=>{
+      const code = escHtml(ccy);
+      const fallback = `<span class=\\'half ${side}\\' style=\\'background:#2962ff;font-size:6px\\'>${code}</span>`;
+      return `<img class="half ${side}" src="${flagLogo(ccy)}" alt="${code}" loading="lazy" onerror="this.outerHTML='${fallback}'">`;
+    };
+    return `<span class="${cls} split">${flagHalf(fx[0],"l")}${flagHalf(fx[1],"r")}</span>`;
+  }
+
+  const chain = logoChain(b, leg);
+  if(!chain.length) return letter;
+
+  // A known-dark mark gets a light disc so the glyph reads. Only when the CMC rung is the one
+  // actually rendering (chain[0]) — if we've fallen through to CoinCap's art, its colours are their
+  // own and the light disc would be wrong.
+  const dark = DARK_LOGO.has(b) && chain[0].startsWith(CMC_LOGO_BASE);
+  const imgCls = dark ? `${cls} on-light` : cls;
+
+  // Attribute-safe twin of `letter`, escaped for use inside the inline handler.
+  const letterAttr = `<span class=\\'${cls}\\' style=\\'background:#2962ff\\'>${initial.replace(/'/g,"&#39;")}</span>`;
+  // Build the fallback chain from the last rung backwards, each step rebinding onerror before
+  // swapping src — without the rebind a second failure would re-fire the same handler forever.
+  let handler = `this.outerHTML='${letterAttr}'`;
+  for(let i = chain.length - 1; i >= 1; i--){
+    // Falling past the CMC rung means the light disc no longer applies — drop it with the src swap.
+    const unlight = dark ? `this.classList.remove('on-light');` : "";
+    handler = `this.onerror=function(){${handler}};${unlight}this.src='${chain[i]}'`;
+  }
+  return `<img class="${imgCls}" src="${chain[0]}" alt="${escHtml(b)}" loading="lazy" onerror="${handler}">`;
 }
 // Spread icon: one circle split diagonally — leg A's coin in the top-left triangle,
 // leg B's in the bottom-right. A leg whose icon is missing (NO_LOGO) or 404s falls
@@ -1520,11 +1731,7 @@ function logoUrl(sym){
 function splitIconHtml(sym, cls="ic"){
   const legs = String(sym).split("/");
   const half = (leg, side)=>{
-    const base = legBase(leg||"").toUpperCase();
-    const initial = escHtml(base[0]||"?");
-    if(!base || NO_LOGO.has(base))
-      return `<span class="half ${side}" style="background:#2962ff">${initial}</span>`;
-    return `<img class="half ${side}" src="${logoForBase(base)}" alt="${escHtml(base)}" onerror="this.outerHTML='<span class=\\'half ${side}\\' style=\\'background:#2962ff\\'>${initial}</span>'">`;
+    return iconHtml(legBase(leg||""), `half ${side}`, leg||"");
   };
   return `<span class="${cls} split">${half(legs[0],"l")}${half(legs[1],"r")}</span>`;
 }
@@ -2521,7 +2728,7 @@ async function fetchPageYahoo(sym, g, end){
   const cfg = YAHOO_IV[g] || YAHOO_IV[86400];
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=${cfg.iv}&range=${cfg.range}`;
   try{
-    const d = await proxyJSON(url);
+    const d = await fetchJSONDirectOrProxy(url);
     const res = d && d.chart && d.chart.result && d.chart.result[0];
     const ts = res && res.timestamp;
     const q  = res && res.indicators && res.indicators.quote && res.indicators.quote[0];
@@ -2536,12 +2743,108 @@ async function fetchPageYahoo(sym, g, end){
   }catch{ return []; }
 }
 
+// Direct fetch first, then OUR same-origin /api/market/proxy (allow-listed hosts,
+// server-side fetch), then the public CORS-proxy chain as a last resort. The new
+// venues differ in whether their public API sends CORS headers (OKX/Kraken do,
+// KuCoin/Gate/MEXC don't in practice) — and the public proxies proved too slow and
+// too small for MB-scale catalog payloads, so the app's own route does the heavy
+// lifting whenever direct is blocked.
+async function fetchJSONDirectOrProxy(url){
+  try{
+    const r = await fetchTimeout(url, 8000);
+    if(r.ok) return await r.json();
+  }catch(e){ /* CORS/network — fall through */ }
+  try{
+    const r = await fetchTimeout(`/api/market/proxy?url=${encodeURIComponent(url)}`, 25000);
+    if(r.ok) return await r.json();
+  }catch(e){ /* server proxy down (static hosting?) — last resort below */ }
+  return proxyJSON(url);
+}
+
+// Kraken OHLC: result[<pair>] = [[time(s),open,high,low,close,vwap,vol,count],…]
+// oldest-first. Serves only the newest ~720 bars with NO backward cursor, so like
+// Yahoo it's a single-shot series: first page returns everything, deeper pages [].
+async function fetchPageKraken(rest, g, end){
+  if(end!==null) return [];
+  const iv = KRAKEN_IV[g] || 1440;
+  try{
+    const d = await fetchJSONDirectOrProxy(`https://api.kraken.com/0/public/OHLC?pair=${encodeURIComponent(rest)}&interval=${iv}`);
+    const res = d && d.result; if(!res) return [];
+    const key = Object.keys(res).find(k=>k!=="last"); if(!key) return [];
+    return res[key].map(k=>({ time:+k[0], open:+k[1], high:+k[2], low:+k[3], close:+k[4], volume:+k[6]||0 }));
+  }catch{ return []; }
+}
+
+// OKX: /market/candles (newest page, ≤300) then /market/history-candles (deeper,
+// ≤100/page, `after` = return rows strictly OLDER than this ms timestamp).
+// Rows [[ts(ms),o,h,l,c,vol,…],…] newest-first.
+async function fetchPageOkx(rest, g, span, end){
+  const bar = OKX_IV[g] || "1D";
+  const url = end===null
+    ? `https://www.okx.com/api/v5/market/candles?instId=${encodeURIComponent(rest)}&bar=${bar}&limit=300`
+    : `https://www.okx.com/api/v5/market/history-candles?instId=${encodeURIComponent(rest)}&bar=${bar}&limit=100&after=${(end+g)*1000}`;
+  try{
+    const d = await fetchJSONDirectOrProxy(url);
+    const list = d && d.data;
+    if(!Array.isArray(list)) return [];
+    return list.map(k=>({ time:Math.floor(+k[0]/1000), open:+k[1], high:+k[2], low:+k[3], close:+k[4], volume:+k[5]||0 }));
+  }catch{ return []; }
+}
+
+// KuCoin: candles rows are [time(s),open,CLOSE,HIGH,LOW,vol,turnover] — close comes
+// before high/low, unlike every other venue here. Newest-first, ≤1500/page, paged
+// backward via endAt (seconds). No CORS headers → effectively always proxied.
+async function fetchPageKucoin(rest, g, end){
+  const type = KUCOIN_IV[g] || "1day";
+  // Without an explicit window KuCoin serves only ~100 rows — far too thin for the
+  // long MAs. Always request a full 1500-bar window ending at the page cursor.
+  const endAt = end!==null ? end : Math.floor(Date.now()/1000);
+  const startAt = endAt - 1500*g;
+  const url = `https://api.kucoin.com/api/v1/market/candles?type=${type}&symbol=${encodeURIComponent(rest)}&startAt=${startAt}&endAt=${endAt}`;
+  try{
+    const d = await fetchJSONDirectOrProxy(url);
+    const list = d && d.data;
+    if(!Array.isArray(list)) return [];
+    return list.map(k=>({ time:+k[0], open:+k[1], high:+k[3], low:+k[4], close:+k[2], volume:+k[5]||0 }));
+  }catch{ return []; }
+}
+
+// Gate: candlestick rows are [t(s), quoteVolume, close, high, low, open, baseVolume, …]
+// oldest-first, ≤1000/page, paged backward via `to` (seconds).
+async function fetchPageGate(rest, g, end){
+  const iv = GATE_IV[g] || "1d";
+  let url = `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${encodeURIComponent(rest)}&interval=${iv}&limit=1000`;
+  if(end!==null) url += `&to=${end}`;
+  try{
+    const d = await fetchJSONDirectOrProxy(url);
+    if(!Array.isArray(d)) return [];
+    return d.map(k=>({ time:+k[0], open:+k[5], high:+k[3], low:+k[4], close:+k[2], volume:+k[6]||0 }));
+  }catch{ return []; }
+}
+
+// MEXC: Binance-shaped /api/v3/klines ([openTime(ms),o,h,l,c,vol,…], ≤1000/page).
+async function fetchPageMexc(rest, g, end){
+  const iv = MEXC_IV[g] || "1d";
+  let url = `https://api.mexc.com/api/v3/klines?symbol=${encodeURIComponent(rest)}&interval=${iv}&limit=1000`;
+  if(end!==null) url += `&endTime=${end*1000}`;
+  try{
+    const raw = await fetchJSONDirectOrProxy(url);
+    if(!Array.isArray(raw)) return [];
+    return raw.map(k=>({ time:Math.floor(k[0]/1000), open:+k[1], high:+k[2], low:+k[3], close:+k[4], volume:+k[5]||0 }));
+  }catch{ return []; }
+}
+
 // Route one page fetch to the right exchange for this leg.
 async function fetchPage(leg, g, span, end){
   const r = resolveLeg(leg);
   if(r.exchange.id==="BINANCE") return fetchPageBinance(r.rest, g, span, end, r.isPerp);
   if(r.exchange.id==="BYBIT")   return fetchPageBybit(r.rest, g, span, end, r.isPerp);
   if(r.exchange.id==="YAHOO")   return fetchPageYahoo(r.rest, g, end);
+  if(r.exchange.id==="KRAKEN")  return fetchPageKraken(r.rest, g, end);
+  if(r.exchange.id==="OKX")     return fetchPageOkx(r.rest, g, span, end);
+  if(r.exchange.id==="KUCOIN")  return fetchPageKucoin(r.rest, g, end);
+  if(r.exchange.id==="GATE")    return fetchPageGate(r.rest, g, end);
+  if(r.exchange.id==="MEXC")    return fetchPageMexc(r.rest, g, end);
   return fetchPageCoinbase(r.rest, g, span, end);
 }
 
@@ -2570,7 +2873,9 @@ async function fetchKlinesProgressive(leg, tfKey, onPage){
   const ex = resolveLeg(leg).exchange.id;
   // Coinbase caps pages at ≤300 bars and needs many pages for depth; Binance/Bybit
   // return ≤1000 per page, so far fewer round-trips reach the same history.
-  const pageMax = ex==="COINBASE" ? 300 : 1000;
+  // OKX's history endpoint caps at 100/page — pageMax must match the DEEP page size,
+  // or the short-page early-stop below would misread every deep page as end-of-history.
+  const pageMax = ex==="COINBASE" ? 300 : ex==="OKX" ? 100 : 1000;
   const span = pageMax * g;             // seconds covered by one full page
   // Enough pages to reach MAX_BARS (50k) output candles. Each output bar rolls up
   // bucket/base raw base-bars, so raw bars needed = MAX_BARS * bucket/base.
@@ -2590,7 +2895,7 @@ async function fetchKlinesProgressive(leg, tfKey, onPage){
     if(!page.length) break;
     all.push(...page);
     if(onPage) onPage(all);                        // render what we have so far
-    if(ex==="YAHOO") break;                         // Yahoo returns the whole series in one page
+    if(ex==="YAHOO" || ex==="KRAKEN") break;        // single-shot venues: whole series in one page
     end = Math.min(...page.map(k=>k.time)) - g;   // step strictly before the oldest bar we got
     if(page.length < pageMax*0.66) break;          // short page = reached start of history; stop early
   }
@@ -3225,21 +3530,8 @@ function buildWatchlist(){
       row.className="row"+(sym===activeSymbol?" active":"");
       row.dataset.sym = sym;
       const isRatio = sym.includes("/");
-      const base = legBase(sym).toUpperCase();
-      // logo: real coin icon, or a letter circle for ratios / coins with no icon
-      let icon;
-      if(isRatio){
-        icon = splitIconHtml(sym);
-      } else if(NO_LOGO.has(base)){
-        icon = `<span class="ic" style="background:#2962ff">${escHtml(base[0]||"")}</span>`;
-      } else {
-        // <img>; if it 404s, swap to a letter circle on error. Escape the derived base
-        // (same discipline as the pair card) so a tampered/odd stored symbol can't
-        // inject markup into the watchlist row or the inline onerror handler.
-        const initial = escHtml(base[0]||"");
-        icon = `<img class="ic" src="${logoForBase(base)}" alt="${escHtml(base)}"
-          onerror="this.outerHTML='<span class=\\'ic\\' style=\\'background:#2962ff\\'>${initial}</span>'">`;
-      }
+      // logo: split circle for ratios, else the CMC → CoinCap → letter chain in iconHtml()
+      const icon = isRatio ? splitIconHtml(sym) : iconHtml(legBase(sym), "ic", sym);
       row.dataset.group = g.name;           // a symbol may live in >1 group; key edits by group+sym
       row.draggable = true;
       // Cleaner display: ratios verbatim; otherwise the venue ticker + a small
@@ -3549,6 +3841,155 @@ async function fetchBybitProducts(isPerp){
   return out;
 }
 
+// ── Big-5 spot venues (Kraken / OKX / KuCoin / Gate.io / MEXC) ──
+// Same contract as the fetchers above: full live catalog from the venue's official
+// keyless endpoint, filtered to tradable, mapped to the unified product record.
+// Kraken's bulk Ticker keys legacy pairs by the padded pair key (XXBTZUSD) while
+// legs store the altname (XBTUSD) — this map, filled when the catalog loads,
+// lets fetchBulkKraken answer under both names.
+const KRAKEN_ALT = {};   // pairKey → altname
+async function fetchKrakenProducts(){
+  const d = await fetchJSONDirectOrProxy("https://api.kraken.com/0/public/AssetPairs");
+  const res = d && d.result; if(!res) throw new Error("kraken assetpairs");
+  const out = [];
+  for(const k of Object.keys(res)){
+    const p = res[k];
+    if(p.status && p.status!=="online") continue;
+    if(p.altname) KRAKEN_ALT[k] = p.altname;
+    const ws = p.wsname || "";                        // "0G/EUR" — clean display names
+    const base = ws.split("/")[0] || p.base, quote = ws.split("/")[1] || p.quote;
+    out.push({ leg:`KRAKEN:${p.altname||k}`, id:p.altname||k, base, quote,
+               name:`${base} / ${quote}`, exLabel:"Kraken", isPerp:false });
+  }
+  return out;
+}
+async function fetchOkxProducts(){
+  const d = await fetchJSONDirectOrProxy("https://www.okx.com/api/v5/public/instruments?instType=SPOT");
+  const list = d && d.data; if(!Array.isArray(list)) throw new Error("okx instruments");
+  return list.filter(s=>s.state==="live")
+    .map(s=>({ leg:`OKX:${s.instId}`, id:s.instId, base:s.baseCcy, quote:s.quoteCcy,
+               name:`${s.baseCcy} / ${s.quoteCcy}`, exLabel:"OKX", isPerp:false }));
+}
+async function fetchKucoinProducts(){
+  const d = await fetchJSONDirectOrProxy("https://api.kucoin.com/api/v2/symbols");
+  const list = d && d.data; if(!Array.isArray(list)) throw new Error("kucoin symbols");
+  return list.filter(s=>s.enableTrading)
+    .map(s=>({ leg:`KUCOIN:${s.symbol}`, id:s.symbol, base:s.baseCurrency, quote:s.quoteCurrency,
+               name:`${s.baseCurrency} / ${s.quoteCurrency}`, exLabel:"KuCoin", isPerp:false }));
+}
+async function fetchGateProducts(){
+  const d = await fetchJSONDirectOrProxy("https://api.gateio.ws/api/v4/spot/currency_pairs");
+  if(!Array.isArray(d)) throw new Error("gate pairs");
+  return d.filter(s=>s.trade_status==="tradable")
+    .map(s=>({ leg:`GATE:${s.id}`, id:s.id, base:s.base, quote:s.quote,
+               name:`${s.base} / ${s.quote}`, exLabel:"Gate.io", isPerp:false }));
+}
+async function fetchMexcProducts(){
+  const d = await fetchJSONDirectOrProxy("https://api.mexc.com/api/v3/exchangeInfo");
+  const list = d && d.symbols; if(!Array.isArray(list)) throw new Error("mexc exchangeinfo");
+  return list.filter(s=>s.isSpotTradingAllowed && s.status==="1")
+    .map(s=>({ leg:`MEXC:${s.symbol}`, id:s.symbol, base:s.baseAsset, quote:s.quoteAsset,
+               name:`${s.baseAsset} / ${s.quoteAsset}`, exLabel:"MEXC", isPerp:false }));
+}
+
+// ── Non-crypto catalogs ──
+// US stocks + ETFs come prefetched from our own /api/market/symbols route (NASDAQ
+// Trader's official symbol directories, ~11k listings, cached server-side) so the
+// dialog can browse/filter them instantly without typing — international listings
+// still arrive via the live Yahoo search. Legs are YF:<sym>, so the existing Yahoo
+// kline/stats branches chart them with zero new adapter work.
+async function fetchUsListings(){
+  const r = await fetch("/api/market/symbols");
+  if(!r.ok) throw new Error("symbols "+r.status);
+  const d = await r.json();
+  const list = d && d.symbols; if(!Array.isArray(list)) throw new Error("symbols shape");
+  return list.map(s=>({ leg:`YF:${s.s}`, id:s.s, base:s.s, quote:"",
+                        name:s.n, exLabel:s.t==="etf"?"ETF":"Stocks", isPerp:false,
+                        tvType:s.t==="etf"?"ETF":"Stock", tvVenue:s.x||"" }));
+}
+// FX / indices / futures are small enough to curate inline — every entry verified
+// chartable through Yahoo's chart endpoint (same YF: leg).
+// The FIAT tab's catalog: BOTH directions vs USD for every liquid currency
+// (MXNUSD=X and USDMXN=X — Yahoo charts both), plus the G10 cross matrix.
+const FX_CCYS = ["EUR","GBP","JPY","CHF","AUD","NZD","CAD","MXN","TRY","ZAR","SEK","NOK","DKK",
+                 "PLN","HUF","CZK","CNY","INR","KRW","SGD","HKD","TWD","THB","PHP","IDR","MYR",
+                 "BRL","CLP","COP","PEN","ARS","ILS","AED","SAR","RON","BGN","ISK","VND"];
+const FX_MAJORS = ["EUR","GBP","JPY","CHF","AUD","NZD","CAD"];
+// Full currency names, so FIAT rows read "Mexican Peso / US Dollar" and typing
+// "peso" finds the pair (search matches on name, not just ticker).
+const CCY_NAMES = {
+  USD:"US Dollar", EUR:"Euro", GBP:"British Pound", JPY:"Japanese Yen", CHF:"Swiss Franc",
+  AUD:"Australian Dollar", NZD:"New Zealand Dollar", CAD:"Canadian Dollar", MXN:"Mexican Peso",
+  TRY:"Turkish Lira", ZAR:"South African Rand", SEK:"Swedish Krona", NOK:"Norwegian Krone",
+  DKK:"Danish Krone", PLN:"Polish Zloty", HUF:"Hungarian Forint", CZK:"Czech Koruna",
+  CNY:"Chinese Yuan", INR:"Indian Rupee", KRW:"South Korean Won", SGD:"Singapore Dollar",
+  HKD:"Hong Kong Dollar", TWD:"Taiwan Dollar", THB:"Thai Baht", PHP:"Philippine Peso",
+  IDR:"Indonesian Rupiah", MYR:"Malaysian Ringgit", BRL:"Brazilian Real", CLP:"Chilean Peso",
+  COP:"Colombian Peso", PEN:"Peruvian Sol", ARS:"Argentine Peso", ILS:"Israeli Shekel",
+  AED:"UAE Dirham", SAR:"Saudi Riyal", RON:"Romanian Leu", BGN:"Bulgarian Lev",
+  ISK:"Icelandic Krona", VND:"Vietnamese Dong", XAU:"Gold Spot", XAG:"Silver Spot",
+};
+// Stable/quote-asset names the crypto rows compose with ("Bitcoin / TetherUS").
+const STABLE_NAMES = { USDT:"TetherUS", USDC:"USD Coin", FDUSD:"First Digital USD",
+  DAI:"Dai", TUSD:"TrueUSD", BUSD:"Binance USD", PYUSD:"PayPal USD", EURT:"Tether EURt" };
+
+// Ticker → full asset name for crypto ("BTC" → "Bitcoin"), so search-by-name works
+// and rows read like TradingView's. CoinGecko's full list (~14k, keyless, CORS-open)
+// gives long-tail coverage; Coinbase /currencies overlays canonical names for
+// majors (first-wins collisions on obscure duplicate tickers are harmless noise).
+let CRYPTO_NAMES = null;
+async function fetchCryptoNames(){
+  if(CRYPTO_NAMES) return CRYPTO_NAMES;
+  const m = {};
+  try{
+    const list = await fetchJSONDirectOrProxy("https://api.coingecko.com/api/v3/coins/list");
+    if(Array.isArray(list)) for(const c of list){
+      const s=(c.symbol||"").toUpperCase();
+      if(s && c.name && !m[s]) m[s]=c.name;
+    }
+  }catch(e){}
+  try{
+    const cur = await fetchTimeout(`${API}/currencies`, 8000).then(r=>r.json());
+    if(Array.isArray(cur)) for(const c of cur){ if(c.id && c.name) m[c.id.toUpperCase()]=c.name; }
+  }catch(e){}
+  Object.assign(m, STABLE_NAMES, CCY_NAMES);
+  // Canonical overrides where the provider name diverges from what people type:
+  // Coinbase calls ETH "Ether" (so "ethereum" matched nothing), and Kraken lists
+  // Bitcoin under its XBT ticker.
+  Object.assign(m, { ETH:"Ethereum", XBT:"Bitcoin", WETH:"Wrapped Ethereum" });
+  CRYPTO_NAMES = m;
+  return m;
+}
+function curatedNonCrypto(){
+  const out = [];
+  const add = (sym,name,type)=>out.push({ leg:`YF:${sym}`, id:sym, base:sym.replace(/[=^].*$/,""), quote:"",
+    name, exLabel:type, isPerp:false, tvType:type==="FX"?"Forex":type==="Indices"?"Index":"Futures", tvVenue:"" });
+  // every currency vs USD, both directions (XXXUSD=X and USDXXX=X) — full names,
+  // so typing "peso" or "mexican" finds the pair.
+  const cn = c => CCY_NAMES[c] || c;
+  for(const c of FX_CCYS){ add(`${c}USD=X`, `${cn(c)} / US Dollar`, "FX"); add(`USD${c}=X`, `US Dollar / ${cn(c)}`, "FX"); }
+  // full G10 cross matrix (both directions)
+  for(const b of FX_MAJORS) for(const q of FX_MAJORS)
+    if(b!==q) add(`${b}${q}=X`, `${cn(b)} / ${cn(q)}`, "FX");
+  add("XAUUSD=X","Gold Spot / US Dollar","FX"); add("XAGUSD=X","Silver Spot / US Dollar","FX");
+  // world indices
+  [["^GSPC","S&P 500"],["^NDX","Nasdaq 100"],["^DJI","Dow Jones Industrial"],["^RUT","Russell 2000"],
+   ["^VIX","CBOE Volatility Index"],["^FTSE","FTSE 100"],["^GDAXI","DAX 40"],["^FCHI","CAC 40"],
+   ["^STOXX50E","Euro Stoxx 50"],["^IBEX","IBEX 35"],["^AEX","AEX"],["^SSMI","SMI 20"],
+   ["^N225","Nikkei 225"],["^HSI","Hang Seng"],["^AXJO","ASX 200"],["^GSPTSE","TSX Composite"],
+   ["^BVSP","Bovespa"],["^MXX","IPC Mexico"],["^KS11","KOSPI"],["^TWII","Taiwan Weighted"],
+   ["^NSEI","Nifty 50"],["^BSESN","Sensex"],["^STI","Straits Times"],["000001.SS","Shanghai Composite"],
+   ["DX-Y.NYB","US Dollar Index"]].forEach(([s,n])=>add(s,n,"Indices"));
+  // liquid futures
+  [["GC=F","Gold"],["SI=F","Silver"],["PL=F","Platinum"],["PA=F","Palladium"],["HG=F","Copper"],
+   ["CL=F","Crude Oil WTI"],["BZ=F","Brent Crude"],["NG=F","Natural Gas"],["RB=F","RBOB Gasoline"],["HO=F","Heating Oil"],
+   ["ZC=F","Corn"],["ZS=F","Soybeans"],["ZW=F","Wheat"],["KC=F","Coffee"],["SB=F","Sugar"],["CC=F","Cocoa"],["CT=F","Cotton"],
+   ["LE=F","Live Cattle"],["HE=F","Lean Hogs"],
+   ["ES=F","S&P 500 E-mini"],["NQ=F","Nasdaq 100 E-mini"],["YM=F","Dow E-mini"],["RTY=F","Russell 2000 E-mini"],
+   ["ZB=F","30Y T-Bond"],["ZN=F","10Y T-Note"],["ZF=F","5Y T-Note"],["ZT=F","2Y T-Note"]].forEach(([s,n])=>add(s,n,"Futures"));
+  return out;
+}
+
 async function loadProducts(){
   if(PRODUCTS) return PRODUCTS;
   if(productsLoading) return productsLoading;
@@ -3561,11 +4002,30 @@ async function loadProducts(){
       fetchBinanceProducts(true),
       fetchBybitProducts(false),
       fetchBybitProducts(true),
+      fetchKrakenProducts(),
+      fetchOkxProducts(),
+      fetchKucoinProducts(),
+      fetchGateProducts(),
+      fetchMexcProducts(),
+      fetchUsListings(),
+      Promise.resolve(curatedNonCrypto()),
     ];
+    // Name map loads alongside the catalogs; a failure only costs pretty names.
+    const namesJob = fetchCryptoNames().catch(()=>({}));
     const settled = await Promise.allSettled(jobs);
     const merged = [];
     for(const s of settled){ if(s.status==="fulfilled") merged.push(...s.value); }
     if(!merged.length) throw new Error("no products from any venue");
+    // Compose full display names for the crypto rows ("Bitcoin / TetherUS"), so the
+    // legend reads like TradingView's AND search-by-name works (symMatches scans
+    // p.name — typing "bitcoin" now finds every BTC pair).
+    const N = await namesJob;
+    for(const p of merged){
+      if(p.leg.startsWith("YF:")) continue;                       // stocks/FX already carry names
+      const bn = N[(p.base||"").toUpperCase()] || p.base;
+      const qn = N[(p.quote||"").toUpperCase()] || p.quote;
+      p.name = `${bn} / ${qn}${p.isPerp?" Perp":""}`;
+    }
     merged.sort((a,b)=> a.base.localeCompare(b.base) || a.id.localeCompare(b.id));
     PRODUCTS = merged;
     return PRODUCTS;
@@ -3580,7 +4040,7 @@ async function loadProducts(){
 // (FUTURE), indices (INDEX) — across global exchanges. Crucially the symbol it
 // returns IS the symbol its chart endpoint charts, so no translation is needed:
 // the leg is simply YF:<symbol>. Routed through the CORS proxy; cached per query.
-const YF_SEARCH = "https://query1.finance.yahoo.com/v1/finance/search?newsCount=0&quotesCount=30&q=";
+const YF_SEARCH = "https://query1.finance.yahoo.com/v1/finance/search?newsCount=0&quotesCount=50&q=";
 const tvCache = new Map();     // query → product[]   (session-lived)
 let tvSeq = 0;                 // guards against out-of-order async renders
 
@@ -3597,7 +4057,7 @@ async function fetchTVResults(q){
   if(!key) return [];
   if(tvCache.has(key)) return tvCache.get(key);
   let raw;
-  try{ raw = await proxyJSON(YF_SEARCH + encodeURIComponent(q.trim())); }
+  try{ raw = await fetchJSONDirectOrProxy(YF_SEARCH + encodeURIComponent(q.trim())); }
   catch{ return []; }                                  // proxy/network failure → no remote rows
   const arr = (raw && Array.isArray(raw.quotes)) ? raw.quotes : [];
   const out = [];
@@ -3617,7 +4077,7 @@ async function fetchTVResults(q){
       tvType:(YF_TYPE_LABEL[type] || (type ? type[0]+type.slice(1).toLowerCase() : "")),
       tvVenue:venue,
     });
-    if(out.length>=40) break;                          // cap remote rows per query
+    if(out.length>=60) break;                          // cap remote rows per query
   }
   tvCache.set(key, out);
   return out;
@@ -3635,8 +4095,17 @@ function openAddSymbolDlg(groupName){
   closeAllPopups();
   symDlgState = { group:groupName, results:[], cur:0, ex:"ALL", tv:[], tvQuery:"", tvLoading:false,
                   spread:{ a:null, b:null, slot:"a" } };
-  const tabs = [["ALL","All"],["Coinbase","Coinbase"],["Binance","Binance"],["Bybit","Bybit"],["TradingView","Stocks & more"],["Spread","Spread"]]
+  // Main row: All · Crypto · Stocks & more · FIAT · Spread. Selecting Crypto
+  // reveals a second row with the 8 exchanges (hidden by default) — "Crypto" alone
+  // filters to every crypto venue; an exchange sub-tab narrows to that venue.
+  // FIAT = currency pairs only (curated =X matrix + live Yahoo forex hits).
+  const MAIN_TABS = [["ALL","All"],["CRYPTO","Crypto"],["TradingView","Stocks & more"],
+                     ["FIAT","FIAT"],["Spread","Spread"]];
+  const CRYPTO_VENUES = ["Coinbase","Binance","Bybit","Kraken","OKX","KuCoin","Gate.io","MEXC"];
+  const tabs = MAIN_TABS
     .map(([id,label])=>`<button class="symtab${id==="ALL"?" cur":""}" data-ex="${id}">${label}</button>`).join("");
+  const subTabs = CRYPTO_VENUES
+    .map(v=>`<button class="symtab" data-ex="${v}">${v==="Gate.io"?"Gate":v}</button>`).join("");
   symDlg.innerHTML =
     `<div class="dh"><span>Add symbol <span class="exch" style="color:var(--muted);font-weight:400;font-size:12px">· ${escHtml(groupName)}</span></span><span class="cl" id="symClose">×</span></div>`
    +`<div class="db">`
@@ -3645,6 +4114,7 @@ function openAddSymbolDlg(groupName){
    +    `<input id="symInput" type="text" placeholder="Search anything — crypto, stocks, ETFs, gold, FX, indices (e.g. AAPL, SPY, XAUUSD, EURUSD, SPX)" autocomplete="off" spellcheck="false">`
    +  `</div>`
    +  `<div class="symtabs" id="symTabs">${tabs}</div>`
+   +  `<div class="symtabs symsub" id="symSubTabs">${subTabs}</div>`
    +  `<div class="symlist" id="symList"><div class="symempty">Loading symbols…</div></div>`
    +`</div>`
    +`<div class="symfoot"><kbd>↑</kbd><kbd>↓</kbd> navigate <kbd>Enter</kbd> add <kbd>Esc</kbd> close</div>`;
@@ -3657,12 +4127,22 @@ function openAddSymbolDlg(groupName){
   input.onkeydown = onSymKey;
   input.focus();
 
-  // Exchange tabs filter the result list to one venue (or All).
-  document.getElementById("symTabs").querySelectorAll(".symtab").forEach(tab=>{
+  // Tabs filter the result list. The Crypto main tab owns the exchange sub-row:
+  // visible only while a crypto state is active, hidden (and irrelevant) otherwise.
+  const isCryptoState = ex => ex==="CRYPTO" || CRYPTO_VENUES.includes(ex);
+  const paintTabs = ()=>{
+    const ex = symDlgState.ex;
+    document.querySelectorAll("#symTabs .symtab").forEach(t=>
+      t.classList.toggle("cur", t.dataset.ex===ex || (t.dataset.ex==="CRYPTO" && isCryptoState(ex))));
+    const sub = document.getElementById("symSubTabs");
+    sub.classList.toggle("open", isCryptoState(ex));
+    sub.querySelectorAll(".symtab").forEach(t=>t.classList.toggle("cur", t.dataset.ex===ex));
+  };
+  document.querySelectorAll("#symTabs .symtab, #symSubTabs .symtab").forEach(tab=>{
     tab.onclick = ()=>{
       symDlgState.ex = tab.dataset.ex;
       symDlgState.cur = 0;
-      document.querySelectorAll("#symTabs .symtab").forEach(t=>t.classList.toggle("cur", t===tab));
+      paintTabs();
       renderSymResults(input.value);
       input.focus();
     };
@@ -3674,25 +4154,36 @@ function openAddSymbolDlg(groupName){
       if(l) l.innerHTML = `<div class="symempty">Couldn't load symbols. You can still type an exact id (e.g. BTC-USD) and press Enter.</div>`; });
 }
 
-// Venue display order: crypto exchanges first, then TradingView (stocks/etc.)
-// last as a tiebreak so the same ticker clusters predictably.
-const EX_ORDER = { Coinbase:0, Binance:1, Bybit:2, TradingView:3 };
+// Venue display order: crypto exchanges first, then the non-crypto classes, then
+// live TradingView/Yahoo rows last as a tiebreak so the same ticker clusters predictably.
+const EX_ORDER = { Coinbase:0, Binance:1, Bybit:2, Kraken:3, OKX:4, KuCoin:5, "Gate.io":6, MEXC:7,
+                   Stocks:8, ETF:9, FX:10, Indices:11, Futures:12, TradingView:13 };
 
 function symMatches(q){
   const exFilter = symDlgState ? symDlgState.ex : "ALL";
-  // Candidate pool: local crypto products + any TradingView results fetched for
-  // this query. The TradingView tab shows ONLY remote rows; other tabs filter the
-  // crypto pool; All blends both.
+  // Candidate pool: local products + any live Yahoo results fetched for this query.
+  // The "Stocks & more" tab shows every non-crypto row (prefetched US listings,
+  // FX/indices/futures, plus live Yahoo hits); venue tabs filter the crypto pool;
+  // All blends everything.
   const tv = (symDlgState && symDlgState.tv) || [];
   let pool;
-  if(exFilter==="TradingView")      pool = tv;
+  if(exFilter==="TradingView")      pool = [...(PRODUCTS || []).filter(p=>p.leg.startsWith("YF:")), ...tv];
+  // "Crypto" main tab (no exchange narrowed yet): every crypto venue at once.
+  else if(exFilter==="CRYPTO")      pool = (PRODUCTS || []).filter(p=>!p.leg.startsWith("YF:"));
+  // FIAT: currency pairs only — the curated =X matrix plus live Yahoo forex hits.
+  else if(exFilter==="FIAT")        pool = [...(PRODUCTS || []).filter(p=>p.exLabel==="FX"),
+                                            ...tv.filter(p=>p.tvType==="Forex")];
   // Spread builder searches every venue (both legs can come from anywhere), like All.
   else if(exFilter && exFilter!=="ALL" && exFilter!=="Spread") pool = (PRODUCTS || []).filter(p=>p.exLabel===exFilter);
   else                              pool = [...(PRODUCTS || []), ...tv];
 
+  // A symbol can appear twice — prefetched (US listings/curated) AND as a live
+  // Yahoo hit for the same ticker. Keep the first (higher-ranked) per leg.
+  const dedupByLeg = arr => { const seen=new Set(); return arr.filter(p=>!seen.has(p.leg) && seen.add(p.leg)); };
+
   q = q.trim().toUpperCase();
   if(!q){                                          // starter list before typing
-    return [...pool].sort((a,b)=> (EX_ORDER[a.exLabel]-EX_ORDER[b.exLabel]) || a.id.localeCompare(b.id)).slice(0, 80);
+    return dedupByLeg([...pool].sort((a,b)=> (EX_ORDER[a.exLabel]-EX_ORDER[b.exLabel]) || a.id.localeCompare(b.id))).slice(0, 80);
   }
   const norm = q.replace(/\//g,"-");              // treat ETH/BTC like ETH-BTC for matching
   const compact = q.replace(/[-/]/g,"");          // BTCUSDT-style query w/o separators
@@ -3708,7 +4199,11 @@ function symMatches(q){
     else if(base===q) score = 90;                 // exact base ticker
     else if(id.startsWith(norm) || idc.startsWith(compact)) score = 80;
     else if(base.startsWith(q)) score = 70;
+    // Exact base-asset NAME ("bitcoin" → rows named "Bitcoin / …") outranks looser
+    // name matches — otherwise "ethereum" surfaces Ethereum Name Service first.
+    else if(nm.startsWith(q+" /")) score = 65;
     else if(ex.startsWith(q)) score = 55;         // "binance"/"bybit"/"trading" → that venue
+    else if(nm.startsWith(q)) score = Math.max(score, 45); // name prefix beats mid-name hits
     else if(nm.includes(q)) score = Math.max(score, 40);   // match on display name
     else if(id.includes(norm) || idc.includes(compact)) score = Math.max(score, 30);
     if(score>=0) scored.push([score, p]);
@@ -3716,7 +4211,7 @@ function symMatches(q){
   scored.sort((a,b)=> b[0]-a[0]
                    || (EX_ORDER[a[1].exLabel]-EX_ORDER[b[1].exLabel])
                    || a[1].id.localeCompare(b[1].id));
-  return scored.slice(0, 80).map(s=>s[1]);
+  return dedupByLeg(scored.map(s=>s[1])).slice(0, 80);
 }
 
 // Kick off (debounced) the remote TradingView search for `q`. When it lands and
@@ -3775,9 +4270,7 @@ function renderSymResults(q){
   list.innerHTML = res.map((p,i)=>{
     const added = have.has(p.leg);
     const base  = (p.base||"?").toUpperCase();
-    const icon  = NO_LOGO.has(base)
-      ? `<span class="ic" style="background:#2962ff">${escHtml(base[0]||"?")}</span>`
-      : `<img class="ic" src="${logoForBase(base)}" alt="${escHtml(base)}" onerror="this.outerHTML='<span class=\\'ic\\' style=\\'background:#2962ff\\'>${escHtml(base[0]||"?")}</span>'">`;
+    const icon  = iconHtml(base, "ic", p.leg);
     const exTag = p.exLabel==="TradingView"
       ? [p.tvVenue, p.tvType].filter(Boolean).join(" · ") || "TradingView"
       : p.exLabel + (p.isPerp ? " · Perp" : "");
@@ -3800,17 +4293,14 @@ function renderSymResults(q){
 // Two-slot composer (A / B) that writes an A/B ratio leg into the section. Reuses
 // the same product pool + TradingView enrichment as the flat search; picking a row
 // fills the active slot (A first, then B). "Add spread" pushes "<legA>/<legB>".
-function spreadIcon(base){
-  base = (base||"?").toUpperCase();
-  return NO_LOGO.has(base)
-    ? `<span class="ic" style="background:#2962ff">${escHtml(base[0]||"?")}</span>`
-    : `<img class="ic" src="${logoForBase(base)}" alt="${escHtml(base)}" onerror="this.outerHTML='<span class=\\'ic\\' style=\\'background:#2962ff\\'>${escHtml(base[0]||"?")}</span>'">`;
+function spreadIcon(base, leg){
+  return iconHtml(base||"?", "ic", leg);
 }
 function spreadSlotChip(which){
   const sp = symDlgState.spread, p = sp[which], active = sp.slot===which;
   const label = which==="a" ? "Numerator (A)" : "Denominator (B)";
   const inner = p
-    ? `${spreadIcon(p.base)}<span class="sp-id">${escHtml(p.id)}</span><span class="sp-x" data-clear="${which}" title="Clear">×</span>`
+    ? `${spreadIcon(p.base, p.leg)}<span class="sp-id">${escHtml(p.id)}</span><span class="sp-x" data-clear="${which}" title="Clear">×</span>`
     : `<span class="sp-ph">Pick ${which.toUpperCase()}…</span>`;
   return `<div class="sp-slot${active?" active":""}${p?" filled":""}" data-slot="${which}"><span class="sp-lab">${label}</span><div class="sp-chip">${inner}</div></div>`;
 }
@@ -3834,7 +4324,7 @@ function renderSpreadBuilder(q){
           ? [p.tvVenue, p.tvType].filter(Boolean).join(" · ") || "TradingView"
           : p.exLabel + (p.isPerp ? " · Perp" : "");
         return `<div class="symrow${i===symDlgState.cur?" cur":""}" data-i="${i}">`
-             +   spreadIcon(p.base)
+             +   spreadIcon(p.base, p.leg)
              +   `<span class="meta"><span class="id">${escHtml(p.id)}</span><span class="nm">${escHtml(p.name)}</span></span>`
              +   `<span class="exch">${escHtml(exTag)}</span>`
              +   `<span class="plus">＋</span>`
@@ -3993,7 +4483,7 @@ async function fetchRichStats(leg){
                                    "Open interest": t.openInterest!=null?(+t.openInterest).toLocaleString():null } : {} };
     }
     if(ex==="YAHOO"){
-      const d = await proxyJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(r.rest)}?interval=1d&range=5d`);
+      const d = await fetchJSONDirectOrProxy(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(r.rest)}?interval=1d&range=5d`);
       const m = d && d.chart && d.chart.result && d.chart.result[0] && d.chart.result[0].meta;
       if(!m || m.regularMarketPrice==null) return null;
       return { last:+m.regularMarketPrice, open:+(m.chartPreviousClose??m.previousClose),
@@ -4099,11 +4589,11 @@ function openPairInfoCard(sym){
   const venue = [...new Set(String(sym).split("/").map(s=>resolveLeg(s).exchange.label))].join(" / ");
   const legR = isSpread ? null : resolveLeg(sym);
   const typeStr = isSpread ? "Spread / Ratio" : (legR.isPerp ? "Perpetual" : "Spot");
+  // `base||label` keeps the old behaviour of lettering off the display label when a leg yields no
+  // base (so the card shows "A" for AAPL rather than "?").
   const icon = isSpread
     ? splitIconHtml(sym, "pc-ic")
-    : NO_LOGO.has(base)
-      ? `<span class="pc-ic" style="background:#2962ff">${escHtml((base[0]||label[0]||"?").toUpperCase())}</span>`
-      : `<img class="pc-ic" src="${logoForBase(base)}" alt="" onerror="this.outerHTML='<span class=\\'pc-ic\\' style=\\'background:#2962ff\\'>${escHtml((base[0]||"?").toUpperCase())}</span>'">`;
+    : iconHtml(base || label, "pc-ic", sym);
 
   // Loading skeleton first; fills in as async data lands. Two carousel pages:
   // page 0 = details, page 1 = multi-timeframe RSI (lazy-loaded on first nav).
@@ -4729,12 +5219,73 @@ async function fetchBulkBybit(isPerp){
     return m;
   }catch{ return {}; }
 }
+// Big-5 bulk tickers — one call answers every watchlist leg on that venue, same
+// contract as fetchBulkBinance/Bybit: { restSymbol: {last, open} }. Where a venue
+// reports change instead of a 24h open, open is derived (open = last − change).
+async function fetchBulkKraken(){
+  try{
+    const d = await fetchJSONDirectOrProxy("https://api.kraken.com/0/public/Ticker");
+    const res = d && d.result; if(!res) return {};
+    const m = {};
+    // Register each ticker under BOTH the raw pair key and its altname (legs use
+    // altname; legacy keys like XXBTZUSD differ from XBTUSD).
+    for(const k of Object.keys(res)){ const t=res[k];
+      const last=+(t.c&&t.c[0]), open=+t.o;
+      if(!(last>0)) continue;
+      const v = { last, open:open>0?open:last };
+      m[k] = v;
+      if(KRAKEN_ALT[k]) m[KRAKEN_ALT[k]] = v;
+    }
+    return m;
+  }catch{ return {}; }
+}
+async function fetchBulkOkx(){
+  try{
+    const d = await fetchJSONDirectOrProxy("https://www.okx.com/api/v5/market/tickers?instType=SPOT");
+    const list = d && d.data; if(!Array.isArray(list)) return {};
+    const m = {};
+    for(const t of list){ const last=+t.last, open=+t.open24h;
+      if(last>0) m[t.instId] = { last, open:open>0?open:last }; }
+    return m;
+  }catch{ return {}; }
+}
+async function fetchBulkKucoin(){
+  try{
+    const d = await fetchJSONDirectOrProxy("https://api.kucoin.com/api/v1/market/allTickers");
+    const list = d && d.data && d.data.ticker; if(!Array.isArray(list)) return {};
+    const m = {};
+    for(const t of list){ const last=+t.last, chg=+t.changePrice;
+      if(last>0) m[t.symbol] = { last, open:Number.isFinite(chg)?last-chg:last }; }
+    return m;
+  }catch{ return {}; }
+}
+async function fetchBulkGate(){
+  try{
+    const d = await fetchJSONDirectOrProxy("https://api.gateio.ws/api/v4/spot/tickers");
+    if(!Array.isArray(d)) return {};
+    const m = {};
+    for(const t of d){ const last=+t.last, pct=+t.change_percentage;
+      if(last>0) m[t.currency_pair] = { last, open:Number.isFinite(pct)&&pct!==-100?last/(1+pct/100):last }; }
+    return m;
+  }catch{ return {}; }
+}
+async function fetchBulkMexc(){
+  try{
+    const d = await fetchJSONDirectOrProxy("https://api.mexc.com/api/v3/ticker/24hr");
+    if(!Array.isArray(d)) return {};
+    const m = {};
+    for(const t of d){ const last=+t.lastPrice, open=+t.openPrice;
+      if(last>0) m[t.symbol] = { last, open:open>0?open:last }; }
+    return m;
+  }catch{ return {}; }
+}
+
 // Yahoo has no bulk endpoint here; a 1d/5d chart call carries meta.regularMarketPrice
 // and meta.chartPreviousClose, giving {last, open} (open = prior close, so Chg% is the
 // daily move — matching how TradingView shows stock change).
 async function fetchStatsYahoo(sym){
   try{
-    const d = await proxyJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`);
+    const d = await fetchJSONDirectOrProxy(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`);
     const meta = d && d.chart && d.chart.result && d.chart.result[0] && d.chart.result[0].meta;
     if(!meta || meta.regularMarketPrice==null) return null;
     const last = +meta.regularMarketPrice;
@@ -4770,20 +5321,33 @@ async function refreshPrices(){
   // Bucket legs by venue: Coinbase legs hit per-product /stats; Binance/Bybit
   // legs are answered from one bulk ticker call per (venue, market).
   const cbLegs = [], biSpot = [], biPerp = [], bySpot = [], byPerp = [], yfLegs = [];
+  const krLegs = [], okxLegs = [], kcLegs = [], gtLegs = [], mxLegs = [];
   for(const leg of legs){
     const r = resolveLeg(leg);
     if(r.exchange.id==="BINANCE") (r.isPerp?biPerp:biSpot).push(leg);
     else if(r.exchange.id==="BYBIT") (r.isPerp?byPerp:bySpot).push(leg);
     else if(r.exchange.id==="YAHOO") yfLegs.push(leg);
+    else if(r.exchange.id==="KRAKEN") krLegs.push(leg);
+    else if(r.exchange.id==="OKX")    okxLegs.push(leg);
+    else if(r.exchange.id==="KUCOIN") kcLegs.push(leg);
+    else if(r.exchange.id==="GATE")   gtLegs.push(leg);
+    else if(r.exchange.id==="MEXC")   mxLegs.push(leg);
     else cbLegs.push(leg);
   }
   const stats = {};
   // fire the bulk calls (only those actually needed) alongside the Coinbase sweep
   const bulkJobs = [];
+  const wireBulk = (legsArr, fetcher) => { if(legsArr.length) bulkJobs.push(
+    fetcher().then(m=>legsArr.forEach(l=>{ const v=m[resolveLeg(l).rest]; if(v) stats[l]=v; }))); };
   if(biSpot.length) bulkJobs.push(fetchBulkBinance(false).then(m=>biSpot.forEach(l=>{ const v=m[resolveLeg(l).rest]; if(v) stats[l]=v; })));
   if(biPerp.length) bulkJobs.push(fetchBulkBinance(true ).then(m=>biPerp.forEach(l=>{ const v=m[resolveLeg(l).rest]; if(v) stats[l]=v; })));
   if(bySpot.length) bulkJobs.push(fetchBulkBybit(false).then(m=>bySpot.forEach(l=>{ const v=m[resolveLeg(l).rest]; if(v) stats[l]=v; })));
   if(byPerp.length) bulkJobs.push(fetchBulkBybit(true ).then(m=>byPerp.forEach(l=>{ const v=m[resolveLeg(l).rest]; if(v) stats[l]=v; })));
+  wireBulk(krLegs, fetchBulkKraken);
+  wireBulk(okxLegs, fetchBulkOkx);
+  wireBulk(kcLegs, fetchBulkKucoin);
+  wireBulk(gtLegs, fetchBulkGate);
+  wireBulk(mxLegs, fetchBulkMexc);
   const cbJob = mapLimit(cbLegs, 4, async p=>[p, await fetchStats(resolveLeg(p).rest)])
     .then(entries=>entries.forEach(([l,v])=>{ if(v) stats[l]=v; }));
   // Yahoo: one proxied call per leg, concurrency-capped (proxies rate-limit harder
@@ -5150,7 +5714,6 @@ function icBell(){   return svg('<path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2
 function icPause(){  return svg('<line x1="9" y1="5" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="19"/>'); }
 function icPlay(){   return svg('<path d="M8 5l11 7-11 7z"/>'); }
 function icEdit(){   return svg('<path d="M17 3l4 4L8 20l-5 1 1-5z"/>'); }
-function icTrash(){  return svg('<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 14h10l1-14"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>'); }
 function icNote(){   return svg('<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>'); }
 function icCross(){  return svg('<line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>'); }
 function icTrend(){  return svg('<line x1="4" y1="20" x2="20" y2="4"/><circle cx="4" cy="20" r="1.6"/><circle cx="20" cy="4" r="1.6"/>'); }

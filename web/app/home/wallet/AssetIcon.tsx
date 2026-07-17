@@ -29,6 +29,16 @@ export default function AssetIcon({ symbol, assetType, size = 28 }: Props) {
   const [failed, setFailed] = useState(false);
   const [triedFallback, setTriedFallback] = useState(false);
 
+  // React reuses this instance when the parent re-renders with a different asset
+  // (e.g. the Best/Worst Performer card changing between polls) — reset the error
+  // chain so the new symbol gets its own shot at loading, render-time per React docs.
+  const [prevAsset, setPrevAsset] = useState(`${symbol}|${assetType}`);
+  if (prevAsset !== `${symbol}|${assetType}`) {
+    setPrevAsset(`${symbol}|${assetType}`);
+    setFailed(false);
+    setTriedFallback(false);
+  }
+
   const isOverride = hasLogoOverride(symbol, assetType);
   const color = getAssetColor(symbol);
   const char = getIconChar(symbol);

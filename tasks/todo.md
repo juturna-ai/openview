@@ -1,3 +1,52 @@
+# Symbol search — full coverage (Big-5 crypto exchanges + every asset class)
+
+## Goal
+The Add-symbol dialog finds effectively every live pair TradingView shows — crypto from
+8 exchanges, plus US stocks/ETFs, FX, indices, futures — and every result is CHARTABLE
+(candles fetchable), not just listed. TradingView's own directory is closed (403 +
+ToS); coverage comes from each venue's official keyless API instead.
+
+## Decisions locked with the user
+- Scope: Big 5 (Kraken, OKX, KuCoin, Gate.io, MEXC) + all non-crypto asset classes.
+- Verified live counts: OKX 1,308 · KuCoin 1,040 · Kraken 1,515 · Gate 2,229 · MEXC 2,212
+  (+ existing Coinbase 527 / Binance 1,363 / Bybit 592 + perps).
+
+## Crypto — 5 new venues (web/public/index.html)
+- [ ] Catalog fetchers merged into loadProducts() allSettled pool
+- [ ] Leg prefixes KRAKEN:/OKX:/KUCOIN:/GATE:/MEXC: in resolveLeg + EX_ORDER + tabs
+- [ ] Kline adapters in fetchPage(): Kraken OHLC (720-bar cap) · OKX candles+history ·
+      KuCoin candles · Gate candlesticks · MEXC klines (Binance-shaped); proxyJSON where no CORS
+- [ ] Per-venue TF interval mapping
+
+## Non-crypto (server route + engine)
+- [ ] web/app/api/market/symbols/route.ts — NASDAQ Trader nasdaqlisted.txt + otherlisted.txt
+      → ~11k US stocks/ETFs, cached server-side 24h, served same-origin
+- [ ] Engine loads it into PRODUCTS as YF: legs (existing Yahoo kline branch — no new adapter)
+- [ ] Curated in-engine lists: FX majors+crosses (=X), world indices (^…), futures (=F)
+- [ ] Yahoo live search stays for international coverage; quotesCount 30 → 50
+
+## Verification
+- [ ] Browser: search rows per new venue; load 1 chart per venue (candles paint)
+- [ ] Stocks/FX/indices/futures rows appear and chart (AAPL, SPY, EURUSD=X, ^GSPC, GC=F)
+- [ ] Existing Coinbase/Binance/Bybit + spread builder unaffected
+
+## Docs
+- [x] ARCHITECTURE.md: route map + engine venue table + search dialog section
+
+## Review (2026-07-17)
+Shipped. Catalog went 4,288 → **24,579 symbols in ~3.3s**: 8 crypto venues
+(Coinbase 527 · Binance 1,936 · Bybit 1,299 · Kraken 1,407 · OKX 1,308 ·
+KuCoin 1,040 · Gate.io 2,225 · MEXC 2,105) + 12,637 US stocks/ETFs + 95 curated
+FX/indices/futures, with live Yahoo search on top for international. 14/14
+chart-load checks pass race-free (one per venue + stock/ETF/FX/index/futures +
+spread regression), all data fresh, zero page errors, 16/16 logic tests.
+Notes: Kraken history is capped at its newest ~720 bars (API has no backward
+cursor); CORS-blocked venues ride /api/market/proxy (allow-listed); public
+CORS-proxy chain demoted to last resort after it proved too slow/small for
+catalog payloads (the 85s partial load during verification).
+
+---
+
 # Reports tab — AI market reports + community wall
 
 ## Goal
@@ -108,3 +157,70 @@ guard inlined in `keep-alive/route.ts`. Prove-it pattern: test written first, RE
 7. **The wall's reaction dedupe is UI courtesy, not enforcement** — no accounts means no identity to
    enforce against, and the in-memory rate limit is per-lambda. Fine for emoji on a market report;
    not fine if a tally ever needs to be trustworthy.
+
+---
+
+# 2026-07-17 — Autonomous bug/regression audit (/loop)
+
+## Plan
+- [x] Fan out 3 audit subagents: new market API routes, index.html diff, rest of web/app
+- [x] Baseline: lint, tsc, all 16 logic-test suites (all green before changes)
+- [x] Fix confirmed findings (Prove-It where unit-testable)
+- [x] Re-verify: lint, tsc, tests, production build
+- [x] Update ARCHITECTURE.md
+- [x] Review section (below)
+
+## Review — what was found and fixed
+
+**Fixed (7 files):**
+1. `web/app/api/market/proxy/upstream.ts` (new) + `route.ts` — extracted proxy logic; **SSRF hardening**:
+   redirects now followed manually (max 3 hops), every hop re-validated against the allow-list (default
+   `redirect:'follow'` would have let an upstream 3xx pivot the server to internal addresses); non-JSON
+   upstream content-types forced to `application/json`; added `query1.finance.yahoo.com` to the allow-list.
+2. `web/app/api/market/proxy/route.logic.test.mjs` (new) — 8 tests, written FIRST and confirmed failing
+   (SSRF + content-type reproduced), pass after the fix.
+3. `web/app/api/market/symbols/route.ts` — single-flight dedup for concurrent cold-cache requests
+   (parity with coinlogos/cmc; was double-fetching two ~10k-line files).
+4. `web/public/index.html` — 4 Yahoo call sites (chart, search, 2× 5d spark) switched `proxyJSON` →
+   `fetchJSONDirectOrProxy` so Yahoo uses the app's own proxy instead of only the flaky public chain.
+5. `web/app/home/wallet/WalletTrackerView.tsx` — `openDetail` race: stale wallet-A response could
+   overwrite wallet-B's just-opened detail panel; latest-request-wins seq guard.
+6. `web/app/home/wallet/AssetIcon.tsx` — `failed`/`triedFallback` never reset when the symbol prop
+   changed (recycled instance showed letter-chip for a loadable logo); render-time reset keyed on
+   symbol|assetType.
+7. `web/app/home/reports/DashboardView.tsx` + `PeriodView.tsx` — mount-fetch vs manual-Refresh race on
+   first empty-cache visit; latest-load-wins seq guard.
+
+**No test for items 5–7** — component-level async races; the repo has no React test harness (plain-node
+logic tests only), and adding jest/RTL for these would be a large dependency change. Documented here
+per the Prove-It escape hatch.
+
+**Found, deliberately NOT changed (product/design calls, flagging only):**
+- `deleteTrade()` in journal `trades.ts` exported but never called — no UI way to remove a trade.
+- TradeModal collects "Leverage" but `computePnl` ignores it — leveraged P&L shows raw notional move.
+- ContactForm relies on `mailto:` — silently no-ops on machines without a mail client.
+- `fetchOlderPages` doesn't special-case Kraken like Yahoo (harmless no-op call chain, self-heals).
+- `logoUrl()` in index.html is now dead code (superseded by `iconHtml`/`logoChain`).
+- Pre-existing duplicate `icTrash` definition in index.html (predates current diff).
+
+**Verified after fixes:** tsc clean, ESLint clean, all 17 logic-test suites pass, `next build` succeeds.
+
+---
+
+# 2026-07-17 — Follow-up: fix the 5 deferred items
+
+- [x] `deleteTrade` UI: right-click a day with trades → "Manage Trades…" → per-row Delete
+      (TradingCalendar.tsx manage panel + globals.css `.trade-manage*`).
+- [x] Leverage now affects P&L. Per user's call ("Size = margin, ×leverage"): `computePnl` extracted
+      to trades.ts, takes `leverage`, notional = margin × leverage. Modal field relabelled
+      "Position Size" → "Margin (USD)"; `amount_asset` scaled too. Test: `journal/pnl.logic.test.mjs`
+      (reproduces the old leverage-ignored bug, passes after fix).
+- [x] ContactForm: submit now shows a confirmation panel with a copy-to-clipboard address as the
+      fallback for machines with no mail client (mailto gives no callback).
+- [x] index.html dead code removed: `logoUrl()` (0 refs) and the shadowed first `icTrash()` definition
+      (the second, simpler one wins in JS and is the one used).
+- [x] React race fixes now have a test where feasible: the P&L extraction gave us a unit-testable
+      seam. The three async-race guards (wallet detail, AssetIcon reset, reports load) remain
+      component-level and untested — no React harness in-repo; not adding jest/RTL for three guards.
+
+**Verified:** tsc clean, ESLint clean, all 18 logic suites pass, `next build` succeeds.
