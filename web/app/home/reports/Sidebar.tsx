@@ -4,11 +4,26 @@ import React, { useEffect, useState } from 'react';
 import { useSidebarResize } from '../useSidebarResize';
 import { Icon } from '../wallet/icons';
 
-// Left sidebar for the Reports dashboard — same shell as the wallet's, but with no action button
-// and no nav list: only the brand header, the collapse toggle and the live clock. Reuses the
-// journal's .journal-sidebar styles so all three dashboards stay visually identical.
+// Left sidebar for the Reports dashboard — same shell as the wallet's, but with no action button:
+// brand header, nav, collapse toggle and live clock. Reuses the journal's .journal-sidebar /
+// .nav-item styles so all three dashboards stay visually identical.
 
-export default function Sidebar() {
+export type ReportsTab = 'dashboard' | 'daily' | 'weekly' | 'monthly';
+
+// Icons are reused from the wallet's existing set — no new paths needed.
+const NAV: { id: ReportsTab; label: string; icon: string }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: 'layers' },
+  { id: 'daily', label: 'Daily', icon: 'bar-chart' },
+  { id: 'weekly', label: 'Weekly', icon: 'trending-up' },
+  { id: 'monthly', label: 'Monthly', icon: 'trophy' },
+];
+
+interface Props {
+  view: ReportsTab;
+  onViewChange: (v: ReportsTab) => void;
+}
+
+export default function Sidebar({ view, onViewChange }: Props) {
   // Held at null until mount so the server doesn't render a timestamp the client immediately
   // contradicts (hydration mismatch).
   const [now, setNow] = useState<Date | null>(null);
@@ -43,6 +58,23 @@ export default function Sidebar() {
       >
         <Icon name={collapsed ? 'chevron-right' : 'chevron-left'} size={18} />
       </button>
+
+      <nav className="sidebar-nav">
+        {NAV.map((item) => (
+          <button
+            key={item.id}
+            className={'nav-item' + (view === item.id ? ' active' : '')}
+            onClick={() => onViewChange(item.id)}
+            aria-current={view === item.id ? 'page' : undefined}
+            title={collapsed ? item.label : undefined}
+          >
+            <span className="nav-icon">
+              <Icon name={item.icon} size={20} />
+            </span>
+            <span className="sidebar-label">{item.label}</span>
+          </button>
+        ))}
+      </nav>
 
       <div className="sidebar-clock">
         {now && (

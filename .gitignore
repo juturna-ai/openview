@@ -25,3 +25,15 @@ test/screenshots/
 !web/public/**/*.png
 _docs/index.full.backup.html
 .vercel
+
+# .mcp.json holds the Supabase personal access token in plain text.
+#
+# It used to reference ${OPENVIEW_SUPABASE_TOKEN}, which is the safer shape — but Claude Code
+# inherits its environment from the VS Code server process, which is started long before (and
+# independently of) any ~/.bashrc edit, so the placeholder silently resolved to an empty string and
+# the MCP kept using a stale token baked into that older environment. Hardcoding the token removes
+# the inheritance puzzle entirely; gitignoring the file is what keeps it out of the repo.
+#
+# Consequence: this file is now per-developer. A teammate needs their own, with a token from an
+# account that can see the Openview project (koedodxkryyxizcryggy). See ARCHITECTURE.md §17.4.
+.mcp.json

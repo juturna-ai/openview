@@ -544,7 +544,7 @@ For `rsi`-vs-`value` alerts, `updateRsiAlertLines()` creates native lightweight-
 
 | `ov_trades` | `Trade[]` — the trade journal (see §15). Written by the **Next app**, not the engine, hence the `ov_` prefix rather than `fv_`. | `saveTrades()` / `addTrade()` in `app/home/journal/trades.ts` (via the right-click → Add Trade modal) | `loadTrades()` in `app/home/journal/trades.ts` |
 | `ov_notes` | `Note[]` — the notes board (see §15). Sorted pinned-first, then most-recently-updated. | `addNote()` / `updateNote()` / `deleteNote()` in `app/home/journal/notes.ts` | `loadNotes()` (same file) |
-| `ov_holdings` | `Holding[]` — wallet portfolio (see §16). Fields are Reach's snake_case (`asset_type`, `avg_buy_price`) so holdings stay portable with the desktop app. | `addHolding()` / `updateHolding()` / `deleteHolding()` in `app/home/wallet/holdings.ts` | `loadHoldings()` (same file) |
+| `ov_holdings` | `Holding[]` — wallet portfolio (see §16). Fields are Reach's snake_case (`asset_type`, `avg_buy_price`) so holdings stay portable with the desktop app. Purchase detail — `purchased_at` (epoch ms), `fee_pct` (percent of trade value, defaults to 0.5 on a new entry), `notes` — is **optional**: records written before those fields existed simply lack them, so nothing needs migrating and no reader may assume they're present. The **dollar** fee is derived at render time from `amount × avg_buy_price × fee_pct`, never stored — a stored figure would go stale the moment either input changed. | `addHolding()` / `updateHolding()` / `deleteHolding()` in `app/home/wallet/holdings.ts` | `loadHoldings()` (same file) |
 | `ov_portfolio_snapshots` | `Snapshot[]` (`{t, value}`) — portfolio-value time series backing the History chart **and the header's 24h change** (`valueAgo(snapshots, 24)`). Appended on each successful price poll, throttled to one per 5 min, capped at 26k points. Reach stores these in SQLite; with no server DB they live here, which is why the chart shows "Collecting data" until two polls land — and why a fresh wallet's 24h change reads "—" until the series reaches back a day. | `recordSnapshot()` in `app/home/wallet/holdings.ts` | `loadSnapshots()` / `valueAgo()` (same file) |
 | `ov_tracked_wallets` | `TrackedWallet[]` (`{id, address, chain, label?}`) — on-chain addresses watched by the Wallet Tracker (see §16). Seeded with the 231 known whale/exchange wallets in `DEFAULT_WALLETS` (~20 per chain on the original 10 chains, plus live-verified whale seeds on the newer chains) **only when the key has never been written** (`raw === null`); an explicitly-stored `[]` is honoured as empty, so a user who clears the list doesn't get them all back on reload. When the seed set itself changes, `SEED_VERSION` drives a migration that swaps stale seeds for current ones while preserving user-added rows (§16). | `saveTracked()` in `app/home/wallet/chains.ts` | `loadTracked()` / `defaultWallets()` (same file) |
 | `ov_tracked_seed_version` | `number` — which generation of `DEFAULT_WALLETS` the stored list was seeded from. Absent/`1` = Reach's original 20; `2` = the 173-wallet set; `3` = adds hyperliquid/cardano/sui/bittensor/injective (+8 verified seeds); `4` = adds Hedera and fills the new chains' seeds to 231 total. Lets an existing user pick up a new seed set without losing wallets they added themselves. | `saveTracked()` (same file) | `loadTracked()` (same file) |
@@ -748,17 +748,19 @@ Local-first key/value over AsyncStorage; when `supabaseConfigured`, mirrors each
 - **Notifications** `src/lib/notifications.ts`: foreground handler (sound+badge), permission request + Android channel, `fireLocalAlert`, `setBadgeCount`, `registerPushToken` (stores the Expo token in `push_tokens`).
 - **Closed-app push** `supabase/functions/alert-watcher/index.ts`: a cron-scheduled Edge Function that scans active alerts → current Coinbase price → Expo Push to that user's tokens → marks the alert triggered.
 
-### Supabase schema — `supabase/schema.sql`
-| Table | Key | Columns | RLS |
-| --- | --- | --- | --- |
-| `sync_state` | (`user_id`,`key`) | `device_id, value jsonb, updated_at` | own-rows (select/insert/update/delete) |
-| `alerts` | `id` | `user_id, symbol, op, target, message, active, triggered_at, created_at` | own-rows (all) |
-| `push_tokens` | (`user_id`,`device_id`) | `token, updated_at` | own-rows (all) |
+### Supabase schema — `openviewapp/supabase/schema.sql`
+The mobile app owns `sync_state`, `push_tokens` and `push_alerts` — **in the same Supabase project the
+web app uses**. Requires **Anonymous sign-ins ON** (Auth → Providers). Setup + Edge Function
+deploy/cron steps are in `openviewapp/README.md`.
 
-Requires **Anonymous sign-ins ON** (Auth → Providers). Setup + Edge Function deploy/cron steps are in `openviewapp/README.md`.
+> **→ See §18 for the authoritative, live-verified account of the shared Supabase project.** Do not
+> duplicate table/RLS details here — a second copy is how this drifted before (this table used to
+> list an `alerts` table that does not exist; the real one is `push_alerts`).
 
 ### MCP
-Root `.mcp.json` registers the Supabase MCP server (`@supabase/mcp-server-supabase`, `--read-only`), reading `SUPABASE_PROJECT_REF` + `SUPABASE_ACCESS_TOKEN` from the environment (no secrets committed). Authorizing/activating it requires an interactive session.
+`openvieweb/.mcp.json` is **gitignored and per-developer**, hardcoding the project ref + access token.
+`openviewapp` has its own. See §18.4 — the env-var indirection this used to rely on silently
+resolved to the wrong project.
 
 ### Theme — `src/theme.ts`
 Exact TradingView palette mirrored from the web CSS vars: bg `#131722`, panel `#1E222D`, border `#2A2E39`, accent `#2962FF`, up `#26A69A`, down `#EF5350`; `userInterfaceStyle: dark`.
@@ -818,7 +820,7 @@ The binding constraint (verified in code, not assumed):
 2. **Root `/` serves the engine** via a `next.config.js` `beforeFiles` rewrite `{'/' → '/index.html'}`. Next serves `public/index.html` **directly** at `/index.html` (200, no redirect) — strictly better than the old Vercel `/index.html → /` 308 hop; grid iframe `src="index.html?…"` now hits the engine directly with params preserved.
 3. **"Chart engine as ONE `'use client'` component"** requirement is met by `web/app/chart/ChartEngine.tsx` — a `'use client'` wrapper that mounts the engine full-viewport in an iframe and forwards the query string; it backs the in-app **`/chart`** route (navbar use). The **canonical mobile / grid / embed contract stays on the raw `/` document** (never the iframe wrapper), which is why mobile keeps working untouched.
 4. **Mobile app is NOT modified or redeployed** — lowest risk. Its URL (`/?embed=1…`) still lands on the engine. (The instruction allowed updating the mobile config in the same commit; not needed because the root contract is preserved.)
-5. **Supabase** lives only in `openviewapp` and is **not touched** — "keep Supabase identical" is satisfied trivially.
+5. ~~**Supabase** lives only in `openviewapp` and is **not touched**.~~ **False since Reports Phase 2 (2026-07-16), and the "separate projects" framing was never true.** Web and mobile share **one** project, `koedodxkryyxizcryggy`. **→ §18** is authoritative; don't re-derive it here.
 
 ### Route map (`web/app/`)
 
@@ -835,7 +837,7 @@ The binding constraint (verified in code, not assumed):
 | `/home/journal` | `app/home/journal/page.tsx` + `JournalShell.tsx` (`'use client'`) | **Trade journal dashboard** (folder-tab "Journal"): sidebar + Calendar/Notes. See §15. |
 | `/home/assets` | `app/home/assets/page.tsx` + `AssetsShell.tsx` (`'use client'`) | **Assets dashboard** (folder-tab "Assets"): sidebar + Leaderboards (default) / Gainers & Losers. Same dashboard design as the wallet, **no Add Asset button**. Reuses the wallet's `MoversView` + `AssetDetailView` (§16). |
 | `/home/wallet` | `app/home/wallet/page.tsx` + `WalletShell.tsx` (`'use client'`) | **Wallet dashboard** (folder-tab "Wallet"): sidebar + Wallet / Wallet Tracker. Leaderboards / Gainers & Losers moved to `/home/assets`. See §16. |
-| `/home/reports` | `app/home/reports/page.tsx` + `ReportsShell.tsx` (`'use client'`) | **Reports dashboard** (folder-tab "Reports"): sidebar + empty content area. The sidebar is the wallet's shell with **no action button and no nav list** — brand header, collapse toggle and clock only. Placeholder for report views. |
+| `/home/reports` | `app/home/reports/page.tsx` + `ReportsShell.tsx` (`'use client'`) | **Reports dashboard** (folder-tab "Reports"): sidebar + four views — Dashboard (feed), Daily, Weekly, Monthly. The sidebar is the wallet's shell with a nav list but **no action button**. Same mount-once/keep-mounted tab discipline as `WalletShell`. See §17. |
 | `/api/market/prices` | `app/api/market/prices/route.ts` | POST holdings → `{symbol: {price, change24h}}`. Server-side price proxy (§16). |
 | `/api/market/cmc` | `app/api/market/cmc/route.ts` | GET CoinMarketCap listing + spotlight + Fear & Greed — powers the market page's 6 crypto tabs (§16). No API key; see §16. |
 | `/api/market/global` | `app/api/market/global/route.ts` | GET `{marketCap, marketCapChange24h, marketCapSeries:{t,v}[], fearGreed, altcoinSeason}` — the three snapshot cards (`home/GlobalStats.tsx`) shown above the **crypto** Leaderboards table (`MoversView`, crypto class only). `marketCapSeries` is a **4-year daily** series (~1460 pts via an explicit `timeStart`/`timeEnd` window with `interval=1d`; `range` caps at ~400 pts so it can't reach 4y) powering the Market Cap sparkline's hover crosshair/tooltip — the ▲/▼ badge stays the 24h change from the *latest* endpoint, only the sparkline is long-range. Keyless CMC `global-metrics` (latest + historical) + `altcoin-season/chart` + alternative.me Fear & Greed; each source fails soft, 60s cache. |
@@ -843,6 +845,13 @@ The binding constraint (verified in code, not assumed):
 | `/api/market/asset` | `app/api/market/asset/route.ts` (+ `descriptions.ts`, `tokenized.ts`) | GET `?cls=crypto\|stocks\|etfs\|commodities&symbol=…\|id=…&range=24H\|7D\|1M\|1Y\|ALL&mktPage=N` → one **asset detail** payload (quote, price series, stats, links, description, markets) for the page a leaderboard row opens into (§16.1). Keyless; normalises all four classes onto a single shape. **Every** class carries a description (crypto→CMC, stocks→Nasdaq, commodities→Wikipedia, ETFs→hardcoded); crypto carries a markets table, and a commodity with a tokenized proxy (gold→XAUt) carries a real CEX/DEX one for **the token** (§16.2). |
 | `/api/wallet-tracker` | `app/api/wallet-tracker/route.ts` | POST `{action: balance\|tokens\|prices}` — on-chain lookups across 16 chains (§16). |
 | `/api/explorer` | `app/api/explorer/route.ts` (+ `chains.server.ts`, `normalize.ts`) | POST `{action: address\|tx\|families}` — multi-chain **transaction** Explorer (§16.3). `address`→recent txns, `tx`→one tx's detail, both normalised to one `ExplorerTx` shape. Keyless: EVM via Blockscout (`eth/arbitrum/base/polygon`), Solana/Sui/Cardano/NEAR via each chain's public RPC/REST; chains with no keyless tx list (bsc/avalanche/optimism/tron) return `{deepLinkOnly:true, deepLink}` for a "View on explorer" link. Same never-leak-upstream-error contract as `/api/wallet-tracker`. |
+| `/api/reports/preview` | `app/api/reports/preview/route.ts` (+ `_lib/`) | GET `?period=daily\|weekly\|monthly` — builds one market report live (CMC gainers + Binance pairs + sentiment + LLM analysis) and returns it, **without** persisting. 3 h TTL cache + single-flight; `maxDuration = 60`. The client's fallback when no stored report exists. See §17. |
+| `/api/reports/cron` | `app/api/reports/cron/route.ts` | GET, Vercel cron `0 18 * * *` (= 1 PM Cancún, UTC-5 no DST). Builds + upserts daily, `+weekly` on Mondays, `+monthly` on the 1st. `CRON_SECRET` bearer (see §17.4 on the non-latin-1 trap). Idempotent on `(period, report_date)`. |
+| `/api/reports/generate` | `app/api/reports/generate/route.ts` | POST `{period}` — manual build+save for testing, same code path as the cron. Globally throttled 1/period/5 min so it can't drain the LLM free tier. |
+| `/api/reports/list` | `app/api/reports/list/route.ts` | GET `?period=&limit=` — the feed (anon-key read). Omit `period` for all periods by recency. Returns `{reports, configured}`; `configured:false` when Supabase env is absent, which makes the client fall back to `preview`. |
+| `/api/reports/[id]` | `app/api/reports/[id]/route.ts` | GET — one report + its comments + reaction tallies in one round trip. UUID-validated. |
+| `/api/reports/comment` | `app/api/reports/comment/route.ts` | POST `{reportId,nickname,body}` — service-role write, validated, 5/IP/10 min. |
+| `/api/reports/react` | `app/api/reports/react/route.ts` | POST `{reportId,emoji}` — atomic `increment_reaction()` RPC, emoji allow-list, 20/IP/10 min. |
 
 `/home/*` share `app/home/layout.tsx` → dark folder-tab bar (`OvTabs`, tabs: Home · Openview · Journal · Wallet · Reports) + heading nav (`app/home/HomeNav.tsx`: Home · Openview · APP · Docs · About us). `OvTabs` is a client component that derives the active tab from `usePathname()`. The raw engine tab bars (`index.html`, `web/public/index.html` `#ovTabs`) mirror the same tabs (Journal/Wallet/Reports link to `/home/journal`, `/home/wallet`, `/home/reports`). Each folder-tab dashboard route must be added to the `startsWith` path guards in **both** `HomeNav.tsx` and `HomeFooter.tsx`, which self-suppress on those paths. The nav "Openview" is the **description** page (`/home/openview`), NOT the chart — the chart is the folder-tab "OpenView" → `/`. Old `(site)` navbar pages (`/about`, `/portfolio`, `/contact`) are unrelated leftovers.
 | `/about` | `app/(site)/about/page.tsx` | Marketing copy. |
@@ -1232,9 +1241,13 @@ But there is a version of the request that is real: some of these assets have a 
 
 The Wallet dashboard's fifth view (`ExplorerView.tsx`) and the only one added beyond Reach's set. Paste an **address** → a Blockscan-style result with a **Net Worth** header and **Portfolio | Transactions** tabs; paste a **tx hash** → that transaction's detail. Modeled on Blockscan / Suivision / Cardanoscan: a clean centered hero with one wide search bar and a row of **chain-family pills** (`All · EVM · Solana · SUI · Cardano · NEAR · Tron`) directly below it; picking `EVM` reveals a sub-row to choose the specific EVM chain (they share the `0x…40` address format). `All` auto-detects via `detectChain()` (`chains.ts`); a family pill overrides that. Once a result shows, the hero collapses to a compact top bar so the next search is one keystroke away.
 
-**Address = Portfolio + Transactions.** The **Portfolio** tab (default) reuses `/api/wallet-tracker {action:'tokens'}` — the same endpoint (and `TokenIcon` fallback cascade) the Wallet Tracker's detail overlay uses — to render Net Worth + a holdings table (Token · Portfolio % · Price · Amount · Value), priced tokens first. For an **EVM** address (which exists on every EVM chain at the same 0x address) a **Token-Holdings breakdown** of per-chain cards sits above the table: the `tokens` lookup is fanned out across **all 14 EVM chains** (`EVM_CHAIN_IDS` — the original 7 plus Gnosis/Celo/Scroll/zkSync/Mode/Unichain/Zora, each a verified keyless Blockscout v2 host) **in parallel** (`Promise.all`), each card showing that chain's USD subtotal + portfolio %, sorted by value (funded chains first). The grid collapses to the top 12 with a **Show N more / Hide chains** toggle (`BREAKDOWN_COLLAPSED`). Wall-time ≈ the slowest single chain (~2s), not the sum. The family pills also cover the four non-EVM single-chain networks the Wallet Tracker prices but that have no keyless tx list — **Injective, Hyperliquid, Hedera, Bittensor** — so e.g. an `inj1…` address resolves to a deep-link + a working Portfolio tab instead of "Unknown chain". Chains with no keyless price feed (Solana SPL, Sui, Cardano, NEAR non-native) return every token at `usdValue 0`; the native coin still prices, and the unpriced tail is capped at 50 rows (a whale can hold thousands) with a "N unpriced tokens hidden" note. The **Transactions** tab is the normalised tx timeline from `/api/explorer {action:'address'}`.
+**Address = Portfolio + Transactions.** The **Portfolio** tab (default) reuses `/api/wallet-tracker {action:'tokens'}` — the same endpoint (and `TokenIcon` fallback cascade) the Wallet Tracker's detail overlay uses — to render Net Worth + a holdings table (Token · Portfolio % · Price · Amount · Value), priced tokens first. For an **EVM** address (which exists on every EVM chain at the same 0x address) a **Token-Holdings breakdown** of per-chain cards sits above the table: the `tokens` lookup is fanned out across **all 23 EVM chains** (`EVM_CHAIN_IDS` — the original 7, plus Gnosis/Celo/Scroll/zkSync/Mode/Unichain/Zora, plus Linea/SEI/Sonic/Robinhood/World Chain/Ink/Soneium/Etherlink/LightLink) **in parallel** (`Promise.all`), each card showing that chain's USD subtotal + portfolio %, sorted by value (funded chains first). The grid collapses to the top 12 with a **Show N more / Hide chains** toggle (`BREAKDOWN_COLLAPSED`).
 
-Both the single-chain holdings fetch and the multi-chain breakdown are **keyed by `chain:query` and seeded from `dataCache`** (via `getExplorerResult`/`setExplorerResult`), so re-opening an address paints instantly. Each has a 30s `AbortController` timeout so the spinner always resolves. ⚠ The fetch effects are keyed off the **address identity only, never off their own `loading`/`loaded` flags** — an earlier version listed `loading` in the deps, so `setLoading(true)` re-ran the effect whose cleanup aborted the in-flight request, stranding "Loading holdings…" forever.
+**An EVM chain's token source is a three-tier fallback** (`getTokens`, wallet-tracker route): (1) a keyless **Blockscout v2** host (`BLOCKSCOUT_HOSTS`) — preferred, carries per-token USD rates; (2) **Moralis** (`MORALIS_CHAINS`, needs `MORALIS_API_KEY`) for chains with no Blockscout — currently bsc, avalanche, SEI, Linea; (3) **the priced native coin only** (`getNativeOnlyTokens`) for a chain with neither. ⚠ Tier 3 exists because a chain with no source previously returned `{tokens: [], totalUsd: 0}` — a card reading "$0.00 / no tokens" for a genuinely funded wallet, indistinguishable from an empty one. **Sonic** is the only EVM chain on tier 3: it has a keyless RPC (`rpc.soniclabs.com`) and a CoinGecko id, but no token index anywhere — `explorer.soniclabs.com` serves the HTML explorer rather than a Blockscout API, and Moralis 400s it under every identifier (`sonic`, `0x92`, `146`). Its card prices native **S** and lists no ERC-20s. Its `cgId` is **`sonic-3`**, *not* `fantom` — the retired FTM id Sonic migrated from, which would misprice the chain exactly as the POL/`matic-network` trap did for Polygon. Before adding a chain, probe `https://<host>/api/v2/addresses/<addr>` **and** `/token-balances` and confirm a real `coin_balance` comes back: a host that only serves HTML returns 200 and silently yields $0.00 cards.
+
+**Each card is a `<button>` that re-opens the same address on that chain.** An EVM address is valid on every EVM chain, so a click just calls `runSearch` with the chain forced (and moves the family pill / EVM sub-row to match); `ResultPanel`'s effects key off `result.chain`, so the Portfolio and Transactions tabs repopulate on their own. The active chain's card is marked (`.active`), so the grid doubles as the "where am I" indicator. It's a real `<button>` — not a click handler on a div — so it's keyboard-reachable and announced as clickable. Wall-time ≈ the slowest single chain (~2s), not the sum. The family pills also cover the four non-EVM single-chain networks the Wallet Tracker prices but that have no keyless tx list — **Injective, Hyperliquid, Hedera, Bittensor** — so e.g. an `inj1…` address resolves to a deep-link + a working Portfolio tab instead of "Unknown chain". Chains with no keyless price feed (Solana SPL, Sui, Cardano, NEAR non-native) return every token at `usdValue 0`; the native coin still prices, and the unpriced tail is capped at 50 rows (a whale can hold thousands) with a "N unpriced tokens hidden" note. The **Transactions** tab is the normalised tx timeline from `/api/explorer {action:'address'}`.
+
+Both the single-chain holdings fetch and the multi-chain breakdown are seeded from `dataCache` (via `getExplorerResult`/`setExplorerResult`), so re-opening an address paints instantly. The holdings fetch is keyed `chain:query` — it *is* per-chain. ⚠ The **breakdown is keyed by address alone** (`breakdown:${query}`), deliberately **not** `chain:query`: the fan-out asks every EVM chain about the same address, so its result is identical whichever chain is being viewed. While the key included the chain, every chain-card click missed the cache and re-fanned all 22 chains for a payload already in hand — 23 requests per click instead of 1. Each has a 30s `AbortController` timeout so the spinner always resolves. ⚠ The fetch effects are keyed off the **address identity only, never off their own `loading`/`loaded` flags** — an earlier version listed `loading` in the deps, so `setLoading(true)` re-ran the effect whose cleanup aborted the in-flight request, stranding "Loading holdings…" forever.
 
 **Data — keyless, reusing the same public providers as `/api/wallet-tracker`.** Every call goes through `/api/explorer` (public RPCs send no CORS headers; external calls belong server-side per CLAUDE.md). Each source is normalised into one `ExplorerTx` shape (`hash/timestamp/from/to/value/symbol/fee/status/method/direction`) so the UI is chain-agnostic:
 
@@ -1287,7 +1300,7 @@ A local desktop app can trust its own input; a public web route cannot. The rout
 | `web/public/metals/*.gif` | Reach's animated metal coin sprites (gold / silver / platinum / palladium), 32×32. |
 | `web/app/home/wallet/holdings.ts` | `ov_holdings` + `ov_portfolio_snapshots` persistence. |
 | `web/app/home/wallet/chains.ts` | 16-chain config, `detectChain()`, `poolMap()` (bounded-concurrency fetch), `filterByChain()` / `chainCounts()`, the 231 seeded `DEFAULT_WALLETS`, `ov_tracked_wallets` persistence + `SEED_VERSION` migration. |
-| `web/app/home/wallet/chainIcons.ts` | Inline-SVG artwork for all 16 chains as data-URIs (official web3icons geometry for the newer marks; Solana's is the real gradient logo) — no network, no CDN (see §16 notes). |
+| `web/app/home/wallet/chainIcons.ts` | Inline-SVG artwork for all 32 chains as data-URIs (official web3icons geometry for the newer marks; Solana's is the real gradient logo) — no network, no CDN (see §16 notes). Gradient-based marks (SEI, Etherlink, LightLink, Zora) carry their own `<defs>`, with ids namespaced per chain so two marks can't collide in one document. |
 | `web/app/api/wallet-tracker/polkadot.ts` | Bittensor (TAO) balance over Substrate WS via `@polkadot/api` — a lazily-imported singleton connection, isolated here so no other chain pays the dependency's cost (see §16 notes). |
 | `web/app/home/wallet/ChainIcon.tsx` | `'use client'` — renders a chain's SVG mark, degrading to the coloured letter badge for any chain without artwork. |
 | `web/app/home/wallet/AssetIcon.tsx` / `icons.tsx` | Asset avatar w/ fallback chain; inlined Lucide glyphs. |
@@ -1319,7 +1332,7 @@ Reach also appends a `?t=${Date.now()}` cache-buster so every GIF instance start
 - **Seed migration (`SEED_VERSION`).** The seed set changed from Reach's 20 to 173, and `loadTracked()` only ever seeded when the key had *never* been written — so an existing user would have been stuck on the old 20 forever. `loadTracked()` now compares a stored `ov_tracked_seed_version` against `SEED_VERSION` and, when stale, swaps the old seeds for the current set. It is careful with user data: rows the user added themselves (identified by *not* having a `default-N` id) are preserved verbatim, and a deliberately-emptied tracker **stays empty** rather than having 173 wallets reappear underneath it. `loadTracked()` is a **pure read** — it must not stamp the version, because React StrictMode double-invokes the mount effect and an earlier version that wrote during the read had its second call skip the migration and hand back the stale list it had just replaced (caught in the browser, pinned in `seedMigration.logic.test.mjs`). `saveTracked()` owns the stamp.
 - **Right-click a wallet card → View / Rename / Delete** (`.wt-ctx-menu`, anchored to the cursor via `onContextMenu`). **View** opens the same token-detail overlay a left-click does (`openDetail`); **Delete** is the existing `handleRemove`; **Rename** opens a small dialog (`.wt-edit-panel`, reuses `.wt-detail-overlay`) to change the wallet's display **name** (`label`) only — the address and chain are immutable (remove and re-add to track a different address), which sidesteps address-validation and collision concerns. The label persists through the normal `saveTracked()` path. The menu closes on outside click, scroll (it's cursor-anchored, so scrolling would strand it) or Escape. **The outside-click close excludes the menu by ref (`ctxRef`), not by `stopPropagation`** — a React synthetic `stopPropagation` does not reliably stop the document-level native `mousedown` listener, which was closing the menu before an item's `onClick` (mouseup) could land, so every item appeared dead.
 - **Adding a wallet takes an optional name.** The add-form has a `.wt-name-input` ("Name (optional)") left of the address box; `handleAdd` trims it into `label` (omitted when blank) on the new `TrackedWallet`. On mobile both inputs go full-width and stack (name order 2, address order 3).
-- **Chain icons are inline SVG** (`chainIcons.ts` → `ChainIcon.tsx`), not remote logos — same rule the commodity artwork follows (§ leaderboard icons): a chain logo is *identity*, and a wrong-but-confident one mislabels which network a balance is on. Data-URIs mean no network, no CDN dependency, and nothing to mismatch; a chain with no artwork degrades to the coloured letter badge it replaced. Used on the wallet cards, the chain dropdown, the summary pills, and the detail panel.
+- **Chain icons are inline SVG** (`chainIcons.ts` → `ChainIcon.tsx`), not remote logos — same rule the commodity artwork follows (§ leaderboard icons): a chain logo is *identity*, and a wrong-but-confident one mislabels which network a balance is on. Data-URIs mean no network, no CDN dependency, and nothing to mismatch; a chain with no artwork degrades to the coloured letter badge it replaced. **All 31 chains in `CHAINS` now have artwork** (verified: no id in `CHAINS` is missing from `CHAIN_ART`), so the letter badge is a safety net for a future chain rather than a state any chain ships in — the 14 EVM chains from the two widenings rendered as letters until their marks were added. Used on the wallet cards, the chain dropdown, the summary pills, and the detail panel.
 - **Non-Ethereum wallet token detail showed nothing** — clicking a wallet on any chain but Ethereum opened an empty detail panel. `getTokens` looks the EVM chain up in `BLOCKSCOUT_HOSTS` and, with no host, returned an empty token list *with no error* — so polygon/optimism/bsc/avalanche all rendered nothing. Fixed in two parts:
   - `polygon.blockscout.com` and `explorer.optimism.io` are live and return priced `token-balances`, so both were added to `BLOCKSCOUT_HOSTS`.
   - **bsc and avalanche have no healthy public Blockscout instance and no keyless token API** (Ankr, Etherscan V2, 1inch, OKLink, bscscan-V1 all now require a key or reject the chain). They fall back to **Moralis** (`getEvmTokensMoralis`), whose `/wallets/{addr}/tokens?exclude_spam=true&limit=100` returns balances *and* USD prices in one call, keyed by `MORALIS_CHAINS`. Requires `MORALIS_API_KEY` (free tier, **Data API → Read** scope, server-side only, in `.env.local`; template in `.env.example`); when the key is **absent** those two chains degrade to balance-only exactly as before — no crash. Every other EVM chain still uses Blockscout. Two Moralis quirks handled: (1) a wallet with **>10k tokens** (Binance's BSC hot wallet) is rejected upstream on every endpoint — detected via the response message and surfaced as `tooMany: true`, which the detail panel renders as "too many tokens to list" rather than blanking or erroring; (2) `possible_spam` misses some impersonator tokens (a fake "USDT" with a 1e39 balance that poisons the total), so non-native tokens are additionally filtered to `verified_contract === true`.
@@ -1469,3 +1482,250 @@ changes nothing on screen. Here every table routes through the same `sortList`, 
 Regression-tested in `movers.logic.test.mjs` (`node app/home/wallet/movers.logic.test.mjs`), which
 reproduces the original behaviour and asserts ours differs.
 - **Footer suppressed** on `/home/wallet` (as on `/home/journal`) — `HomeFooter` returns null; a marketing footer under a full-height dashboard just eats vertical space.
+
+---
+
+## 17. Reports — AI market reports + wall (`/home/reports`)
+
+Four views (`ReportsShell` + `Sidebar`, `ReportsTab = dashboard | daily | weekly | monthly`): a
+**Dashboard** feed and three period reports. Each report = the top-20 CMC gainers for its window, a
+Binance USDT-pairs section, a sentiment snapshot, and a short LLM analysis. Same mount-once /
+keep-mounted / `display:none` tab discipline as `WalletShell` (§16) — a report costs a CMC listing, a
+Binance sweep and an LLM call, so a re-fetch per tab switch would be genuinely expensive.
+
+### 17.1 The quality gate — `app/api/reports/_lib/gate.ts`
+
+**The core of the feature, and the reason it produces signal instead of noise.** CMC's listing only
+sorts by market cap, so gainers are ranked in-process (as `MoversView` does). But ranking the raw
+pool by percent change is worthless: a live 30 d pull put **ANSEM at +152,296 %** and **CASHCAT at
++8,486 %** in the top two slots — near-zero-baseline microcaps and listing artifacts where a
+sub-tick move reads as five figures. An LLM handed that list will then confidently narrate a 1,500x
+that never economically happened. So the pool is gated *before* it is ranked:
+
+| Threshold | Value | Why |
+|---|---|---|
+| `MIN_MARKET_CAP` | `> $10M` | below this a percent change is meaningless |
+| `MIN_VOLUME_24H` | `> $1M` | below this you can't take a position without moving the price |
+| `MAX_CMC_RANK` | `<= 500` | data quality falls off a cliff past the top 500 |
+| `MAX_ABS_CHANGE_PCT` | `<= 1000 %` | above this it's a broken baseline, not a rally |
+
+Floors are **exclusive**, the ceiling **inclusive**. Gainers only (`change > 0`). Then sort by the
+period's field (`change24h`/`change7d`/`change30d` — `CHANGE_KEY`) and take 20.
+**These numbers are load-bearing and easy to drift — change them only deliberately.** Locked by
+`gate.logic.test.mjs` (`node web/app/api/reports/_lib/gate.logic.test.mjs`), which pins the real
+ANSEM/CASHCAT values and asserts they never appear.
+
+`CHANGE_KEY` is declared in `gate.ts` (not `types.ts`) and re-exported: `gate.ts` must stay free of
+runtime imports so it's importable under plain `node`, matching every other tested `.ts` here.
+
+### 17.2 Sources
+
+| Source | Endpoint | Notes |
+|---|---|---|
+| CMC listing | `data-api/v3/cryptocurrency/listing?limit=500` | keyless, undocumented, needs a browser UA; **only sorts by market cap** |
+| CMC spotlight | `.../spotlight?dataType=7\|8` | trending / most-visited / recently-added — the free crowd-attention proxy |
+| Fear & Greed | `alternative.me/fng` | keyless |
+| Binance daily | `api/v3/ticker/24hr` (bulk) | **1.9 MB, ~3,650 pairs** — server-side only, never proxied; carries **no** 7 d/30 d field |
+| Binance weekly/monthly | `api/v3/klines?interval=1d` | one call per pair, 10-concurrent. Measured: 60 calls ≈ 1.8 s, full pass ≈ **5 s** vs the 60 s Hobby limit |
+
+`api/v3/exchangeInfo` is **17 MB** and deliberately never called — `ticker/24hr` already carries every
+symbol, and anything quoting 24 h volume is by definition trading. Binance pairs are filtered to
+USDT, minus stablecoin quotes (peg noise) and leveraged `…UP`/`…DOWN` tokens (they'd double-count the
+underlying's move).
+
+### 17.3 The LLM — `_lib/llm.ts`
+
+`gemini-flash-latest` (free tier, ~1,500 req/day; we need 3) → **Groq `llama-3.1-8b-instant` on a 429
+only**. Any *other* Gemini failure returns `analysis: null` rather than silently switching provider,
+so a real fault stays visible instead of hiding behind a fallback that also changes the report's
+voice. `GEMINI_BASE_URL`/`GROQ_BASE_URL` override the endpoints so the path can be exercised against
+a local mock without burning quota.
+
+**What the model can and cannot know — the honest limit of this feature.** It receives numbers only:
+price, change, volume, market cap, rank, turnover, sentiment. It has **no news feed and no X/Twitter**
+(no free read tier — see `_lib/sentiment/x.ts` for the seam and a warning about cashtag astroturfing).
+So it can say *"MOVER rose 18 % on turnover worth 40 % of its market cap while Fear & Greed sat at
+62"* — real and checkable — but it **cannot say why**, because no causal data is in its input. Asked
+"why did this pump?", an LLM will happily invent a partnership and sound authoritative; a fabricated
+catalyst is worse than silence because someone may trade on it. Mitigations:
+
+1. The prompt forbids invented causes and mandates the exact phrase **"no clear catalyst identified"**.
+2. The prompt forbids buy/sell/hold calls and price targets.
+3. A disclaimer is **required, and `validateAnalysis()` rejects the response without it** — and the
+   stored text is always our canonical constant, never the model's echo, so a reworded
+   "disclaimer" that reads as advice cannot reach the page.
+
+**Rules 1–2 are requests a model can ignore; rule 3 is enforced in code.** That asymmetry is the
+known gap: a regex/keyword scan for un-sourced event language ("partnership", "ETF", "hack") is the
+obvious next hardening step. Theses for symbols not in the report are dropped (a hallucinated row
+would imply a ranking that never happened). An empty report skips the LLM entirely — the free tier is
+a budget, not a given. Locked by `llm.logic.test.mjs`.
+
+### 17.4 Persistence — Supabase
+
+> **→ §18 is authoritative for the project itself** (which project, every table, both security
+> models, what else runs against it, the config traps). This subsection covers only what's specific
+> to Reports. Reports does **not** have its own project — web and mobile share
+> `koedodxkryyxizcryggy`, and mobile's live user data (`sync_state`/`push_tokens`/`push_alerts`)
+> sits in the same database.
+
+Schema: `web/supabase/schema.sql` — apply via the SQL editor, idempotent, safe to re-run.
+
+Tables and RLS: **§18.2**. The design reasoning behind them:
+
+**jsonb, not child rows**, for the ranked coins: written once, always read whole, never queried
+per-coin — a join would buy nothing and complicate the upsert. Comments *are* relational: many per
+report, arriving independently over time, needing their own ordering.
+
+**Never add a public-insert policy** to the reports tables — it would hand anyone with DevTools
+direct write access and reduce the rate limiter to decoration. The default-deny is the whole
+security model (§18.2).
+
+**`increment_reaction()`** is `security definer` with no grant to `anon`/`authenticated`, so it's
+service-role-only. It exists because a read-then-write from the route would drop concurrent clicks
+(lost update); `count = count + 1` inside the upsert is resolved under Postgres's row lock.
+
+**Idempotency.** Vercel does **not** guarantee at-most-once cron delivery, so every write upserts on
+`(period, report_date)`. **Verified live**: two authenticated cron runs, both `saved=true`, still one
+row, same `id`, `updated_at` advanced — a retry refreshes rather than double-posts.
+
+**Cron: `0 18 * * *`** = 1 PM Cancún. America/Cancun is **UTC-5 year-round** (Quintana Roo dropped DST
+in 2015), so no DST branch exists anywhere. One cron routes internally: daily always, `+weekly` if
+`getUTCDay()===1`, `+monthly` if `getUTCDate()===1`; periods run **sequentially** so a Monday-the-1st
+doesn't fire three Binance batches at once. This puts Vercel Hobby at its **2-cron ceiling**
+(keep-alive is the other) — a third needs Pro.
+
+**`keep_alive`** is read daily by `/api/keep-alive` so Supabase doesn't pause the free-tier project.
+In practice it's now belt-and-braces: the reports cron writes daily and the mobile app's four
+pg_cron jobs hit this database every 15 seconds (§18.3), so it is never idle. It stays because the
+route 500s on zero rows by design — a silent no-op ping would be worse than none.
+
+**Cron auth — `_lib/cronAuth.ts`.** A `CRON_SECRET` containing any **non-latin-1** character (an
+em-dash or curly quote, which copy-paste introduces silently) can never be sent in an HTTP header —
+values are ByteStrings, so `fetch` throws `Cannot convert argument to a ByteString`. A naive
+`header === 'Bearer ' + secret` then answers **401 forever**, which is a lie: the secret isn't wrong,
+it's *untransmittable*, and an operator would chase a phantom auth bug. So an unsendable secret
+returns **`misconfigured` (500) with an explicit log**, distinct from 401. The compare is
+length-checked then constant-time. Locked by `cronAuth.logic.test.mjs`; the same guard is inlined in
+`keep-alive/route.ts` (which is `runtime = 'edge'` and dependency-free by design).
+
+**Anonymous writes.** No accounts. `/api/reports/comment` (5/IP/10min) and `/api/reports/react`
+(20/IP/10min, emoji restricted to a fixed allow-list) validate input and hold the service-role key.
+The limiter is **module state, so per-lambda-instance** — the effective global limit is
+N × warm instances. That's acceptable *because it isn't load-bearing*: the tables have no public
+write path, so beating the limiter buys extra rows, not access. Nicknames are unverified by design
+and the UI says so. The client-side reaction dedupe is UI courtesy, not enforcement — with no
+identity there's nothing to enforce against. Fine for emoji on a market report; **not** fine for
+anything where the tally must be trustworthy.
+
+### 17.5 UI notes
+
+Reuses the Gainers & Losers vocabulary (`.gl-page`, `.gl-section-block`, `.gl-cmc-table`,
+`.gl-change-pill`, `.gl-page-disclaimer`); the `rp-` classes only cover what that board lacks —
+analysis block, thesis rows, feed card. New surfaces sit on `var(--bg)` with no border/tint.
+Two gotchas found by screenshotting rather than by DOM assertions:
+- `.gl-sections` becomes a **2-col grid** ≥1100 px (built for *paired* gainers/losers). Reports'
+  two sections aren't a pair, so `.rp-sections` re-weights them `1.6fr / 1fr`.
+- A table auto-sizes to its widest cell, so an unwrapped thesis sentence pushed the table past its
+  wrapper into a horizontal scroller. `.rp-table { table-layout: fixed }` + declared column widths
+  make the prose wrap instead. Scoped to Reports — the board relies on content-driven sizing.
+- `.rp-reaction` names the emoji font stack explicitly: the inherited UI stack has no emoji
+  coverage, so on systems without one in the default chain they render as tofu boxes.
+
+---
+
+## 18. Supabase — ONE project, shared by web + mobile (authoritative)
+
+> **Read this before touching anything Supabase.** This section is the single source of truth. It was
+> written after a full audit of both repos plus live queries against the database (2026-07-16),
+> because scattered, half-true copies of this information caused real confusion — including a claim
+> that the two apps used *separate* projects, and a table listing an `alerts` table that has never
+> existed. **Do not restate table/RLS details elsewhere. Link here instead.**
+
+### 18.1 The one fact that matters
+
+**`openvieweb` (this repo) and `openviewapp` (the Expo mobile app) are ONE product sharing ONE
+Supabase project: `koedodxkryyxizcryggy`** (org `ayxiemkxfvacqqxrlaed`, project name "openview").
+There is no second project. There never was.
+
+Both apps reach it through their own env var names — same project:
+
+| App | URL var | Key var | Key used |
+| --- | --- | --- | --- |
+| `openvieweb` | `NEXT_PUBLIC_SUPABASE_URL` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon in browser; `SUPABASE_SERVICE_ROLE_KEY` in server routes only |
+| `openviewapp` | `EXPO_PUBLIC_SUPABASE_URL` | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | anon only — service_role never ships in the bundle |
+
+**A different, unrelated project (`gfdebbumdbrmzvpnyvsm`) belongs to UDG**, a separate music-events
+app (venues/artists/events/promoters) under a different Supabase **account** (the UDG account).
+`~/.bashrc` exports `SUPABASE_PROJECT_REF`/`SUPABASE_ACCESS_TOKEN` for **UDG**, and UDG's own
+`.mcp.json` files depend on them — **never repoint those globals.** If a Supabase tool here returns
+venues/artists/events, it is on the wrong project.
+
+### 18.2 Every table in the project (live-verified)
+
+| Table | Owner | Key | RLS policy | Written by |
+| --- | --- | --- | --- | --- |
+| `reports` | web | `id`; `unique (period, report_date)` | `SELECT` to all; **no write policy** | server routes (service_role) |
+| `report_comments` | web | `id` → `reports(id)` cascade | `SELECT` to all; **no write policy** | `/api/reports/comment` |
+| `report_reactions` | web | (`report_id`,`emoji`) | `SELECT` to all; **no write policy** | `/api/reports/react` → `increment_reaction()` |
+| `keep_alive` | web | one row | `SELECT` to `anon`,`authenticated` | nothing (read-only ping target) |
+| `sync_state` | mobile | (`user_id`,`key`) | own-rows: `select/insert/update/delete` where `auth.uid() = user_id` | the app (anon key) |
+| `push_tokens` | mobile | (`user_id`,`device_id`) | own-rows: `ALL` | the app (anon key) |
+| `push_alerts` | mobile | `alert_key` = `"<device_id>:<engine_id>"` | own-rows: `ALL` | the app + `alert-watcher` |
+
+**Two different security models coexist here, deliberately:**
+- **Web/Reports = public read, zero client writes.** No accounts. RLS default-deny means the anon key
+  in the browser can read and write nothing; every write goes through a rate-limited server route
+  holding the service_role key. Verified live: anon `SELECT` → 200, anon `INSERT` → **401**.
+- **Mobile = own-rows via anonymous auth.** `signInAnonymously()` gives each install a real
+  `auth.uid()`; every policy is `auth.uid() = user_id`. **Anonymous sign-ins must stay ON**
+  (Auth → Providers) or the mobile app silently loses all sync/push.
+
+Schemas: `web/supabase/schema.sql` (web's four) and `openviewapp/supabase/schema.sql` (mobile's
+three). Both idempotent. **Neither file describes the whole project** — that's this table's job.
+
+### 18.3 What runs against this database
+
+| Job | Schedule | Where | Does |
+| --- | --- | --- | --- |
+| `alert-watcher-every-min` + `-15s`/`-30s`/`-45s` | `* * * * *` ×4 (offsets `pg_sleep` 15/30/45) | **pg_cron in Postgres** | `net.http_post` → the `alert-watcher` Edge Function. ~15s worst-case closed-app alert latency. **All four active.** |
+| `/api/keep-alive` | `0 9 * * *` | Vercel cron | anon-key read of `keep_alive` so the free tier doesn't pause |
+| `/api/reports/cron` | `0 18 * * *` | Vercel cron | builds + upserts the daily report (+weekly Mon, +monthly 1st) |
+
+Vercel Hobby allows **2 crons** — both are used. A third needs Pro. The pg_cron jobs are separate and
+don't count against that.
+
+**`alert-watcher`** (`openviewapp/supabase/functions/alert-watcher/index.ts`) is the only Edge
+Function: scans active `push_alerts` → prices (Coinbase / Binance) → Expo Push → updates
+`last_price`/`last_fired_at`, prunes dead tokens. Deployed `--no-verify-jwt`, gated by an
+`x-watcher-secret` header. Requires extensions **`pg_cron`** + **`pg_net`**.
+
+**Vault holds two secrets** (`vault.secrets`, created 2026-07-10): `service_role_key` and
+`watcher_secret` — the cron reads both at call time so neither appears in the schedule definition.
+
+> ⚠️ **Rotating `SUPABASE_SERVICE_ROLE_KEY` breaks push alerts** unless the Vault copy is updated in
+> the same pass. That's not hypothetical — four live cron jobs read it every 15 seconds.
+
+### 18.4 Config that has already bitten us — don't repeat it
+
+- **`openvieweb/.mcp.json` is gitignored, untracked, and hardcodes the project ref + access token.**
+  It used `${SUPABASE_PROJECT_REF}`/`${SUPABASE_ACCESS_TOKEN}`, which resolved to **UDG's** project.
+  A dedicated `${OPENVIEW_SUPABASE_TOKEN}` var *still* failed: Claude Code inherits its environment
+  from the **VS Code server process**, started long before any `~/.bashrc` edit, so the placeholder
+  resolved empty and a stale token persisted. Hardcoding removes the inheritance puzzle; the
+  gitignore keeps the token out of git (no token was ever committed — every committed version used
+  placeholders). **Consequence: `.mcp.json` is per-developer.** The MCP reads it at startup → any
+  change needs a Claude Code restart.
+- **Access tokens are per-Supabase-account, not per-project.** The UDG account's token can
+  *only* ever see UDG. An Openview token must come from the account owning Openview.
+- **`CRON_SECRET` must be plain ASCII** (`openssl rand -hex 32`). A pasted em-dash or curly quote
+  cannot be sent in an HTTP header at all, so no caller could ever authenticate — see §17.4.
+
+### 18.5 If you remember nothing else
+
+1. **One project. Web + mobile. `koedodxkryyxizcryggy`.**
+2. `gfdebbumdbrmzvpnyvsm` is **UDG's**, a different app on a different account. Not ours.
+3. This project holds **real user data** (push tokens, sync state) — not just public market data.
+   Never treat a destructive statement here as "just reports".
+4. Reports tables: public read, **zero** client writes. Mobile tables: own-rows via anon auth.
+5. Rotating the service_role key means updating **Vault** too, or push alerts die silently.

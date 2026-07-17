@@ -43,6 +43,23 @@ export const CHAINS: Chain[] = [
   { id: 'mode', label: 'Mode', symbol: 'ETH', color: '#dffe00', explorer: 'https://explorer.mode.network/address/', cgId: 'ethereum' },
   { id: 'unichain', label: 'Unichain', symbol: 'ETH', color: '#f50db4', explorer: 'https://unichain.blockscout.com/address/', cgId: 'ethereum' },
   { id: 'zora', label: 'Zora', symbol: 'ETH', color: '#000000', explorer: 'https://explorer.zora.energy/address/', cgId: 'ethereum' },
+  // Second EVM widening. Every cgId below was verified against the chain's own reported coin price
+  // rather than a CoinGecko name search (which mis-resolves: "ink" → Chainlink, "soneium" → a bridged
+  // ASTR token). Robinhood/Ink/Soneium/LightLink/World Chain all report ~$1877 = ETH gas; Etherlink
+  // reports ~$0.2228, matching XTZ exactly. SEI and Linea have their own gas tokens.
+  { id: 'robinhood', label: 'Robinhood', symbol: 'ETH', color: '#00c805', explorer: 'https://robinhoodchain.blockscout.com/address/', cgId: 'ethereum' },
+  { id: 'sei', label: 'SEI', symbol: 'SEI', color: '#9e1f19', explorer: 'https://seitrace.com/address/', cgId: 'sei-network' },
+  { id: 'linea', label: 'Linea', symbol: 'ETH', color: '#61dfff', explorer: 'https://lineascan.build/address/', cgId: 'ethereum' },
+  { id: 'ink', label: 'Ink', symbol: 'ETH', color: '#7132f5', explorer: 'https://explorer.inkonchain.com/address/', cgId: 'ethereum' },
+  { id: 'soneium', label: 'Soneium', symbol: 'ETH', color: '#000000', explorer: 'https://soneium.blockscout.com/address/', cgId: 'ethereum' },
+  { id: 'etherlink', label: 'Etherlink', symbol: 'XTZ', color: '#38ff9c', explorer: 'https://explorer.etherlink.com/address/', cgId: 'tezos' },
+  { id: 'worldchain', label: 'World Chain', symbol: 'ETH', color: '#000000', explorer: 'https://worldchain-mainnet.explorer.alchemy.com/address/', cgId: 'ethereum' },
+  { id: 'lightlink', label: 'LightLink', symbol: 'ETH', color: '#00b4ff', explorer: 'https://phoenix.lightlink.io/address/', cgId: 'ethereum' },
+  // Sonic is native-balance-only: it has a keyless RPC and a CoinGecko id ('sonic-3' — the S token,
+  // NOT 'fantom', the retired FTM id it migrated from), but no keyless token index — no Blockscout v2
+  // instance (explorer.soniclabs.com serves HTML, not the API) and Moralis rejects it outright. Its
+  // card therefore prices native S and lists no ERC-20s. See the note in the route's CHAINS map.
+  { id: 'sonic', label: 'Sonic', symbol: 'S', color: '#fe9a4d', explorer: 'https://sonicscan.org/address/', cgId: 'sonic-3' },
 ];
 
 export function getChain(id: string): Chain | undefined {

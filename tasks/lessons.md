@@ -465,3 +465,114 @@ onto the finite set the app actually uses, not merely clamp its range. Clamping 
 one request; quantising bounds how many distinct keys exist. Check what the client can actually send
 (grep the callers) before picking the key. And keep perf comments honest about scope — per-instance
 module state collapses a herd within one warm server, never across serverless instances.
+
+## Rank-by-percent on a raw market pool is a data-quality trap — gate BEFORE you rank
+Building the Reports gainers, the raw 30d top-2 were ANSEM **+152,296%** and CASHCAT **+8,486%** —
+dead microcaps where a sub-tick price move reads as five figures. Sorting a market pool by percent
+change surfaces broken baselines, not opportunities, and an LLM handed that list will confidently
+narrate a 1,500x that never economically happened. Lesson: whenever ranking by a *ratio* (%, growth,
+turnover), first gate on the denominator's credibility (market cap, volume, rank) and cap the ratio
+itself — a five-figure percentage is an artifact, not a signal. Pin the real offending values in a
+unit test so the thresholds can't silently drift. Generalises beyond crypto: any "top N by % change"
+over a long tail needs a liquidity/size floor first.
+
+## Screenshot the page — DOM assertions pass while the layout is visibly broken
+Reports' `.rp-thesis-row` count was 20, `.rp-analysis` present, 0 console errors — every assertion
+green. The screenshot showed the thesis text clipped at the table's edge, because `.gl-sections`
+becomes a 2-col grid ≥1100px and a table auto-sizes to its widest cell, pushing it past its
+`overflow-x:auto` wrapper into a horizontal scroller. Lesson: element counts and error logs prove
+existence, not legibility — always render the page and LOOK. Then measure to find the real cause
+(`scrollWidth` vs `clientWidth`, and which descendants actually exceed the container's right edge)
+instead of nudging padding numbers. Corollary: `scrollWidth` can exceed `clientWidth` by a few px
+from sub-pixel rounding with `table-layout: fixed` while **zero** elements actually overflow — check
+what's really outside the box before "fixing" a number that isn't a bug.
+
+## Verify the LLM model id and API contract against live docs — never from memory
+Wrote `gemini-flash-latest` + `responseMimeType` from memory, then checked: the alias was right, but
+that was luck, not knowledge. Model ids get retired and REST shapes drift. Lesson: for any provider
+call, confirm the model id and request/response shape against current docs (or `ListModels`) before
+shipping — a wrong id fails only at runtime, on a cron, at 18:00 UTC, silently. Also: add a
+`*_BASE_URL` env override so the provider path can be exercised against a local mock — it proved the
+whole analysis render path (theses, risk flags, disclaimer) without a key or a cent of quota.
+
+## `pkill -f "next dev"` kills your own shell — match the listener by PID
+Killing a dev server with `pkill -f "next dev"` matched the harness's own command line and took down
+the shell (exit 144). And `lsof -ti:3333` came back empty while `next-server` was still LISTENing, so
+the "port is free" check lied and the replacement server died on EADDRINUSE — leaving me querying the
+OLD server and nearly reporting its stale output as a result. Lesson: resolve the listener by port
+(`ss -lptnH 'sport = :3333'` → pid), kill that pid, then POLL until the port is actually free before
+restarting. Use `setsid` for the new one so it outlives the tool call. If a result looks unchanged
+after a restart, suspect you're talking to the old process before you suspect the code.
+
+## A "green" test that never exercised the code is worse than no test
+Verifying the reports cron, my check ran it twice and asserted the row count stayed at 1 — it
+printed "✅ IDEMPOTENT". Both runs had actually returned **401 and written nothing**; the count was
+unchanged because nothing happened. The assertion couldn't distinguish "upsert worked" from "no-op".
+Lesson: an idempotency/side-effect test must first PROVE the effect occurred (assert `saved=true`,
+assert `updated_at` advanced), then assert the invariant. Any test whose pass condition is also
+satisfied by total inaction is decoration. Corollary: when a test passes on the first try in an
+environment you haven't fully verified, be suspicious and check the underlying signal.
+
+## A secret with a non-latin-1 char can NEVER authenticate — 401 is a lie there
+`CRON_SECRET` was left as the placeholder `<any long random string — e.g. ...>`, containing an
+em-dash (U+2014). HTTP header values are ByteStrings (latin-1), so `fetch` throws
+`Cannot convert argument to a ByteString ... value of 8212` and the request is never even sent.
+The route's `header === 'Bearer ' + secret` then answers "unauthorized" forever — sending the
+operator to rotate keys and re-read docs chasing an auth bug that doesn't exist. Lesson: when a
+secret arrives via copy-paste (docs, password managers, templates smart-quote things silently),
+validate that it's *transmittable* and report misconfiguration as its own state, distinct from
+auth failure. Boundary is latin-1 (U+00FF), not ASCII — `café` is fine, `—` and `’` are not.
+Fixed in `_lib/cronAuth.ts` + `cronAuth.logic.test.mjs`; same guard added to keep-alive.
+
+## Don't inherit a global env var that another project owns
+`openvieweb/.mcp.json` used `--project-ref=${SUPABASE_PROJECT_REF}`, but that var is exported in
+`~/.bashrc` pointing at the **UDG** project — so Openview's Supabase MCP was reading UDG's database
+(venues/artists/events), and "fixing" it in `.bashrc` would have silently repointed UDG's three
+`.mcp.json` files at Openview. Lesson: when config resolves through a shared global, check who else
+depends on it before changing it; prefer hardcoding the non-secret identifier (a project ref is
+public — it's in the Supabase URL) in the project that needs it, and leave the global alone. Only
+the credential (`SUPABASE_ACCESS_TOKEN`) stays an env var.
+
+## Claude Code does NOT inherit ~/.bashrc — it inherits the VS Code server's env
+Pointing openvieweb's Supabase MCP at the right project needed a new token. Adding
+`export OPENVIEW_SUPABASE_TOKEN=...` to `~/.bashrc` and restarting Claude Code did nothing:
+`${OPENVIEW_SUPABASE_TOKEN}` in `.mcp.json` resolved to empty, and the MCP process still held a
+*third*, older token (`sbp_bd3c…`) that matched neither `~/.bashrc` nor the new value. Reason: in a
+VS Code/WSL setup, Claude Code inherits the environment of the **VS Code server process**, which
+started long before the edit; restarting Claude Code from inside VS Code re-reads nothing.
+Lesson: when config uses `${ENV_VAR}` and the value doesn't take, don't keep restarting — inspect
+what the process ACTUALLY got (`tr '\0' '\n' < /proc/<pid>/environ`). If the env is inherited from a
+long-lived parent you can't cheaply restart, stop fighting it: put the value in the config file and
+gitignore the file. Untrack it (`git rm --cached`) BEFORE writing the secret, and verify with
+`git check-ignore -v` + a staged-diff scan that the secret can't be committed.
+
+## "Shows in git status" ≠ "will be committed" — decode the status code first
+After `git rm --cached .mcp.json`, my check saw the file in `git status` and shouted "*** SHOWS IN
+STATUS — problem", implying a token leak. The status was `D ` — the *staged deletion* I had just
+intentionally made. The file was untracked, gitignored, and the token appeared 0 times in the staged
+diff. Lesson: `git status --short | grep -q .` is not a leak test. Test the actual property:
+`git ls-files --error-unmatch <f>` (is it tracked?), `git check-ignore -v <f>` (is it ignored?), and
+`git diff --cached | grep <secret>` (is it staged?). A scary-looking heuristic that cries wolf is
+worse than no check — it trains you to ignore it.
+
+## Docs drift when the same fact lives in three places — one owner, everything else links
+ARCHITECTURE.md claimed "Supabase lives only in openviewapp" while §17.4 said Reports had "its own
+project" and §13 listed an `alerts` table that has never existed (it's `push_alerts`). All three
+were written confidently; none were true. The reality: openvieweb and openviewapp are ONE product
+sharing ONE project (koedodxkryyxizcryggy), and the mobile app's live user data (push_tokens,
+sync_state) sits in the same database as Reports. The user's words: "i do not want any more
+confusion about this ever again." Lesson: when a fact spans subsystems, give it exactly ONE owning
+section (here: §18, live-verified) and make every other mention a LINK, never a restatement. When
+correcting a wrong claim, strike it through and say why rather than deleting — a silent edit lets
+the next reader re-derive the same wrong conclusion from the same stale reasoning. And verify docs
+against the live system (list_tables, pg_policies, cron.job, vault.secrets), not against other docs
+— all three wrong claims would have survived any amount of cross-reading.
+
+## Assuming a database is "just mine" is how you write a destructive statement
+I treated koedodxkryyxizcryggy as the Reports database and reasoned about rotating its service_role
+key as low-risk "public market data only". The MCP then showed sync_state(17)/push_tokens(4)/
+push_alerts(8) — real mobile user data — plus FOUR active pg_cron jobs reading that same key out of
+Vault every 15s. Rotating it would have silently killed closed-app push alerts. Lesson: before any
+statement or key change against a shared backend, enumerate what ELSE lives there (tables, cron
+jobs, vault secrets, edge functions). "It's a new project, it's probably empty" is an assumption,
+and assumptions about blast radius are the expensive kind.

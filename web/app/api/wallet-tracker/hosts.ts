@@ -24,12 +24,26 @@ export const BLOCKSCOUT_HOSTS: Record<string, string> = {
   mode: 'explorer.mode.network',
   unichain: 'unichain.blockscout.com',
   zora: 'explorer.zora.energy',
+  // Second widening. Each host was probed on the two endpoints getTokens actually calls
+  // (/api/v2/addresses/{addr} and /token-balances) and returned 200 with real coin_balance — a host
+  // that only serves an HTML explorer (e.g. explorer.soniclabs.com) silently yields $0.00 cards.
+  robinhood: 'robinhoodchain.blockscout.com',
+  ink: 'explorer.inkonchain.com',
+  soneium: 'soneium.blockscout.com',
+  etherlink: 'explorer.etherlink.com',
+  worldchain: 'worldchain-mainnet.explorer.alchemy.com',
+  lightlink: 'phoenix.lightlink.io',
 };
 
 // Moralis `chain` query values for the EVM chains that have no healthy Blockscout instance.
 export const MORALIS_CHAINS: Record<string, string> = {
   bsc: 'bsc',
   avalanche: 'avalanche',
+  // Verified live against Moralis: `sei` and `linea` return 200 with real token rows. (Sonic is
+  // deliberately absent — Moralis 400s it under every identifier tried: sonic, 0x92, 146,
+  // sonic-mainnet — and it has no keyless Blockscout v2 host, so it would only ever render $0.00.)
+  sei: 'sei',
+  linea: 'linea',
 };
 
 /**

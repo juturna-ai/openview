@@ -108,6 +108,20 @@ export const EXPLORER_CHAINS: Record<string, ExplorerChainCfg> = {
   unichain: { type: 'evm', decimals: 18, native: 'ETH', blockscout: 'unichain.blockscout.com', explorer: 'https://unichain.blockscout.com/address/' },
   scroll: { type: 'evm', decimals: 18, native: 'ETH', blockscout: 'scroll.blockscout.com', explorer: 'https://scrollscan.com/address/' },
   zora: { type: 'evm', decimals: 18, native: 'ETH', blockscout: 'explorer.zora.energy', explorer: 'https://explorer.zora.energy/address/' },
+  // Second EVM widening — hosts probed live on /api/v2/addresses + /token-balances. SEI and Linea
+  // have no Blockscout instance, so they carry no `blockscout` field: isDeepLinkOnly() returns true
+  // for them and the Transactions tab deep-links, while the Portfolio tab still fills from Moralis.
+  robinhood: { type: 'evm', decimals: 18, native: 'ETH', blockscout: 'robinhoodchain.blockscout.com', explorer: 'https://robinhoodchain.blockscout.com/address/' },
+  ink: { type: 'evm', decimals: 18, native: 'ETH', blockscout: 'explorer.inkonchain.com', explorer: 'https://explorer.inkonchain.com/address/' },
+  soneium: { type: 'evm', decimals: 18, native: 'ETH', blockscout: 'soneium.blockscout.com', explorer: 'https://soneium.blockscout.com/address/' },
+  etherlink: { type: 'evm', decimals: 18, native: 'XTZ', blockscout: 'explorer.etherlink.com', explorer: 'https://explorer.etherlink.com/address/' },
+  worldchain: { type: 'evm', decimals: 18, native: 'ETH', blockscout: 'worldchain-mainnet.explorer.alchemy.com', explorer: 'https://worldchain-mainnet.explorer.alchemy.com/address/' },
+  lightlink: { type: 'evm', decimals: 18, native: 'ETH', blockscout: 'phoenix.lightlink.io', explorer: 'https://phoenix.lightlink.io/address/' },
+  sei: { type: 'evm', decimals: 18, native: 'SEI', explorer: 'https://seitrace.com/address/' },
+  linea: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://lineascan.build/address/' },
+  // No `blockscout` host exists for Sonic, so isDeepLinkOnly() returns true and the Transactions tab
+  // deep-links to sonicscan.org; the Portfolio tab still shows its priced native S balance.
+  sonic: { type: 'evm', decimals: 18, native: 'S', explorer: 'https://sonicscan.org/address/' },
   // ── Non-EVM chains the Wallet Tracker prices but which have no keyless tx-list source: transactions
   // deep-link to the chain's explorer, while the Portfolio tab still works (native balance via
   // /api/wallet-tracker). Included so their addresses RESOLVE instead of "Unknown chain".
@@ -130,6 +144,7 @@ export function isDeepLinkOnly(chainId: string): boolean {
 /** Every EVM chain, ordered by prominence — drives the multi-chain breakdown + EVM sub-row. */
 export const EVM_CHAIN_IDS = [
   'ethereum', 'bsc', 'polygon', 'base', 'arbitrum', 'optimism', 'avalanche',
+  'linea', 'sei', 'sonic', 'robinhood', 'worldchain', 'ink', 'soneium', 'etherlink', 'lightlink',
   'gnosis', 'celo', 'scroll', 'zksync', 'mode', 'unichain', 'zora',
 ];
 

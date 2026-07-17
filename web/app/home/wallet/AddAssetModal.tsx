@@ -20,8 +20,27 @@ interface Props {
     name: string;
     amount: number;
     avgBuyPrice: number;
+    purchasedAt: number;
+    feePct: number;
+    notes: string;
   }) => void;
   onClose: () => void;
+}
+
+/** Default trading fee applied to a new purchase, as a percent of trade value. */
+const DEFAULT_FEE_PCT = '0.5';
+
+/**
+ * Formats an epoch-ms instant for `<input type="datetime-local">`, which wants a bare local
+ * "YYYY-MM-DDTHH:mm" with no zone suffix — toISOString() would shift the clock to UTC.
+ */
+function toLocalInputValue(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
 }
 
 export default function AddAssetModal({ holding, onSave, onClose }: Props) {
@@ -34,8 +53,24 @@ export default function AddAssetModal({ holding, onSave, onClose }: Props) {
   );
   const [amount, setAmount] = useState(holding ? String(holding.amount) : '');
   const [avgBuyPrice, setAvgBuyPrice] = useState(holding ? String(holding.avg_buy_price) : '0');
+  // Defaults to now for a new purchase; an older holding keeps whatever it was saved with. Computed
+  // once on mount so the field doesn't tick forward while the form is open.
+  const [purchasedAt, setPurchasedAt] = useState(() =>
+    toLocalInputValue(holding?.purchased_at ?? Date.now()),
+  );
+  const [feePct, setFeePct] = useState(
+    holding?.fee_pct !== undefined ? String(holding.fee_pct) : DEFAULT_FEE_PCT,
+  );
+  const [notes, setNotes] = useState(holding?.notes ?? '');
 
   const amountRef = useRef<HTMLInputElement>(null);
+
+  // The dollar fee is derived, never stored — it would go stale the moment amount or price changed.
+  const feeAmount = useMemo(() => {
+    const value = (parseFloat(amount) || 0) * (parseFloat(avgBuyPrice) || 0);
+    const pct = parseFloat(feePct) || 0;
+    return (value * pct) / 100;
+  }, [amount, avgBuyPrice, feePct]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -72,12 +107,17 @@ export default function AddAssetModal({ holding, onSave, onClose }: Props) {
     const asset = isEditing
       ? { symbol: holding!.symbol, name: holding!.name }
       : selected!;
+    // An emptied/half-typed datetime parses to NaN — fall back to now rather than saving a bad date.
+    const parsedDate = new Date(purchasedAt).getTime();
     onSave({
       assetType: isEditing ? holding!.asset_type : assetType,
       symbol: asset.symbol,
       name: asset.name,
       amount: parseFloat(amount),
       avgBuyPrice: parseFloat(avgBuyPrice) || 0,
+      purchasedAt: Number.isFinite(parsedDate) ? parsedDate : Date.now(),
+      feePct: parseFloat(feePct) || 0,
+      notes: notes.trim(),
     });
   };
 
@@ -186,6 +226,50 @@ export default function AddAssetModal({ holding, onSave, onClose }: Props) {
                   />
                 </div>
               </div>
+            </div>
+          )}
+
+          {(isEditing || selected) && (
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="holdingPurchasedAt">Date Purchased</label>
+                <input
+                  id="holdingPurchasedAt"
+                  type="datetime-local"
+                  value={purchasedAt}
+                  onChange={(e) => setPurchasedAt(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="holdingFeePct">Fee</label>
+                <div className="input-with-suffix">
+                  <input
+                    id="holdingFeePct"
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={feePct}
+                    onChange={(e) => setFeePct(e.target.value)}
+                  />
+                  <span className="input-suffix">%</span>
+                </div>
+                <span className="form-hint">
+                  ≈ ${feeAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {(isEditing || selected) && (
+            <div className="form-group wallet-notes-group">
+              <label htmlFor="holdingNotes">Notes</label>
+              <textarea
+                id="holdingNotes"
+                rows={2}
+                placeholder="Optional — exchange, strategy, anything worth remembering."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
             </div>
           )}
 

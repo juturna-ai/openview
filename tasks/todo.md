@@ -1,118 +1,110 @@
-# Gainers & Losers — rebuild as CMC-backed multi-tab market page
+# Reports tab — AI market reports + community wall
 
 ## Goal
-Replace the current metals/FX-only Gainers & Losers with Reach's real **CoinMarketCap-backed**
-market page: 6 crypto tabs, plus **2 new sections we add** — Metals and Stocks/ETFs.
+`/home/reports` was an empty scaffold. Build four tabs — **Dashboard** (a Facebook/Instagram-style
+wall), **Daily**, **Weekly**, **Monthly** — where each period report ranks the top-20 gainers from
+CoinMarketCap plus a Binance trading-pairs section, with an LLM writing the commentary. Reports
+generate automatically at **1 PM Cancún**. Objective: **catch assets while they're just starting to
+move**, and share that read with people.
 
-Reference: `D:\Projects\Reach` → `electron/main.js` (data) + `src/components/GainersLosers/GainersLosers.jsx` (UI).
+## Decisions locked with the user
+- Storage: Supabase in the web app; **anonymous** (no login). Writes via server routes + IP rate limit.
+- LLM: **Gemini Flash** free tier primary, **Groq** `llama-3.1-8b-instant` fallback **on 429 only**.
+- Twitter/X: **skipped** — no free read tier ($100/mo minimum). Free sentiment proxies instead.
+- Schedule: **one** Vercel cron, `0 18 * * *` (= 1 PM Cancún, UTC-5, **no DST since 2015**).
+- Quality gate (strict): mcap > $10M, vol > $1M, rank ≤ 500, drop |change| > 1000%.
 
-## Research findings (all VERIFIED LIVE — see notes)
+## Research — all VERIFIED LIVE, not assumed
+| Finding | Consequence |
+|---|---|
+| CMC listing returns 500 coins; `percentChange24h/7d/30d` all non-null | One call feeds all 3 periods |
+| CMC listing **only** sorts by market cap | Rank in-process (as `MoversView` does) |
+| Raw monthly top gainers = **ANSEM +152,296%**, CASHCAT +8,486% | The gate is **load-bearing**, not polish |
+| Binance `ticker/24hr` = 1.9 MB, **no** 7d/30d field | Server-side only; klines needed for w/m |
+| Binance `exchangeInfo` = **17 MB** | Never call it |
+| 60 klines @10-concurrent = **1.84s**, zero 429s | Full pass ≈ 5s vs Vercel's 60s limit |
+| Only **174** USDT pairs clear the $1M volume floor | The illiquid tail was never actionable |
 
-### How Reach connects to CoinMarketCap
-- **No API key.** Reach hits CMC's *undocumented public* `data-api/v3` endpoints — the same ones
-  coinmarketcap.com's own frontend uses. Requires a **browser User-Agent** header or it fails.
-- Two endpoints cover 5 of the 6 tabs:
-  1. `…/cryptocurrency/listing?start=1&limit=N&sortBy=market_cap&sortType=desc&convert=USD…`
-     → the full ranked coin list (`data.cryptoCurrencyList`). Reach sorts it locally for
-     gainers/losers and slices it for Leaderboards. `limit` = pool size (default 500).
-  2. `…/cryptocurrency/spotlight?dataType=7&limit=30` → `trendingList`, `mostVisitedList`,
-     `gainerList`, `loserList` in ONE call.
-     `…/spotlight?dataType=8&limit=30` → `recentlyAddedList`.
-     ⚠ `limit` must be **5–30** — outside that the API 400s.
-- **Fear & Greed** gauge (Community Sentiment tab) = `https://api.alternative.me/fng/?limit=1`
-  (keyless). Returns `{value, value_classification}`.
-- Coin logos: `https://s2.coinmarketcap.com/static/img/coins/64x64/{id}.png`.
-- ✅ Verified live today: listing returns real coins; spotlight dataType=7 returns all 4 lists (30 each)
-  and dataType=8 returns recentlyAdded; F&G returned `28 / "Fear"` — matches the user's screenshot.
+## Phase 1 — live reports, no database  ✅ SHIPPED
+- [x] `_lib/types.ts`, `_lib/gate.ts` — the quality gate + in-process ranking
+- [x] `_lib/gate.logic.test.mjs` — pins real ANSEM/CASHCAT values, asserts they never appear
+- [x] `_lib/cmc.ts` — listing + spotlight + Fear & Greed (fail-soft per source)
+- [x] `_lib/binance.ts` — bulk 24hr (daily) + batched klines (weekly/monthly)
+- [x] `_lib/llm.ts` — Gemini→Groq-on-429, validated JSON, enforced disclaimer
+- [x] `_lib/llm.logic.test.mjs` — 8 contract assertions incl. the 429-only fallback rule
+- [x] `_lib/sentiment/x.ts` — documented seam for X, returns null
+- [x] `_lib/build.ts` — composes the report
+- [x] `api/reports/preview/route.ts` — 3h TTL cache + single-flight, `maxDuration = 60`
+- [x] `Sidebar.tsx` — `ReportsTab` + NAV (reused existing icons, added none)
+- [x] `ReportsShell.tsx` — WalletShell tab pattern (mount-once, keep-mounted, idle prewarm)
+- [x] `PeriodView.tsx`, `DashboardView.tsx`, `dataCache.ts`
+- [x] CSS — `rp-` classes on `var(--bg)`, no border/tint
+- [x] ARCHITECTURE.md §17 + `.env.example`
 
-### Metals + Stocks/ETFs (the 2 extra sections the user asked for)
-- Existing `/api/market/movers` already does **metals** via Yahoo `v8/finance/chart` (real price +
-  `chartPreviousClose` + volume) and **currencies** via Frankfurter. Keep and extend.
-- ✅ Verified: the **same Yahoo endpoint serves stocks/ETFs** — AAPL/NVDA/SPY/QQQ all returned live
-  price, previous close, and volume. **So Stocks/ETFs needs no new provider and no API key.**
+## Phase 2 — persistence + the wall  ✅ SHIPPED
+Project: **`koedodxkryyxizcryggy`** (Openview's own — NOT `gfdebbumdbrmzvpnyvsm`, which is UDG's
+music-events app that the global `SUPABASE_PROJECT_REF` points at).
+- [x] `web/supabase/schema.sql` — reports/report_comments/report_reactions/keep_alive, RLS public
+      SELECT + **zero write policies**, `increment_reaction()` security-definer. Applied by the user.
+- [x] `.mcp.json` — hardcodes the Openview ref instead of inheriting UDG's global var; writes allowed
+      but **ask the user before every write**.
+- [x] `_lib/supabase.ts` (anon read / service-role write), `_lib/rateLimit.ts`, `_lib/cronAuth.ts`
+- [x] Routes: `cron` (`0 18 * * *`), `generate`, `list`, `[id]`, `comment`, `react`
+- [x] `vercel.json` — 2nd cron (Hobby ceiling now full)
+- [x] `DashboardView` feed with persisted reactions + comments; `PeriodView` reads stored, falls back
+      to `preview`
+- [x] `nickname.ts` (localStorage, unverified by design)
 
-### Constraints
-- CLAUDE.md: never call an external API from the browser → all upstream calls go through
-  **server-side Next.js API routes**. (Also necessary here: CMC's data-api would CORS-block.)
-- `gl-*` CSS classes (`.gl-page`, `.gl-cmc-table`, `.gl-change-pill`, …) **already exist** in
-  globals.css from the current MoversView — large reuse, only new classes needed for tabs/gauge.
+## Verified against the LIVE database — not assumed
+| Check | Result |
+|---|---|
+| anon key SELECT | 200 |
+| **anon key INSERT** | **401 — blocked by RLS** (the check that makes an anonymous wall safe) |
+| service_role SELECT | 200 |
+| service_role not `NEXT_PUBLIC_` | confirmed |
+| write path | `generate` → real row in Supabase, 20 coins / 20 pairs, **0 gate violations** |
+| **cron idempotency** | 2 authenticated runs, **both `saved=true`**, still **1 row**, same id, `updated_at` advanced |
+| cron auth | wrong secret → 401; unsendable secret → 500 `misconfigured` + log |
+| reactions | atomic 1→2→3; bad emoji → 400; bad uuid → 400 |
+| comments | 200; empty → 400; nonexistent report → 502 (FK) |
+| rate limit | 6th comment in 10 min → 429 |
+| **wall in a real browser** | reaction 🚀3→🚀4 and comment **both survived a reload** (server-side, not local state); 0 page errors |
+| build / typecheck / lint | all clean; 3 test files pass |
+Test data (4 comments, 1 reaction) deleted afterwards with the user's approval; report row preserved.
 
-## Plan
+## Bug found + fixed during verification
+**A `CRON_SECRET` with any non-latin-1 char can never authenticate.** The placeholder contained an
+em-dash; HTTP header values are ByteStrings, so `fetch` throws and a naive compare answers 401
+*forever* — sending you to chase an auth bug that doesn't exist. Now returns a distinct
+`misconfigured` (500) with an explicit log. `_lib/cronAuth.ts` + `cronAuth.logic.test.mjs`; same
+guard inlined in `keep-alive/route.ts`. Prove-it pattern: test written first, RED, then fixed.
 
-### 1. API routes (server-side; keys not needed, but UA header is)
-- [ ] `web/app/api/market/cmc/route.ts` — proxies CMC. One handler, `?dataset=` switch:
-      - `listing` (pool size param, clamp ≤ 1000)
-      - `spotlight` (dataType 7 + 8 in parallel; clamp limit to 5–30)
-      - `feargreed`
-      Normalize each coin to one shape: `{id, cmcRank, symbol, name, slug, price, change1h,
-      change24h, change7d, change30d, volume, marketCap, thumb}`.
-      In-memory cache (~30s) so the 30s client poll doesn't hammer upstream. Fail soft → empty lists.
-- [ ] Extend `web/app/api/market/movers/route.ts` with a **stocks/ETF** list (Yahoo, same fetcher as
-      metals). Add `assetType: 'stock'`. Keep metals + currencies working.
+## Review — what was verified, and how
+- `npm run build` ✅ · `npx tsc --noEmit` ✅ · `next lint` ✅ (0 warnings)
+- Both test files pass under plain `node`
+- **Live route through the real dev server on :3333**: 20 gated coins + 20 Binance pairs, **zero gate
+  violations**, ANSEM/CASHCAT absent. Cache: **3.97s cold → 0.013s warm** (~300x).
+- **Real Chromium**: all 4 tabs render, 40 rows, tab round-trip keeps state (no refetch), **0 console
+  errors**, no horizontal scroll at 1400px or 820px.
+- **Analysis path proven end-to-end against a local mock LLM** (`GEMINI_BASE_URL` override):
+  provider=gemini, 20 theses matched to 20 real coins, **0 orphans**, canonical disclaimer enforced.
+- Cross-validation: BANK/DGB/KAITO/MANTRA appear independently in both the CMC and Binance lists.
 
-### 2. UI — rewrite `MoversView.tsx` as the 6-tab page + 2 extra sections
-- [ ] Tab bar (8 total): Leaderboards · Gainers & Losers · Trending · Most Visited ·
-      Recently Added · Community Sentiment · **Metals** · **Stocks/ETFs**
-- [ ] Per-tab title/subtitle strings (copy Reach's exactly).
-- [ ] **Gainers & Losers** tab: timeframe dropdown (1h/24h/7d/30d → change1h/24h/7d/30d) + pool
-      dropdown (Top 100 / Top 500 / All). Pool filter = `volume > 50000` always, then `cmcRank <= pool`.
-      Two tables (gainers desc / losers asc).
-- [ ] **Leaderboards**: `allCoins` sorted by marketCap desc, top 30.
-- [ ] **Trending / Most Visited / Recently Added**: straight from spotlight lists.
-- [ ] **Community Sentiment**: F&G gauge (thresholds ≥50 green, ≥25 yellow, else red; bar width =
-      value) + Most Bullish / Most Bearish, each top 15 ranked by `volume * change24h` momentum.
-      Per-row bar = `clamp(50 + change24h*2, 0, 100)`.
-      ⚠ Reach has a **bug** here: sentiment table headers are clickable but it maps `list` instead of
-      `sortList(list)`, so sorting silently does nothing. **Fix in our port** (wire sortList).
-- [ ] **Metals** + **Stocks/ETFs** tabs: reuse the existing gainer/loser table off `/api/market/movers`.
-- [ ] Sorting: click col → desc, click same col again → asc; reset on tab change.
-- [ ] Formatters: port `fmtPrice` (8/6/2 decimal tiers), `fmtVol`, `fmtMcap` verbatim.
-- [ ] 30s poll + manual refresh button w/ last-updated timestamp; loading + empty states.
-- [ ] Coin icon = CMC thumb `<img>` w/ colored-initial fallback on error.
-
-### 3. Styles + docs
-- [ ] Add CSS for the tab bar, dropdowns, F&G gauge, sentiment bars (reuse existing `gl-*` where possible).
-- [ ] Update ARCHITECTURE.md: new route, data sources, tab map, the no-key CMC discovery.
-
-## Open risks
-- CMC's `data-api/v3` is **undocumented** — it can change or rate-limit without notice. Mitigate:
-  server-side cache + fail-soft empty lists (never crash the page). Worth stating in ARCHITECTURE.md.
-- Yahoo is similarly unofficial; already relied on for metals, so no new risk class.
-
-## Review — DONE
-
-All 8 tabs built and verified against live upstreams.
-
-**Files**
-- NEW `web/app/api/market/cmc/route.ts` — CMC proxy (listing / spotlight×2 / Fear & Greed), 30s cache
-  keyed by pool size, each source fails soft and independently.
-- NEW `web/app/home/wallet/CoinIcon.tsx` — CMC logo w/ coloured-initial fallback.
-- NEW `web/app/home/wallet/movers.logic.test.mjs` — 15 assertions, all pass.
-- `web/app/api/market/movers/route.ts` — added 16 stocks/ETFs; factored the Yahoo fetch into a shared
-  `yahooRow()` used by both metals and stocks.
-- `web/app/home/wallet/MoversView.tsx` — rewritten as the 8-tab page.
-- `web/app/home/wallet/icons.tsx` — +trophy/flame/eye/clock/users.
-- `web/app/globals.css` — tab bar, selects, coin avatar, rank/mcap/sentiment cells, F&G gauge;
-  `.gl-sections` → 2-col grid ≥1100px (bullish/bearish sit side by side, as in the screenshots).
-- `ARCHITECTURE.md` — new route, CMC no-key discovery + risk, tab/derivation table, the fixed bug.
-
-**Verified live**
-- `/api/market/cmc?limit=100` → 100 coins, 30 trending, 30 most-visited, 30 recently-added,
-  Fear & Greed `28 / "Fear"`. BTC $62,578 / −2.17%. Matches the user's screenshots.
-- `/api/market/movers` → 30 rows (4 metals, 16 stocks, 10 currencies) with real prices/changes/volume.
-- `npx tsc --noEmit` clean; `npx next build` **succeeds**.
-
-**Reach bug found + fixed (the "address any bug" ask)**
-Reach's Community Sentiment table wires sortable headers but renders `list.map()` instead of
-`sortList(list).map()` — clicking a header silently does nothing. Ours routes every table through
-`sortList`. Proved with a failing-then-passing test: the repro asserts Reach's renderer leaves the
-list in momentum order (`XEC, WBTC`) under a price-desc sort, while ours correctly yields `WBTC, XEC`.
-(First attempt at the repro was a false pass — the fixture's momentum order happened to already be
-price-descending, so bug and fix looked identical. Fixture rebuilt so the two orders genuinely differ.)
-
-**Side effect worth noting:** `npx next build` previously failed at page-data collection for
-`/api/market/movers` (pre-existing, confirmed on a clean tree earlier). Refactoring that route fixed
-it — the build is now green end to end.
-
-**Known risk (documented in ARCHITECTURE.md):** CMC's `data-api/v3` is undocumented; it can change or
-rate-limit without notice. Mitigated by fail-soft empties + server cache, but it's not a contract.
+## Needs the user's attention
+1. **`CRON_SECRET` is still the placeholder** in `web/.env.local` — both cron routes return
+   `misconfigured` until it's a plain-ASCII value (`openssl rand -hex 32`). Nothing else is blocked.
+2. **`GEMINI_API_KEY` / `GROQ_API_KEY`** still unset — reports build and render fine; the analysis
+   section honestly says "Analysis unavailable" instead of inventing commentary.
+3. **Restart Claude Code** for the `.mcp.json` change to take effect (the live MCP session still
+   holds UDG's project). Test: `list_tables` must show reports/report_comments/report_reactions —
+   if it shows venues/artists, it didn't take.
+4. **UDG's project no longer gets a keep-alive ping** from this app — it pauses after 7 days idle
+   unless something else touches it.
+5. **`service_role` key rotation deferred** — it appeared in a screenshot (2026-07-16). Fine while
+   this project holds only public market data; revisit before anything sensitive lands.
+6. **The honest limit**: with X skipped, the model sees only numbers — it can say *what* moved and on
+   what volume, never *why*. It's prompted to say "no clear catalyst identified" rather than invent
+   one. Real causal explanation needs a news/X source.
+7. **The wall's reaction dedupe is UI courtesy, not enforcement** — no accounts means no identity to
+   enforce against, and the in-memory rate limit is per-lambda. Fine for emoji on a market report;
+   not fine if a tally ever needs to be trustworthy.

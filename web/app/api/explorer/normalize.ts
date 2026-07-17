@@ -35,6 +35,26 @@ const CHAIN_FACTS: Record<string, { type: ExplorerChainType; decimals: number; n
   cardano: { type: 'cardano', decimals: 6, native: 'ADA', explorer: 'https://cardanoscan.io/address/' },
   near: { type: 'near', decimals: 24, native: 'NEAR', explorer: 'https://nearblocks.io/address/' },
   tron: { type: 'tron', decimals: 6, native: 'TRX', explorer: 'https://tronscan.org/#/address/' },
+  // Every other EVM chain in EXPLORER_CHAINS. These were missing, so txUrl() returned '' for them and
+  // their tx-detail links silently went nowhere — this table is keyed independently of
+  // EVM_CHAIN_IDS, so adding a chain there alone doesn't reach it. Keep `explorer` identical to the
+  // base in chains.server.ts / chains.ts: txUrl swaps the /address/ tail for the tx path.
+  gnosis: { type: 'evm', decimals: 18, native: 'XDAI', explorer: 'https://gnosisscan.io/address/' },
+  celo: { type: 'evm', decimals: 18, native: 'CELO', explorer: 'https://celoscan.io/address/' },
+  scroll: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://scrollscan.com/address/' },
+  zksync: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://era.zksync.network/address/' },
+  mode: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://explorer.mode.network/address/' },
+  unichain: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://unichain.blockscout.com/address/' },
+  zora: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://explorer.zora.energy/address/' },
+  robinhood: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://robinhoodchain.blockscout.com/address/' },
+  sei: { type: 'evm', decimals: 18, native: 'SEI', explorer: 'https://seitrace.com/address/' },
+  linea: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://lineascan.build/address/' },
+  ink: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://explorer.inkonchain.com/address/' },
+  soneium: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://soneium.blockscout.com/address/' },
+  etherlink: { type: 'evm', decimals: 18, native: 'XTZ', explorer: 'https://explorer.etherlink.com/address/' },
+  worldchain: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://worldchain-mainnet.explorer.alchemy.com/address/' },
+  lightlink: { type: 'evm', decimals: 18, native: 'ETH', explorer: 'https://phoenix.lightlink.io/address/' },
+  sonic: { type: 'evm', decimals: 18, native: 'S', explorer: 'https://sonicscan.org/address/' },
 };
 
 /** One transaction, normalized across every chain source so the UI is chain-agnostic. */

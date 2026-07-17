@@ -9,6 +9,7 @@ import { type Chain, detectChain, getChain } from './chains.ts';
  *  EVM_CHAIN_IDS (app/api/explorer/chains.server.ts) — keep the two in sync. */
 export const EVM_CHAIN_IDS = [
   'ethereum', 'bsc', 'polygon', 'base', 'arbitrum', 'optimism', 'avalanche',
+  'linea', 'sei', 'sonic', 'robinhood', 'worldchain', 'ink', 'soneium', 'etherlink', 'lightlink',
   'gnosis', 'celo', 'scroll', 'zksync', 'mode', 'unichain', 'zora',
 ];
 

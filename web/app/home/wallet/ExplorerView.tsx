@@ -222,6 +222,22 @@ export default function ExplorerView() {
     void runSearch(query, family, evmChain);
   };
 
+  // Clicking a chain card in the Token-Holdings breakdown re-opens the SAME address on that chain.
+  // An EVM address is valid on every EVM chain, so this is just a re-search with the chain forced —
+  // `runSearch` already owns fetching, caching and the result swap, and ResultPanel's effects key off
+  // `result.chain`, so its portfolio/transactions repopulate for the picked chain on their own.
+  // The pills are moved to match, or the sub-row would still highlight the chain we just left.
+  const selectChain = useCallback(
+    (chainId: string) => {
+      const addr = result?.query;
+      if (!addr) return;
+      setFamily('EVM');
+      setEvmChain(chainId);
+      void runSearch(addr, 'EVM', chainId);
+    },
+    [result?.query, runSearch],
+  );
+
   const copy = (text: string) => {
     void navigator.clipboard?.writeText(text).then(() => {
       setCopied(text);
@@ -304,7 +320,14 @@ export default function ExplorerView() {
         {error && <p className="exp-error">{error}</p>}
       </div>
 
-      {result && <ResultPanel result={result} onCopy={copy} copied={copied} />}
+      {result && (
+        <ResultPanel
+          result={result}
+          onCopy={copy}
+          copied={copied}
+          onSelectChain={selectChain}
+        />
+      )}
     </div>
   );
 }
@@ -313,10 +336,12 @@ function ResultPanel({
   result,
   onCopy,
   copied,
+  onSelectChain,
 }: {
   result: Result;
   onCopy: (t: string) => void;
   copied: string | null;
+  onSelectChain: (chainId: string) => void;
 }) {
   const chain = getChain(result.chain);
   // Address view: Blockscan-style Portfolio | Transactions tabs. Tx view: the field grid only.
@@ -405,7 +430,11 @@ function ResultPanel({
   // EVM chains in parallel and show a card per chain with its USD subtotal + portfolio %. Non-EVM
   // families are single-chain, so their breakdown is just the one chain (fed from `portfolio`).
   const isEvmAddress = isAddress && EVM_CHAINS.includes(result.chain);
-  const breakdownKey = `breakdown:${result.chain}:${result.query}`;
+  // Keyed by ADDRESS ONLY, not `${result.chain}:${query}`. The fan-out asks every EVM chain about the
+  // same address, so its result is identical whichever chain you're currently viewing — including the
+  // chain in the key meant every chain-card click missed the cache and re-fanned all 22 chains for a
+  // payload we already had. The card click makes result.chain change often, so that mattered.
+  const breakdownKey = `breakdown:${result.query}`;
   const [breakdown, setBreakdown] = useState<Breakdown>(
     () => getExplorerResult<Breakdown>(breakdownKey) ?? { chains: [], totalUsd: 0, loading: false, loaded: false },
   );
@@ -453,7 +482,9 @@ function ResultPanel({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [breakdownKey, isEvmAddress, result.query, result.chain]);
+    // NOT keyed off result.chain: the fan-out covers every EVM chain regardless of which one is being
+    // viewed, so re-running it on a chain switch would re-fetch 22 chains for an identical result.
+  }, [breakdownKey, isEvmAddress, result.query]);
 
   if (!chain) return null;
 
@@ -509,6 +540,8 @@ function ResultPanel({
               portfolio={portfolio}
               chain={chain}
               breakdown={isEvmAddress ? breakdown : null}
+              activeChain={result.chain}
+              onSelectChain={onSelectChain}
             />
           ) : (
             <TxList
@@ -529,7 +562,15 @@ function ResultPanel({
 /** How many breakdown cards show before "Show N more chains". Matches Blockscan's collapsed grid. */
 const BREAKDOWN_COLLAPSED = 12;
 
-function ChainBreakdown({ breakdown }: { breakdown: Breakdown }) {
+function ChainBreakdown({
+  breakdown,
+  activeChain,
+  onSelectChain,
+}: {
+  breakdown: Breakdown;
+  activeChain: string;
+  onSelectChain: (chainId: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const total = breakdown.totalUsd;
   // Chains with any value/tokens first (sorted by USD upstream), empty chains after — so the
@@ -553,8 +594,16 @@ function ChainBreakdown({ breakdown }: { breakdown: Breakdown }) {
           if (!chn) return null;
           const pct = total > 0 ? (c.usd / total) * 100 : 0;
           const pctLabel = c.usd <= 0 ? '(0%)' : pct >= 1 ? `(${pct.toFixed(0)}%)` : '(< 1%)';
+          const isActive = c.chainId === activeChain;
           return (
-            <div key={c.chainId} className="exp-breakdown-card">
+            <button
+              key={c.chainId}
+              type="button"
+              className={'exp-breakdown-card' + (isActive ? ' active' : '')}
+              onClick={() => onSelectChain(c.chainId)}
+              aria-current={isActive || undefined}
+              aria-label={`View this address on ${chn.label}`}
+            >
               <div className="exp-breakdown-card-top">
                 <ChainIcon chain={chn} size={18} />
                 <span className="exp-breakdown-card-name">{chn.label}</span>
@@ -563,7 +612,7 @@ function ChainBreakdown({ breakdown }: { breakdown: Breakdown }) {
               <div className="exp-breakdown-card-val">
                 {fmtUsdVal(c.usd)} <span className="exp-breakdown-card-pct">{pctLabel}</span>
               </div>
-            </div>
+            </button>
           );
         })}
         {hidden > 0 && (
@@ -581,10 +630,14 @@ function PortfolioTab({
   portfolio,
   chain,
   breakdown,
+  activeChain,
+  onSelectChain,
 }: {
   portfolio: Portfolio;
   chain: Chain;
   breakdown: Breakdown | null;
+  activeChain: string;
+  onSelectChain: (chainId: string) => void;
 }) {
   if (portfolio.loading && !portfolio.loaded) {
     return <div className="exp-empty"><p>Loading holdings…</p></div>;
@@ -613,7 +666,13 @@ function PortfolioTab({
   const total = portfolio.totalUsd;
   return (
     <div className="exp-holdings">
-      {breakdown && breakdown.chains.length > 0 && <ChainBreakdown breakdown={breakdown} />}
+      {breakdown && breakdown.chains.length > 0 && (
+        <ChainBreakdown
+          breakdown={breakdown}
+          activeChain={activeChain}
+          onSelectChain={onSelectChain}
+        />
+      )}
       <div className="exp-holdings-meta">
         Showing {rows.length} token{rows.length === 1 ? '' : 's'}
         {portfolio.totalCount > rows.length ? ` of ${portfolio.totalCount}` : ''} worth {fmtUsdVal(total)}

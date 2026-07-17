@@ -58,6 +58,31 @@ const CHAINS: Record<string, ChainCfg> = {
   mode: { rpc: 'https://mainnet.mode.network', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
   unichain: { rpc: 'https://mainnet.unichain.org', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
   zora: { rpc: 'https://rpc.zora.energy', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
+  // Second EVM widening. Every rpc below answered eth_blockNumber live; every cgId was confirmed
+  // against the chain's own reported coin price rather than a CoinGecko name search (which resolves
+  // "ink" to Chainlink and "soneium" to a bridged ASTR token). Robinhood/Ink/Soneium/World
+  // Chain/LightLink all report ~$1877 = ETH; Etherlink reports ~$0.2228, matching XTZ.
+  //
+  // Robinhood Chain (an Arbitrum Orbit L2, native ETH per Blockscout's own chain registry) publishes
+  // no public RPC — balance comes from its Blockscout host, which getBalance tries FIRST and which is
+  // verified working. `rpc` is required by ChainCfg, so it points at the same Blockscout instance's
+  // JSON-RPC proxy; if that ever 404s, the Blockscout branch above it has already returned.
+  robinhood: { rpc: 'https://robinhoodchain.blockscout.com/api/eth-rpc', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
+  // SEI and Linea have no keyless Blockscout v2 instance — their token detail comes from Moralis
+  // (see MORALIS_CHAINS), which returns balances + USD in one call. Balance still uses these RPCs.
+  sei: { rpc: 'https://evm-rpc.sei-apis.com', type: 'evm', decimals: 18, cgId: 'sei-network', native: 'SEI' },
+  linea: { rpc: 'https://rpc.linea.build', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
+  ink: { rpc: 'https://rpc-gel.inkonchain.com', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
+  soneium: { rpc: 'https://rpc.soneium.org', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
+  etherlink: { rpc: 'https://node.mainnet.etherlink.com', type: 'evm', decimals: 18, cgId: 'tezos', native: 'XTZ' },
+  worldchain: { rpc: 'https://worldchain-mainnet.g.alchemy.com/public', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
+  lightlink: { rpc: 'https://replicator.phoenix.lightlink.io/rpc/v1', type: 'evm', decimals: 18, cgId: 'ethereum', native: 'ETH' },
+  // Sonic — EVM, but the only chain here with NO token index: no keyless Blockscout v2 host
+  // (explorer.soniclabs.com serves the HTML explorer, not the API) and Moralis 400s it under every
+  // identifier (sonic / 0x92 / 146). getTokens therefore degrades it to the priced native coin.
+  // cgId is 'sonic-3' (the S token) — NOT 'fantom', which is the retired FTM id Sonic migrated from
+  // and would misprice the whole chain, the same trap the POL/matic-network note above describes.
+  sonic: { rpc: 'https://rpc.soniclabs.com', type: 'evm', decimals: 18, cgId: 'sonic-3', native: 'S' },
   solana: { rpc: 'https://api.mainnet-beta.solana.com', type: 'solana', decimals: 9, cgId: 'solana', native: 'SOL' },
   tron: { rpc: 'https://api.trongrid.io', type: 'tron', decimals: 6, cgId: 'tron', native: 'TRX' },
   // rpc.mainnet.near.org was deprecated and now returns HTTP 429 + a "STOP USING IT" warning for
@@ -393,7 +418,17 @@ async function getTokens(address: string, chain: string) {
 
   if (cfg.type === 'evm') {
     const host = BLOCKSCOUT_HOSTS[chain];
-    if (!host) return (await getEvmTokensMoralis(address, chain, cfg)) ?? { tokens: [], totalUsd: 0 };
+    if (!host) {
+      // No Blockscout: try Moralis, and fall back to the priced native coin rather than an empty
+      // list. An EVM chain with neither source used to return `{tokens: [], totalUsd: 0}` — a card
+      // reading "$0.00 / no tokens" for a funded wallet, indistinguishable from a genuinely empty
+      // one. Sonic is the case in point: keyless RPC + a CoinGecko id, but no token index anywhere.
+      // Same honest degradation the non-EVM native-only chains already use (see below).
+      return (
+        (await getEvmTokensMoralis(address, chain, cfg)) ??
+        (await getNativeOnlyTokens(address, chain, cfg))
+      );
+    }
 
     const [addrRes, tokRes] = await Promise.all([
       fetchJSON(`https://${host}/api/v2/addresses/${address}`) as Promise<{
