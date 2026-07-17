@@ -163,9 +163,13 @@ export default function GlobalStats() {
 
       {/* Fear & Greed */}
       <div className="ov-gcard ov-gcard--center">
+        {/* Inputs listed are CMC's own, matching the endpoint the value comes from — not
+            alternative.me's (volatility/momentum/volume/social/BTC dominance), which is a different
+            index with a different methodology. */}
         <div className="ov-gcard-explainer" role="tooltip">
-          Scores market sentiment 0 (Extreme Fear) to 100 (Extreme Greed) from volatility, momentum,
-          volume, social media and BTC dominance. Extreme fear can signal a buy; extreme greed, a top.
+          Scores market sentiment 0 (Extreme Fear) to 100 (Extreme Greed) from price momentum,
+          implied volatility, the options put/call ratio, stablecoin supply and search trends.
+          Extreme fear can signal a buy; extreme greed, a top.
         </div>
         <div className="ov-gcard-head">
           Fear &amp; Greed <span className="ov-gcard-chev">›</span>

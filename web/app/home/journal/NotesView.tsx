@@ -343,6 +343,12 @@ function NoteViewer({
   // deletes on the second. A misclick costs a click, not the note.
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Disarm when the viewer is switched to a different note (context-menu View swaps `note` on this
+  // same instance). Without this, the armed "Sure?" carries over and one click deletes the NEW note
+  // with no confirmation of its own. The onBlur below doesn't cover it: Safari/Firefox never focus
+  // a clicked button, so blur never fires there.
+  useEffect(() => setConfirmDelete(false), [note.id]);
+
   // The viewer is a floating panel, not a modal: no backdrop, so the board behind stays clickable
   // and scrollable while a note is open. Position is viewport coords of the top-left corner; null
   // until first measured, at which point it's centred (see the layout effect below).

@@ -123,6 +123,22 @@ export default function TradingCalendar({ newTradeSignal = 0 }: { newTradeSignal
     setToday(now);
     setDate(now);
     setTrades(loadTrades());
+
+    // Keep the "today" highlight honest across midnight: a tab left open would otherwise keep
+    // yesterday marked forever. The setter compares day keys so the once-a-minute tick only
+    // re-renders on an actual rollover; the visibility listener catches backgrounded tabs, where
+    // browsers throttle intervals well past a minute.
+    const refreshToday = () =>
+      setToday((prev) => {
+        const next = new Date();
+        return prev && toKey(prev) === toKey(next) ? prev : next;
+      });
+    const tick = setInterval(refreshToday, 60_000);
+    document.addEventListener('visibilitychange', refreshToday);
+    return () => {
+      clearInterval(tick);
+      document.removeEventListener('visibilitychange', refreshToday);
+    };
   }, []);
 
   // Sidebar "New Trade" — open on the selected day, falling back to today on the very first render.

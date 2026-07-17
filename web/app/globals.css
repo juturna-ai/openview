@@ -1902,19 +1902,21 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 }
 .wallet-tooltip-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .wallet-tooltip-value { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
-/* The plot is the hover target; the crosshair reads better with a pointer cursor than a text I-beam. */
-.wallet-history-svg { cursor: crosshair; }
 /* The SVG carries explicit pixel width/height matching the measured container, so 1 user unit is
    1 CSS px and text renders at its true size. Sizing it at 100% here would re-introduce the
-   non-uniform scaling that stretched and blurred the axis labels. */
-.wallet-history-svg { display: block; }
+   non-uniform scaling that stretched and blurred the axis labels. The plot is the hover target, so
+   it takes a crosshair rather than a text I-beam. */
+.wallet-history-svg { display: block; cursor: crosshair; }
 /* 11px is the real rendered size now — the old 9px was only legible because the viewBox upscaled it. */
 .wallet-axis-label { fill: var(--muted); font-size: 11px; }
+/* Fills its parent rather than restating the 220px: it now renders *inside* .wallet-history-chart
+   (which the ResizeObserver must always have mounted), so a fixed height here would stack on top of
+   the container's and double the card. */
 .wallet-history-empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 220px;
+  height: 100%;
   padding: 0 32px;
   color: var(--muted);
   font-size: 13px;

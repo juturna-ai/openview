@@ -208,7 +208,12 @@ function PortfolioHistory({
             <button
               key={p.label}
               className={'wallet-history-tab' + (period.label === p.label ? ' active' : '')}
-              onClick={() => setPeriod(p)}
+              // Drop the hover with the period: hoverIdx indexes into the OLD points array, so
+              // keeping it would leave a crosshair pinned to a different snapshot's value.
+              onClick={() => {
+                setPeriod(p);
+                setHoverIdx(null);
+              }}
             >
               {p.label}
             </button>
@@ -216,15 +221,18 @@ function PortfolioHistory({
         </div>
       </div>
 
-      {data.length < 2 ? (
-        <div className="wallet-history-empty">
-          Collecting data — chart will appear as portfolio values are recorded.
-        </div>
-      ) : (
-        // Always mounted once there's data, so the ResizeObserver has an element to measure. The
-        // SVG stays out until the first measurement lands (chart === null), which is one frame.
-        <div className="wallet-history-chart" ref={chartRef}>
-          {chart && (
+      {/* Mounted unconditionally, empty state and all: the ResizeObserver attaches once on mount,
+          so a container that only appears with data would never get observed — the effect would
+          have already run and bailed on a null ref, leaving size.w at 0 and the SVG permanently
+          unrendered. The empty state lives inside for the same reason. */}
+      <div className="wallet-history-chart" ref={chartRef}>
+        {data.length < 2 ? (
+          <div className="wallet-history-empty">
+            Collecting data — chart will appear as portfolio values are recorded.
+          </div>
+        ) : (
+          <>
+            {chart && (
           <svg
             className="wallet-history-svg"
             width={chart.W}
@@ -314,9 +322,10 @@ function PortfolioHistory({
                 <span className="wallet-tooltip-value">{fmtUsd(hovered.value)}</span>
               </div>
             </div>
-          )}
-        </div>
-      )}
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
