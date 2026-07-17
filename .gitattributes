@@ -1,0 +1,6 @@
+# The chart engine is a single ~880 KB standalone HTML file served as a static
+# asset by the Next.js app. It dwarfs the TypeScript source by byte count, so
+# GitHub's Linguist labels the whole repo "HTML". Mark it vendored so the
+# language bar reflects the actual Next.js/TypeScript codebase. Cosmetic only —
+# no effect on the build or on Vercel's framework detection.
+web/public/index.html linguist-vendored
