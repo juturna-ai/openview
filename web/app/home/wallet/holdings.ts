@@ -14,6 +14,12 @@ export interface Holding {
   amount: number;
   /** 0 when unknown — every P&L figure is suppressed rather than shown as a 100% gain. */
   avg_buy_price: number;
+  /** Epoch ms the purchase was made. Absent on records written before this field existed. */
+  purchased_at?: number;
+  /** Trading fee paid, as a percent of trade value (0.5 = 0.5%). */
+  fee_pct?: number;
+  /** Free-form user note. */
+  notes?: string;
 }
 
 export const HOLDINGS_KEY = 'ov_holdings';
@@ -28,6 +34,10 @@ function coerce(raw: unknown): Holding | null {
   if (!ASSET_TYPES.includes(h.asset_type as AssetType)) return null;
   const num = (v: unknown, fallback = 0) =>
     typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+  // The three fields below post-date the original record shape, so they stay optional: a holding
+  // saved before they existed loads with them undefined rather than being rejected outright.
+  const optNum = (v: unknown) =>
+    typeof v === 'number' && Number.isFinite(v) ? v : undefined;
   return {
     id: num(h.id),
     symbol: h.symbol,
@@ -35,6 +45,9 @@ function coerce(raw: unknown): Holding | null {
     asset_type: h.asset_type as AssetType,
     amount: num(h.amount),
     avg_buy_price: num(h.avg_buy_price),
+    purchased_at: optNum(h.purchased_at),
+    fee_pct: optNum(h.fee_pct),
+    notes: typeof h.notes === 'string' ? h.notes : undefined,
   };
 }
 
@@ -118,6 +131,32 @@ export function loadSnapshots(): Snapshot[] {
   } catch {
     return [];
   }
+}
+
+/** How far back a snapshot may sit from the target and still anchor the change figure. */
+const CHANGE_TOLERANCE_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Value of the portfolio `hoursAgo` hours back, or null when history doesn't reach that far.
+ *
+ * Returns null rather than falling back to the oldest snapshot: differencing a fresh portfolio
+ * against its own first reading reports the opening balance as a gain, which is how a $63k wallet
+ * ends up claiming "24h +$63k" on day one. A dash is the honest answer until the history exists.
+ */
+export function valueAgo(snapshots: Snapshot[], hoursAgo: number, now = Date.now()): number | null {
+  if (snapshots.length === 0) return null;
+  const target = now - hoursAgo * 3600_000;
+  // Snapshots are appended in time order, so the last one at/before the target is the anchor.
+  let anchor: Snapshot | null = null;
+  for (const s of snapshots) {
+    if (s.t <= target) anchor = s;
+    else break;
+  }
+  if (!anchor) return null;
+  // A stale anchor (portfolio untouched for days) would date the "24h" change by however long the
+  // gap runs — treat anything well outside the window as no data.
+  if (target - anchor.t > CHANGE_TOLERANCE_MS) return null;
+  return anchor.value;
 }
 
 /**

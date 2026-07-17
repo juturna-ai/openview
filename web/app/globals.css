@@ -1669,6 +1669,50 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
    ══════════════════════════════════════════════════════════════════════════ */
 .wallet-view { display: flex; flex-direction: column; gap: 16px; }
 
+/* ── Portfolio header ──
+   The headline total, as on the phone-app reference: value first, deltas under it. No border/panel
+   — it reads as page-level content, not another card competing with the stat cards below. */
+.wallet-header { display: flex; flex-direction: column; gap: 6px; }
+.wallet-header-main { display: flex; align-items: center; gap: 10px; }
+.wallet-total {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.wallet-eye-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+.wallet-eye-btn:hover { color: var(--text); background: var(--hover); }
+/* Pushed to the far end so the total and the action don't crowd each other. */
+.wallet-header-add { margin-left: auto; }
+.wallet-header-changes { display: flex; flex-direction: column; gap: 2px; }
+.wallet-change-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.wallet-change-label { color: var(--muted); }
+.wallet-change-val { font-weight: 600; }
+.wallet-change-val.profit,
+.wallet-change-pct.profit { color: var(--green); }
+.wallet-change-val.loss,
+.wallet-change-pct.loss { color: var(--red); }
+.wallet-change-pct { color: var(--muted); }
+.wallet-change-none { color: var(--muted); }
+
 /* ── Asset icon ── */
 .wallet-asset-icon {
   position: relative;
@@ -1749,11 +1793,17 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wallet-stat-sub.loss { color: var(--red); }
 
 /* ── Charts row ── */
+/* Chart and allocation used to share a 1.4fr/1fr row. The donut now sits below the assets table
+   instead: on a phone it pushed the first asset row to the fold, which is the whole reason the
+   header/chart/assets order was reworked. The chart spans the full width in its place. */
 .wallet-charts-row {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
 }
+/* Freestanding now rather than a grid cell — cap it so the donut doesn't stretch across a desktop
+   width, while staying full-bleed on a phone. */
+.wallet-allocation-card { max-width: 420px; }
 .wallet-history-card,
 .wallet-allocation-card,
 .wallet-assets-card {
@@ -3361,7 +3411,6 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 /* ── Narrow screens ── */
 @media (max-width: 1100px) {
   .wallet-stats-row { grid-template-columns: repeat(2, 1fr); }
-  .wallet-charts-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 860px) {
   /* The assets table has too many columns to squeeze — let it scroll rather than crush the cells. */

@@ -14,6 +14,7 @@ import {
   recordSnapshot,
   type Snapshot,
   updateHolding,
+  valueAgo,
 } from './holdings';
 import { Icon } from './icons';
 
@@ -241,6 +242,88 @@ function PortfolioHistory({
   );
 }
 
+// ── Portfolio header ──
+
+/** One "+ $1.23  0.45%" delta line. Renders a dash when the window has no history to measure. */
+function ChangeRow({
+  label,
+  from,
+  to,
+}: {
+  label: string;
+  from: number | null;
+  to: number;
+}) {
+  if (from === null || from <= 0) {
+    return (
+      <div className="wallet-change-row">
+        <span className="wallet-change-label">{label}:</span>
+        <span className="wallet-change-none">—</span>
+      </div>
+    );
+  }
+  const delta = to - from;
+  const pct = (delta / from) * 100;
+  const up = delta >= 0;
+  return (
+    <div className="wallet-change-row">
+      <span className="wallet-change-label">{label}:</span>
+      <span className={'wallet-change-val ' + (up ? 'profit' : 'loss')}>
+        {up ? '+' : '-'}
+        {fmtUsd(Math.abs(delta))}
+      </span>
+      <span className={'wallet-change-pct ' + (up ? 'profit' : 'loss')}>
+        {Math.abs(pct).toFixed(2)}%
+      </span>
+    </div>
+  );
+}
+
+function PortfolioHeader({
+  totalValue,
+  totalCost,
+  snapshots,
+  onAdd,
+}: {
+  totalValue: number;
+  totalCost: number;
+  snapshots: Snapshot[];
+  onAdd: () => void;
+}) {
+  const [hidden, setHidden] = useState(false);
+
+  // Recomputed per render off the live total — the snapshot list only moves every 5 minutes, so
+  // memoising this would pin the delta to a stale total between polls.
+  const dayAgo = valueAgo(snapshots, 24);
+
+  return (
+    <div className="wallet-header">
+      <div className="wallet-header-main">
+        <span className="wallet-total">{hidden ? '••••••' : fmtUsd(totalValue)}</span>
+        <button
+          className="wallet-eye-btn"
+          onClick={() => setHidden((v) => !v)}
+          aria-label={hidden ? 'Show portfolio value' : 'Hide portfolio value'}
+          aria-pressed={hidden}
+        >
+          <Icon name={hidden ? 'eye-off' : 'eye'} size={17} />
+        </button>
+        <button className="btn-primary btn-sm wallet-header-add" onClick={onAdd}>
+          <Icon name="plus" size={15} /> Add Asset
+        </button>
+      </div>
+      {!hidden && (
+        <div className="wallet-header-changes">
+          <ChangeRow label="24h" from={dayAgo} to={totalValue} />
+          {/* All-time is measured against cost basis, not a snapshot: it's what was paid, which is
+              known from the first render rather than accumulating like the 24h window. */}
+          <ChangeRow label="All-time" from={totalCost > 0 ? totalCost : null} to={totalValue} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main view ──
 
 export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: number }) {
@@ -305,10 +388,19 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
     name: string;
     amount: number;
     avgBuyPrice: number;
+    purchasedAt: number;
+    feePct: number;
+    notes: string;
   }) => {
     if (editing) {
       setHoldings(
-        updateHolding(editing.id, { amount: data.amount, avg_buy_price: data.avgBuyPrice }),
+        updateHolding(editing.id, {
+          amount: data.amount,
+          avg_buy_price: data.avgBuyPrice,
+          purchased_at: data.purchasedAt,
+          fee_pct: data.feePct,
+          notes: data.notes,
+        }),
       );
     } else {
       setHoldings(
@@ -318,6 +410,9 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
           asset_type: data.assetType,
           amount: data.amount,
           avg_buy_price: data.avgBuyPrice,
+          purchased_at: data.purchasedAt,
+          fee_pct: data.feePct,
+          notes: data.notes,
         }),
       );
     }
@@ -416,125 +511,16 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
 
   return (
     <div className="wallet-view">
-      {/* ── Stat cards ── */}
-      <div className="wallet-stats-row">
-        <div className="wallet-stat-card">
-          <span className="wallet-stat-label">All-Time Profit</span>
-          <span className={'wallet-stat-value ' + (totalPnL >= 0 ? 'profit' : 'loss')}>
-            {totalPnL < 0 ? '-' : ''}
-            {fmtUsd(totalPnL)}
-          </span>
-          {totalCost > 0 && (
-            <span className={'wallet-stat-sub ' + (totalPnL >= 0 ? 'profit' : 'loss')}>
-              <Icon name={totalPnL >= 0 ? 'trending-up' : 'trending-down'} size={13} />
-              {Math.abs(totalPnLPct).toFixed(2)}%
-            </span>
-          )}
-        </div>
-
-        <div className="wallet-stat-card">
-          <span className="wallet-stat-label">Cost Basis</span>
-          <span className="wallet-stat-value neutral">{fmtUsd(totalCost)}</span>
-        </div>
-
-        <div className="wallet-stat-card">
-          <span className="wallet-stat-label">Best Performer</span>
-          {best ? (
-            <>
-              <span className="wallet-stat-performer">
-                <AssetIcon symbol={best.symbol} assetType={best.asset_type} size={26} />
-                <span className="wallet-performer-name">{best.symbol}</span>
-              </span>
-              <span className={'wallet-stat-sub ' + (best.pnlUsd >= 0 ? 'profit' : 'loss')}>
-                {best.pnlUsd >= 0 ? '+' : '-'}
-                {fmtUsd(best.pnlUsd)}
-                <Icon name={best.pnlPct >= 0 ? 'trending-up' : 'trending-down'} size={13} />
-                {Math.abs(best.pnlPct).toFixed(2)}%
-              </span>
-            </>
-          ) : (
-            <span className="wallet-stat-value neutral">—</span>
-          )}
-        </div>
-
-        <div className="wallet-stat-card">
-          <span className="wallet-stat-label">Worst Performer</span>
-          {worst ? (
-            <>
-              <span className="wallet-stat-performer">
-                <AssetIcon symbol={worst.symbol} assetType={worst.asset_type} size={26} />
-                <span className="wallet-performer-name">{worst.symbol}</span>
-              </span>
-              <span className={'wallet-stat-sub ' + (worst.pnlUsd >= 0 ? 'profit' : 'loss')}>
-                {worst.pnlUsd >= 0 ? '+' : '-'}
-                {fmtUsd(worst.pnlUsd)}
-                <Icon name={worst.pnlPct >= 0 ? 'trending-up' : 'trending-down'} size={13} />
-                {Math.abs(worst.pnlPct).toFixed(2)}%
-              </span>
-            </>
-          ) : (
-            <span className="wallet-stat-value neutral">—</span>
-          )}
-        </div>
-      </div>
+      <PortfolioHeader
+        totalValue={totalValue}
+        totalCost={totalCost}
+        snapshots={snapshots}
+        onAdd={openAdd}
+      />
 
       {/* ── Charts ── */}
       <div className="wallet-charts-row">
         <PortfolioHistory snapshots={snapshots} liveValue={totalValue} />
-
-        {segments.length > 0 && (
-          <div className="wallet-allocation-card">
-            <h3 className="wallet-section-title">Allocation</h3>
-            <div className="wallet-alloc-body">
-              <div className="wallet-donut-wrap">
-                <svg
-                  className="wallet-donut"
-                  viewBox="0 0 200 200"
-                  role="img"
-                  aria-label="Allocation by asset"
-                >
-                  {/* -90° so the first segment starts at 12 o'clock rather than 3 o'clock. */}
-                  <g transform="rotate(-90 100 100)">
-                    <circle
-                      cx="100"
-                      cy="100"
-                      r="70"
-                      fill="none"
-                      stroke="var(--border)"
-                      strokeWidth="24"
-                      opacity="0.25"
-                    />
-                    {segments.map((s) => (
-                      <circle
-                        key={s.symbol}
-                        cx="100"
-                        cy="100"
-                        r="70"
-                        fill="none"
-                        stroke={s.color}
-                        strokeWidth="24"
-                        strokeDasharray={`${s.dashLen} ${circumference - s.dashLen}`}
-                        strokeDashoffset={-s.offset}
-                      />
-                    ))}
-                  </g>
-                </svg>
-                <div className="wallet-donut-center">
-                  <span className="wallet-donut-total">{fmtUsd(totalValue, 0)}</span>
-                </div>
-              </div>
-              <div className="wallet-alloc-legend">
-                {segments.map((s) => (
-                  <div key={s.symbol} className="wallet-legend-row">
-                    <span className="wallet-legend-dot" style={{ backgroundColor: s.color }} />
-                    <span className="wallet-legend-sym">{s.symbol}</span>
-                    <span className="wallet-legend-pct">{(s.pct * 100).toFixed(2)}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Assets table ── */}
@@ -641,6 +627,123 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* ── Allocation ── */}
+      {segments.length > 0 && (
+        <div className="wallet-allocation-card">
+          <h3 className="wallet-section-title">Allocation</h3>
+          <div className="wallet-alloc-body">
+            <div className="wallet-donut-wrap">
+              <svg
+                className="wallet-donut"
+                viewBox="0 0 200 200"
+                role="img"
+                aria-label="Allocation by asset"
+              >
+                {/* -90° so the first segment starts at 12 o'clock rather than 3 o'clock. */}
+                <g transform="rotate(-90 100 100)">
+                  <circle
+                    cx="100"
+                    cy="100"
+                    r="70"
+                    fill="none"
+                    stroke="var(--border)"
+                    strokeWidth="24"
+                    opacity="0.25"
+                  />
+                  {segments.map((s) => (
+                    <circle
+                      key={s.symbol}
+                      cx="100"
+                      cy="100"
+                      r="70"
+                      fill="none"
+                      stroke={s.color}
+                      strokeWidth="24"
+                      strokeDasharray={`${s.dashLen} ${circumference - s.dashLen}`}
+                      strokeDashoffset={-s.offset}
+                    />
+                  ))}
+                </g>
+              </svg>
+              <div className="wallet-donut-center">
+                <span className="wallet-donut-total">{fmtUsd(totalValue, 0)}</span>
+              </div>
+            </div>
+            <div className="wallet-alloc-legend">
+              {segments.map((s) => (
+                <div key={s.symbol} className="wallet-legend-row">
+                  <span className="wallet-legend-dot" style={{ backgroundColor: s.color }} />
+                  <span className="wallet-legend-sym">{s.symbol}</span>
+                  <span className="wallet-legend-pct">{(s.pct * 100).toFixed(2)}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Stat cards ── */}
+      <div className="wallet-stats-row">
+        <div className="wallet-stat-card">
+          <span className="wallet-stat-label">All-Time Profit</span>
+          <span className={'wallet-stat-value ' + (totalPnL >= 0 ? 'profit' : 'loss')}>
+            {totalPnL < 0 ? '-' : ''}
+            {fmtUsd(totalPnL)}
+          </span>
+          {totalCost > 0 && (
+            <span className={'wallet-stat-sub ' + (totalPnL >= 0 ? 'profit' : 'loss')}>
+              <Icon name={totalPnL >= 0 ? 'trending-up' : 'trending-down'} size={13} />
+              {Math.abs(totalPnLPct).toFixed(2)}%
+            </span>
+          )}
+        </div>
+
+        <div className="wallet-stat-card">
+          <span className="wallet-stat-label">Cost Basis</span>
+          <span className="wallet-stat-value neutral">{fmtUsd(totalCost)}</span>
+        </div>
+
+        <div className="wallet-stat-card">
+          <span className="wallet-stat-label">Best Performer</span>
+          {best ? (
+            <>
+              <span className="wallet-stat-performer">
+                <AssetIcon symbol={best.symbol} assetType={best.asset_type} size={26} />
+                <span className="wallet-performer-name">{best.symbol}</span>
+              </span>
+              <span className={'wallet-stat-sub ' + (best.pnlUsd >= 0 ? 'profit' : 'loss')}>
+                {best.pnlUsd >= 0 ? '+' : '-'}
+                {fmtUsd(best.pnlUsd)}
+                <Icon name={best.pnlPct >= 0 ? 'trending-up' : 'trending-down'} size={13} />
+                {Math.abs(best.pnlPct).toFixed(2)}%
+              </span>
+            </>
+          ) : (
+            <span className="wallet-stat-value neutral">—</span>
+          )}
+        </div>
+
+        <div className="wallet-stat-card">
+          <span className="wallet-stat-label">Worst Performer</span>
+          {worst ? (
+            <>
+              <span className="wallet-stat-performer">
+                <AssetIcon symbol={worst.symbol} assetType={worst.asset_type} size={26} />
+                <span className="wallet-performer-name">{worst.symbol}</span>
+              </span>
+              <span className={'wallet-stat-sub ' + (worst.pnlUsd >= 0 ? 'profit' : 'loss')}>
+                {worst.pnlUsd >= 0 ? '+' : '-'}
+                {fmtUsd(worst.pnlUsd)}
+                <Icon name={worst.pnlPct >= 0 ? 'trending-up' : 'trending-down'} size={13} />
+                {Math.abs(worst.pnlPct).toFixed(2)}%
+              </span>
+            </>
+          ) : (
+            <span className="wallet-stat-value neutral">—</span>
+          )}
         </div>
       </div>
 
