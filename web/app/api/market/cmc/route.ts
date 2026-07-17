@@ -225,7 +225,9 @@ async function fetchSpotlight(): Promise<{
   };
 }
 
-/* ── Fear & Greed (alternative.me, keyless) ── */
+/* ── Fear & Greed (CMC, keyless) ──
+   CMC's own index rather than alternative.me's — same name, different methodology, different
+   number. This is the endpoint behind CMC's chart page, so the value matches coinmarketcap.com. */
 
 export interface FearGreed {
   value: number;
@@ -233,13 +235,14 @@ export interface FearGreed {
 }
 
 async function fetchFearGreed(): Promise<FearGreed | null> {
-  const d = (await fetchJSON('https://api.alternative.me/fng/?limit=1')) as {
-    data?: { value?: string; value_classification?: string }[];
-  };
-  const row = d?.data?.[0];
-  const value = row?.value != null ? parseInt(row.value, 10) : NaN;
-  if (!Number.isFinite(value)) return null;
-  return { value, classification: row?.value_classification ?? '' };
+  const d = (await fetchJSON(
+    'https://pro-api.coinmarketcap.com/public-api/v3/fear-and-greed/latest',
+  )) as { data?: { value?: number | string; value_classification?: string } };
+  // Number today, but parsed defensively — the local num() rejects strings outright.
+  const raw = d?.data?.value;
+  const value = typeof raw === 'string' ? parseFloat(raw) : raw;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return { value, classification: d?.data?.value_classification ?? '' };
 }
 
 /* ── Handler ── */

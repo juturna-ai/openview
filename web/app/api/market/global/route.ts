@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 //
 // Same keyless CMC data-api/v3 approach as ../cmc/route.ts (undocumented endpoints the CMC
 // frontend itself calls; they require a browser User-Agent and send no CORS, so this must be
-// server-side). Fear & Greed comes from alternative.me, matching the cmc route.
+// server-side). Fear & Greed comes from CMC's keyless public-api, matching the cmc route.
 //
 // Every source fails soft (null, never a throw) and the payload is cached so the client's poll
 // doesn't hammer upstream.
@@ -89,16 +89,22 @@ async function fetchAltcoinSeason(): Promise<number | null> {
   return num(d?.data?.historicalValues?.now?.altcoinIndex);
 }
 
-/* ── Fear & Greed (alternative.me, keyless) ── */
+/* ── Fear & Greed (CMC, keyless) ──
+   CMC's own index, not alternative.me's: the two share a name but not a methodology (CMC blends
+   price momentum, Volmex implied vol, the BTC/ETH put/call ratio, SSR and proprietary search data),
+   so they routinely print different numbers. This endpoint is the one behind CMC's own chart page,
+   which is the point — the card has to read the same as coinmarketcap.com. Keyless and needs no
+   browser UA, but it lives on the metered pro-api host, so treat a failure here as expected: the
+   caller nulls the field rather than failing the payload. */
 
 async function fetchFearGreed(): Promise<{ value: number; classification: string } | null> {
-  const d = (await fetchJSON('https://api.alternative.me/fng/?limit=1')) as {
-    data?: { value?: string; value_classification?: string }[];
-  };
-  const row = d?.data?.[0];
-  const value = row?.value != null ? parseInt(row.value, 10) : NaN;
-  if (!Number.isFinite(value)) return null;
-  return { value, classification: row?.value_classification ?? '' };
+  const d = (await fetchJSON(
+    'https://pro-api.coinmarketcap.com/public-api/v3/fear-and-greed/latest',
+  )) as { data?: { value?: number | string; value_classification?: string } };
+  // Single object here, not alternative.me's array-of-rows.
+  const value = num(d?.data?.value);
+  if (value === null) return null;
+  return { value, classification: d?.data?.value_classification ?? '' };
 }
 
 /* ── Handler ── */

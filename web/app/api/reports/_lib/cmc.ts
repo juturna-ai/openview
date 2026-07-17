@@ -129,14 +129,16 @@ async function fetchSpotlight(): Promise<{
   };
 }
 
+/* CMC's own Fear & Greed, not alternative.me's — same name, different methodology. Reports quote
+   the same number the Home cards show, which is the number on coinmarketcap.com. */
 async function fetchFearGreed(): Promise<{ value: number; classification: string } | null> {
-  const d = (await fetchJSON('https://api.alternative.me/fng/?limit=1')) as {
-    data?: { value?: string; value_classification?: string }[];
-  };
-  const row = d?.data?.[0];
-  const value = row?.value != null ? parseInt(row.value, 10) : NaN;
-  if (!Number.isFinite(value)) return null;
-  return { value, classification: row?.value_classification ?? '' };
+  const d = (await fetchJSON(
+    'https://pro-api.coinmarketcap.com/public-api/v3/fear-and-greed/latest',
+  )) as { data?: { value?: number | string; value_classification?: string } };
+  const raw = d?.data?.value;
+  const value = typeof raw === 'string' ? parseFloat(raw) : raw;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return { value, classification: d?.data?.value_classification ?? '' };
 }
 
 /** Sentiment snapshot. Each source fails soft — a dead endpoint costs one field, not the report. */

@@ -1751,6 +1751,41 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   image-rendering: pixelated;
 }
 
+/* ── Hover hints ──
+   Explanatory box shown over a stat card / the donut. Same shell as the chart tooltip so every
+   hover readout on the dashboard reads the same. The host panel needs a positioning context and
+   must not clip the box, hence the rules on .wallet-hinted. */
+.wallet-hinted { position: relative; }
+/* The panels aren't buttons — suppress the focus ring but keep them tab-reachable for the hint. */
+.wallet-hinted:focus { outline: none; }
+.wallet-hinted:focus-visible { outline: 1px solid var(--border); outline-offset: 2px; }
+/* Named -tip, not -hint: .wallet-hint is already AddAssetModal's helper-text class. */
+.wallet-tip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  /* Sized to the text — the hints are one short phrase, so they never need to wrap. */
+  width: max-content;
+  max-width: 220px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+  pointer-events: none;
+  white-space: normal;
+}
+/* The last stat card sits at the viewport's right edge — anchor its hint to the right so it
+   doesn't overflow the page. */
+.wallet-stats-row .wallet-hinted:last-child .wallet-tip { left: auto; right: 0; }
+/* The allocation card is tall and the assets table sits directly under it — drop the hint below the
+   heading instead of below the card, where it would cover the table. */
+.wallet-allocation-card .wallet-tip { top: 40px; left: 16px; }
+
 /* ── Stat cards ── */
 .wallet-stats-row {
   display: grid;
@@ -1793,17 +1828,13 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wallet-stat-sub.loss { color: var(--red); }
 
 /* ── Charts row ── */
-/* Chart and allocation used to share a 1.4fr/1fr row. The donut now sits below the assets table
-   instead: on a phone it pushed the first asset row to the fold, which is the whole reason the
-   header/chart/assets order was reworked. The chart spans the full width in its place. */
+/* Chart and allocation share the row; the narrower cell fits the donut without stretching it.
+   Collapses to one column under 1100px (see the breakpoint below). */
 .wallet-charts-row {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1.4fr 1fr;
   gap: 12px;
 }
-/* Freestanding now rather than a grid cell — cap it so the donut doesn't stretch across a desktop
-   width, while staying full-bleed on a phone. */
-.wallet-allocation-card { max-width: 420px; }
 .wallet-history-card,
 .wallet-allocation-card,
 .wallet-assets-card {
@@ -1844,7 +1875,35 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 }
 .wallet-history-tab:hover { background: var(--hover); color: var(--text); }
 .wallet-history-tab.active { background: var(--accent); color: #fff; }
-.wallet-history-chart { width: 100%; height: 220px; }
+/* Positioned so the hover tooltip anchors to the plot area rather than the page. */
+.wallet-history-chart { position: relative; width: 100%; height: 220px; }
+/* Hover readout — mirrors the market chart's .ov-mc-tip so both charts read the same. Pinned to the
+   top of the plot rather than following the cursor's y, which would jitter along the line. */
+.wallet-chart-tooltip {
+  position: absolute;
+  top: 6px;
+  z-index: 5;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.wallet-tooltip-time { font-size: 12px; font-weight: 600; color: var(--text); }
+.wallet-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.wallet-tooltip-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.wallet-tooltip-value { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+/* The plot is the hover target; the crosshair reads better with a pointer cursor than a text I-beam. */
+.wallet-history-svg { cursor: crosshair; }
 /* The SVG carries explicit pixel width/height matching the measured container, so 1 user unit is
    1 CSS px and text renders at its true size. Sizing it at 100% here would re-introduce the
    non-uniform scaling that stretched and blurred the axis labels. */
@@ -3448,6 +3507,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 /* ── Narrow screens ── */
 @media (max-width: 1100px) {
   .wallet-stats-row { grid-template-columns: repeat(2, 1fr); }
+  .wallet-charts-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 860px) {
   /* The assets table has too many columns to squeeze — let it scroll rather than crush the cells. */

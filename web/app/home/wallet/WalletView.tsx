@@ -14,7 +14,6 @@ import {
   recordSnapshot,
   type Snapshot,
   updateHolding,
-  valueAgo,
 } from './holdings';
 import { Icon } from './icons';
 
@@ -63,6 +62,8 @@ function PortfolioHistory({
   // geometry can be recomputed on resize.
   const chartRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: CHART_H });
+  // Index of the snapshot nearest the cursor; null when the pointer is away.
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   useEffect(() => {
     const el = chartRef.current;
@@ -154,8 +155,41 @@ function PortfolioHistory({
       return { x: x(t), label: fmtTime(t) };
     });
 
-    return { W, H, pad, innerH, line, area, color, yTicks, xTicks };
+    // Screen positions for each snapshot, so the hover layer can hit-test without redoing the scales.
+    const points = data.map((d) => ({ x: x(d.t), y: y(d.value), t: d.t, value: d.value }));
+
+    return { W, H, pad, innerW, innerH, line, area, color, yTicks, xTicks, points };
   }, [data, period, size]);
+
+  // Snap to the nearest point by x. The SVG is drawn at true pixel size, so client px map straight
+  // onto chart units — no viewBox transform to undo.
+  const handleMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!chart) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    let nearest = 0;
+    let best = Infinity;
+    for (let i = 0; i < chart.points.length; i++) {
+      const d = Math.abs(chart.points[i].x - px);
+      if (d < best) {
+        best = d;
+        nearest = i;
+      }
+    }
+    setHoverIdx(nearest);
+  };
+
+  const hovered = chart && hoverIdx !== null ? chart.points[hoverIdx] : null;
+
+  // Full date + time; the axis labels are deliberately terse and ambiguous up close.
+  const fmtStamp = (t: number) =>
+    new Date(t).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
 
   return (
     <div className="wallet-history-card">
@@ -198,6 +232,8 @@ function PortfolioHistory({
             viewBox={`0 0 ${chart.W} ${chart.H}`}
             role="img"
             aria-label="Portfolio value over time"
+            onPointerMove={handleMove}
+            onPointerLeave={() => setHoverIdx(null)}
           >
             <defs>
               <linearGradient id="ovAreaGrad" x1="0" y1="0" x2="0" y2="1">
@@ -234,7 +270,50 @@ function PortfolioHistory({
             ))}
             <path d={chart.area} fill="url(#ovAreaGrad)" />
             <path d={chart.line} fill="none" stroke={chart.color} strokeWidth="2" />
+
+            {hovered && (
+              <g className="wallet-hover-marker" pointerEvents="none">
+                <line
+                  x1={hovered.x}
+                  y1={chart.pad.top}
+                  x2={hovered.x}
+                  y2={chart.pad.top + chart.innerH}
+                  stroke="var(--muted)"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                  opacity="0.6"
+                />
+                <circle cx={hovered.x} cy={hovered.y} r="4" fill={chart.color} />
+                <circle
+                  cx={hovered.x}
+                  cy={hovered.y}
+                  r="4"
+                  fill="none"
+                  stroke="var(--bg)"
+                  strokeWidth="1.5"
+                />
+              </g>
+            )}
           </svg>
+          )}
+
+          {chart && hovered && (
+            // Flips to the left of the cursor near the right edge so it never spills the card.
+            <div
+              className="wallet-chart-tooltip"
+              style={
+                hovered.x > chart.W - 150
+                  ? { right: chart.W - hovered.x + 12 }
+                  : { left: hovered.x + 12 }
+              }
+            >
+              <div className="wallet-tooltip-time">{fmtStamp(hovered.t)}</div>
+              <div className="wallet-tooltip-row">
+                <span className="wallet-tooltip-dot" style={{ backgroundColor: chart.color }} />
+                <span className="wallet-tooltip-label">Portfolio:</span>
+                <span className="wallet-tooltip-value">{fmtUsd(hovered.value)}</span>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -242,82 +321,46 @@ function PortfolioHistory({
   );
 }
 
-// ── Portfolio header ──
+// ── Hover hints ──
 
-/** One "+ $1.23  0.45%" delta line. Renders a dash when the window has no history to measure. */
-function ChangeRow({
-  label,
-  from,
-  to,
+/** What each dashboard panel means, in a few words. Keyed by the hint's target. */
+const HINTS: Record<string, string> = {
+  'all-time-profit': 'Current value minus what you paid.',
+  'cost-basis': 'Total paid for your holdings.',
+  'best-performer': 'Biggest gain vs. buy price.',
+  'worst-performer': 'Biggest loss vs. buy price.',
+  allocation: 'Share of portfolio value per asset.',
+};
+
+/**
+ * Wraps a panel and shows an explanatory box on hover. Focusable so the hint is reachable by
+ * keyboard, not just by mouse — the panels themselves aren't interactive otherwise.
+ */
+function WithHint({
+  hint,
+  className,
+  children,
 }: {
-  label: string;
-  from: number | null;
-  to: number;
+  hint: keyof typeof HINTS | string;
+  className: string;
+  children: React.ReactNode;
 }) {
-  if (from === null || from <= 0) {
-    return (
-      <div className="wallet-change-row">
-        <span className="wallet-change-label">{label}:</span>
-        <span className="wallet-change-none">—</span>
-      </div>
-    );
-  }
-  const delta = to - from;
-  const pct = (delta / from) * 100;
-  const up = delta >= 0;
-  return (
-    <div className="wallet-change-row">
-      <span className="wallet-change-label">{label}:</span>
-      <span className={'wallet-change-val ' + (up ? 'profit' : 'loss')}>
-        {up ? '+' : '-'}
-        {fmtUsd(Math.abs(delta))}
-      </span>
-      <span className={'wallet-change-pct ' + (up ? 'profit' : 'loss')}>
-        {Math.abs(pct).toFixed(2)}%
-      </span>
-    </div>
-  );
-}
-
-function PortfolioHeader({
-  totalValue,
-  totalCost,
-  snapshots,
-  onAdd,
-}: {
-  totalValue: number;
-  totalCost: number;
-  snapshots: Snapshot[];
-  onAdd: () => void;
-}) {
-  const [hidden, setHidden] = useState(false);
-
-  // Recomputed per render off the live total — the snapshot list only moves every 5 minutes, so
-  // memoising this would pin the delta to a stale total between polls.
-  const dayAgo = valueAgo(snapshots, 24);
+  const [open, setOpen] = useState(false);
+  const text = HINTS[hint];
 
   return (
-    <div className="wallet-header">
-      <div className="wallet-header-main">
-        <span className="wallet-total">{hidden ? '••••••' : fmtUsd(totalValue)}</span>
-        <button
-          className="wallet-eye-btn"
-          onClick={() => setHidden((v) => !v)}
-          aria-label={hidden ? 'Show portfolio value' : 'Hide portfolio value'}
-          aria-pressed={hidden}
-        >
-          <Icon name={hidden ? 'eye-off' : 'eye'} size={17} />
-        </button>
-        <button className="btn-primary btn-sm wallet-header-add" onClick={onAdd}>
-          <Icon name="plus" size={15} /> Add Asset
-        </button>
-      </div>
-      {!hidden && (
-        <div className="wallet-header-changes">
-          <ChangeRow label="24h" from={dayAgo} to={totalValue} />
-          {/* All-time is measured against cost basis, not a snapshot: it's what was paid, which is
-              known from the first render rather than accumulating like the 24h window. */}
-          <ChangeRow label="All-time" from={totalCost > 0 ? totalCost : null} to={totalValue} />
+    <div
+      className={className + ' wallet-hinted'}
+      onPointerEnter={() => setOpen(true)}
+      onPointerLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+      tabIndex={0}
+    >
+      {children}
+      {open && text && (
+        <div className="wallet-tip" role="tooltip">
+          {text}
         </div>
       )}
     </div>
@@ -511,16 +554,125 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
 
   return (
     <div className="wallet-view">
-      <PortfolioHeader
-        totalValue={totalValue}
-        totalCost={totalCost}
-        snapshots={snapshots}
-        onAdd={openAdd}
-      />
+      {/* ── Stat cards ── */}
+      <div className="wallet-stats-row">
+        <WithHint hint="all-time-profit" className="wallet-stat-card">
+          <span className="wallet-stat-label">All-Time Profit</span>
+          <span className={'wallet-stat-value ' + (totalPnL >= 0 ? 'profit' : 'loss')}>
+            {totalPnL < 0 ? '-' : ''}
+            {fmtUsd(totalPnL)}
+          </span>
+          {totalCost > 0 && (
+            <span className={'wallet-stat-sub ' + (totalPnL >= 0 ? 'profit' : 'loss')}>
+              <Icon name={totalPnL >= 0 ? 'trending-up' : 'trending-down'} size={13} />
+              {Math.abs(totalPnLPct).toFixed(2)}%
+            </span>
+          )}
+        </WithHint>
+
+        <WithHint hint="cost-basis" className="wallet-stat-card">
+          <span className="wallet-stat-label">Cost Basis</span>
+          <span className="wallet-stat-value neutral">{fmtUsd(totalCost)}</span>
+        </WithHint>
+
+        <WithHint hint="best-performer" className="wallet-stat-card">
+          <span className="wallet-stat-label">Best Performer</span>
+          {best ? (
+            <>
+              <span className="wallet-stat-performer">
+                <AssetIcon symbol={best.symbol} assetType={best.asset_type} size={26} />
+                <span className="wallet-performer-name">{best.symbol}</span>
+              </span>
+              <span className={'wallet-stat-sub ' + (best.pnlUsd >= 0 ? 'profit' : 'loss')}>
+                {best.pnlUsd >= 0 ? '+' : '-'}
+                {fmtUsd(best.pnlUsd)}
+                <Icon name={best.pnlPct >= 0 ? 'trending-up' : 'trending-down'} size={13} />
+                {Math.abs(best.pnlPct).toFixed(2)}%
+              </span>
+            </>
+          ) : (
+            <span className="wallet-stat-value neutral">—</span>
+          )}
+        </WithHint>
+
+        <WithHint hint="worst-performer" className="wallet-stat-card">
+          <span className="wallet-stat-label">Worst Performer</span>
+          {worst ? (
+            <>
+              <span className="wallet-stat-performer">
+                <AssetIcon symbol={worst.symbol} assetType={worst.asset_type} size={26} />
+                <span className="wallet-performer-name">{worst.symbol}</span>
+              </span>
+              <span className={'wallet-stat-sub ' + (worst.pnlUsd >= 0 ? 'profit' : 'loss')}>
+                {worst.pnlUsd >= 0 ? '+' : '-'}
+                {fmtUsd(worst.pnlUsd)}
+                <Icon name={worst.pnlPct >= 0 ? 'trending-up' : 'trending-down'} size={13} />
+                {Math.abs(worst.pnlPct).toFixed(2)}%
+              </span>
+            </>
+          ) : (
+            <span className="wallet-stat-value neutral">—</span>
+          )}
+        </WithHint>
+      </div>
 
       {/* ── Charts ── */}
       <div className="wallet-charts-row">
         <PortfolioHistory snapshots={snapshots} liveValue={totalValue} />
+
+        {segments.length > 0 && (
+          <WithHint hint="allocation" className="wallet-allocation-card">
+            <h3 className="wallet-section-title">Allocation</h3>
+            <div className="wallet-alloc-body">
+              <div className="wallet-donut-wrap">
+                <svg
+                  className="wallet-donut"
+                  viewBox="0 0 200 200"
+                  role="img"
+                  aria-label="Allocation by asset"
+                >
+                  {/* -90° so the first segment starts at 12 o'clock rather than 3 o'clock. */}
+                  <g transform="rotate(-90 100 100)">
+                    <circle
+                      cx="100"
+                      cy="100"
+                      r="70"
+                      fill="none"
+                      stroke="var(--border)"
+                      strokeWidth="24"
+                      opacity="0.25"
+                    />
+                    {segments.map((s) => (
+                      <circle
+                        key={s.symbol}
+                        cx="100"
+                        cy="100"
+                        r="70"
+                        fill="none"
+                        stroke={s.color}
+                        strokeWidth="24"
+                        strokeDasharray={`${s.dashLen} ${circumference - s.dashLen}`}
+                        strokeDashoffset={-s.offset}
+                      />
+                    ))}
+                  </g>
+                </svg>
+                <div className="wallet-donut-center">
+                  <span className="wallet-donut-total">{fmtUsd(totalValue, 0)}</span>
+                </div>
+              </div>
+              <div className="wallet-alloc-legend">
+                {segments.map((s) => (
+                  <div key={s.symbol} className="wallet-legend-row">
+                    <span className="wallet-legend-dot" style={{ backgroundColor: s.color }} />
+                    <span className="wallet-legend-sym">{s.symbol}</span>
+                    <span className="wallet-legend-pct">{(s.pct * 100).toFixed(2)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </WithHint>
+        )}
       </div>
 
       {/* ── Assets table ── */}
@@ -627,123 +779,6 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* ── Allocation ── */}
-      {segments.length > 0 && (
-        <div className="wallet-allocation-card">
-          <h3 className="wallet-section-title">Allocation</h3>
-          <div className="wallet-alloc-body">
-            <div className="wallet-donut-wrap">
-              <svg
-                className="wallet-donut"
-                viewBox="0 0 200 200"
-                role="img"
-                aria-label="Allocation by asset"
-              >
-                {/* -90° so the first segment starts at 12 o'clock rather than 3 o'clock. */}
-                <g transform="rotate(-90 100 100)">
-                  <circle
-                    cx="100"
-                    cy="100"
-                    r="70"
-                    fill="none"
-                    stroke="var(--border)"
-                    strokeWidth="24"
-                    opacity="0.25"
-                  />
-                  {segments.map((s) => (
-                    <circle
-                      key={s.symbol}
-                      cx="100"
-                      cy="100"
-                      r="70"
-                      fill="none"
-                      stroke={s.color}
-                      strokeWidth="24"
-                      strokeDasharray={`${s.dashLen} ${circumference - s.dashLen}`}
-                      strokeDashoffset={-s.offset}
-                    />
-                  ))}
-                </g>
-              </svg>
-              <div className="wallet-donut-center">
-                <span className="wallet-donut-total">{fmtUsd(totalValue, 0)}</span>
-              </div>
-            </div>
-            <div className="wallet-alloc-legend">
-              {segments.map((s) => (
-                <div key={s.symbol} className="wallet-legend-row">
-                  <span className="wallet-legend-dot" style={{ backgroundColor: s.color }} />
-                  <span className="wallet-legend-sym">{s.symbol}</span>
-                  <span className="wallet-legend-pct">{(s.pct * 100).toFixed(2)}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Stat cards ── */}
-      <div className="wallet-stats-row">
-        <div className="wallet-stat-card">
-          <span className="wallet-stat-label">All-Time Profit</span>
-          <span className={'wallet-stat-value ' + (totalPnL >= 0 ? 'profit' : 'loss')}>
-            {totalPnL < 0 ? '-' : ''}
-            {fmtUsd(totalPnL)}
-          </span>
-          {totalCost > 0 && (
-            <span className={'wallet-stat-sub ' + (totalPnL >= 0 ? 'profit' : 'loss')}>
-              <Icon name={totalPnL >= 0 ? 'trending-up' : 'trending-down'} size={13} />
-              {Math.abs(totalPnLPct).toFixed(2)}%
-            </span>
-          )}
-        </div>
-
-        <div className="wallet-stat-card">
-          <span className="wallet-stat-label">Cost Basis</span>
-          <span className="wallet-stat-value neutral">{fmtUsd(totalCost)}</span>
-        </div>
-
-        <div className="wallet-stat-card">
-          <span className="wallet-stat-label">Best Performer</span>
-          {best ? (
-            <>
-              <span className="wallet-stat-performer">
-                <AssetIcon symbol={best.symbol} assetType={best.asset_type} size={26} />
-                <span className="wallet-performer-name">{best.symbol}</span>
-              </span>
-              <span className={'wallet-stat-sub ' + (best.pnlUsd >= 0 ? 'profit' : 'loss')}>
-                {best.pnlUsd >= 0 ? '+' : '-'}
-                {fmtUsd(best.pnlUsd)}
-                <Icon name={best.pnlPct >= 0 ? 'trending-up' : 'trending-down'} size={13} />
-                {Math.abs(best.pnlPct).toFixed(2)}%
-              </span>
-            </>
-          ) : (
-            <span className="wallet-stat-value neutral">—</span>
-          )}
-        </div>
-
-        <div className="wallet-stat-card">
-          <span className="wallet-stat-label">Worst Performer</span>
-          {worst ? (
-            <>
-              <span className="wallet-stat-performer">
-                <AssetIcon symbol={worst.symbol} assetType={worst.asset_type} size={26} />
-                <span className="wallet-performer-name">{worst.symbol}</span>
-              </span>
-              <span className={'wallet-stat-sub ' + (worst.pnlUsd >= 0 ? 'profit' : 'loss')}>
-                {worst.pnlUsd >= 0 ? '+' : '-'}
-                {fmtUsd(worst.pnlUsd)}
-                <Icon name={worst.pnlPct >= 0 ? 'trending-up' : 'trending-down'} size={13} />
-                {Math.abs(worst.pnlPct).toFixed(2)}%
-              </span>
-            </>
-          ) : (
-            <span className="wallet-stat-value neutral">—</span>
-          )}
         </div>
       </div>
 

@@ -5,7 +5,7 @@ import type { GlobalPayload, SeriesPoint } from '../api/market/global/route';
 
 // Three market-snapshot cards on the Home hero (below the heading nav): total Market Cap,
 // Fear & Greed, and Altcoin Season. Data comes from the server-side /api/market/global proxy
-// (keyless CMC + alternative.me); polled every 60s to match the route's cache TTL.
+// (keyless CMC endpoints throughout); polled every 60s to match the route's cache TTL.
 
 function fmtMarketCap(v: number | null): string {
   if (v == null) return '—';

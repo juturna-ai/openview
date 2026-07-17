@@ -840,14 +840,14 @@ The binding constraint (verified in code, not assumed):
 | `/home/reports` | `app/home/reports/page.tsx` + `ReportsShell.tsx` (`'use client'`) | **Reports dashboard** (folder-tab "Reports"): sidebar + four views — Dashboard (feed), Daily, Weekly, Monthly. The sidebar is the wallet's shell with a nav list but **no action button**. Same mount-once/keep-mounted tab discipline as `WalletShell`. See §17. |
 | `/api/market/prices` | `app/api/market/prices/route.ts` | POST holdings → `{symbol: {price, change24h}}`. Server-side price proxy (§16). |
 | `/api/market/cmc` | `app/api/market/cmc/route.ts` | GET CoinMarketCap listing + spotlight + Fear & Greed — powers the market page's 6 crypto tabs (§16). No API key; see §16. |
-| `/api/market/global` | `app/api/market/global/route.ts` | GET `{marketCap, marketCapChange24h, marketCapSeries:{t,v}[], fearGreed, altcoinSeason}` — the three snapshot cards (`home/GlobalStats.tsx`) shown above the **crypto** Leaderboards table (`MoversView`, crypto class only). `marketCapSeries` is a **4-year daily** series (~1460 pts via an explicit `timeStart`/`timeEnd` window with `interval=1d`; `range` caps at ~400 pts so it can't reach 4y) powering the Market Cap sparkline's hover crosshair/tooltip — the ▲/▼ badge stays the 24h change from the *latest* endpoint, only the sparkline is long-range. Keyless CMC `global-metrics` (latest + historical) + `altcoin-season/chart` + alternative.me Fear & Greed; each source fails soft, 60s cache. |
+| `/api/market/global` | `app/api/market/global/route.ts` | GET `{marketCap, marketCapChange24h, marketCapSeries:{t,v}[], fearGreed, altcoinSeason}` — the three snapshot cards (`home/GlobalStats.tsx`) shown above the **crypto** Leaderboards table (`MoversView`, crypto class only). `marketCapSeries` is a **4-year daily** series (~1460 pts via an explicit `timeStart`/`timeEnd` window with `interval=1d`; `range` caps at ~400 pts so it can't reach 4y) powering the Market Cap sparkline's hover crosshair/tooltip — the ▲/▼ badge stays the 24h change from the *latest* endpoint, only the sparkline is long-range. Keyless CMC `global-metrics` (latest + historical) + `altcoin-season/chart` + CMC `public-api/v3/fear-and-greed/latest`; each source fails soft, 60s cache. |
 | `/api/market/screener` | `app/api/market/screener/route.ts` (+ `stocks.ts`) | GET `{stocks, etfs, commodities}` — the non-crypto Leaderboards universes (§16). Keyless: Nasdaq's screener returns 500 market-cap-ranked US stocks in **one** request, of which `stocks.ts` keeps the ~476 that are *common equity* (preferred shares and notes carry the issuer's market cap and would rank as a second copy of the company) and preserves the share class in the name (`Alphabet Inc. (Class A)`) so `GOOGL`/`GOOG` don't render identically; ETFs (40, curated) and commodity futures (16) are priced per-symbol off Yahoo. The size column is filled from Yahoo's crumb-gated `quoteSummary` — **AUM** for ETFs, **notional value** (open interest × price × contract size) for commodities, which have no market cap. |
 | `/api/market/asset` | `app/api/market/asset/route.ts` (+ `descriptions.ts`, `tokenized.ts`) | GET `?cls=crypto\|stocks\|etfs\|commodities&symbol=…\|id=…&range=24H\|7D\|1M\|1Y\|ALL&mktPage=N` → one **asset detail** payload (quote, price series, stats, links, description, markets) for the page a leaderboard row opens into (§16.1). Keyless; normalises all four classes onto a single shape. **Every** class carries a description (crypto→CMC, stocks→Nasdaq, commodities→Wikipedia, ETFs→hardcoded); crypto carries a markets table, and a commodity with a tokenized proxy (gold→XAUt) carries a real CEX/DEX one for **the token** (§16.2). |
 | `/api/wallet-tracker` | `app/api/wallet-tracker/route.ts` | POST `{action: balance\|tokens\|prices}` — on-chain lookups across 16 chains (§16). |
 | `/api/explorer` | `app/api/explorer/route.ts` (+ `chains.server.ts`, `normalize.ts`) | POST `{action: address\|tx\|families}` — multi-chain **transaction** Explorer (§16.3). `address`→recent txns, `tx`→one tx's detail, both normalised to one `ExplorerTx` shape. Keyless: EVM via Blockscout (`eth/arbitrum/base/polygon`), Solana/Sui/Cardano/NEAR via each chain's public RPC/REST; chains with no keyless tx list (bsc/avalanche/optimism/tron) return `{deepLinkOnly:true, deepLink}` for a "View on explorer" link. Same never-leak-upstream-error contract as `/api/wallet-tracker`. |
-| `/api/reports/preview` | `app/api/reports/preview/route.ts` (+ `_lib/`) | GET `?period=daily\|weekly\|monthly` — builds one market report live (CMC gainers + Binance pairs + sentiment + LLM analysis) and returns it, **without** persisting. 3 h TTL cache + single-flight; `maxDuration = 60`. The client's fallback when no stored report exists. See §17. |
+| `/api/reports/preview` | `app/api/reports/preview/route.ts` (+ `_lib/`) | GET `?period=daily\|weekly\|monthly` — builds one market report live (CMC gainers + Binance pairs + sentiment + LLM analysis) and returns it, **without** persisting. 3 h TTL cache + single-flight; `maxDuration = 60`. Cache **hits** are never throttled; a **miss** is rate-limited 20/IP/min, and an empty build is cached for 60 s (never caching it let a transient upstream failure starve the cache and turn every request into a full rebuild). The client's fallback when no stored report exists. See §17. |
 | `/api/reports/cron` | `app/api/reports/cron/route.ts` | GET, Vercel cron `0 18 * * *` (= 1 PM Cancún, UTC-5 no DST). Builds + upserts daily, `+weekly` on Mondays, `+monthly` on the 1st. `CRON_SECRET` bearer (see §17.4 on the non-latin-1 trap). Idempotent on `(period, report_date)`. |
-| `/api/reports/generate` | `app/api/reports/generate/route.ts` | POST `{period}` — manual build+save for testing, same code path as the cron. Globally throttled 1/period/5 min so it can't drain the LLM free tier. |
+| `/api/reports/generate` | `app/api/reports/generate/route.ts` | POST `{period}` — manual build+save, same code path as the cron. **Requires the `CRON_SECRET` bearer** (it triggers the same ~25s CMC+Binance+LLM pipeline; it shipped open at first, which made it a public quota-burn button). Also globally throttled 1/period/5 min as a second layer. |
 | `/api/reports/list` | `app/api/reports/list/route.ts` | GET `?period=&limit=` — the feed (anon-key read). Omit `period` for all periods by recency. Returns `{reports, configured}`; `configured:false` when Supabase env is absent, which makes the client fall back to `preview`. |
 | `/api/reports/[id]` | `app/api/reports/[id]/route.ts` | GET — one report + its comments + reaction tallies in one round trip. UUID-validated. |
 | `/api/reports/comment` | `app/api/reports/comment/route.ts` | POST `{reportId,nickname,body}` — service-role write, validated, 5/IP/10 min. |
@@ -1079,7 +1079,7 @@ Reach fetches **all** market and chain data in its Electron **main process**, be
 | **Currency price** | Frankfurter `/latest` — **also `change24h: 0`** | Frankfurter `/latest` **diffed against the prior published session** = a real change |
 | On-chain balance/tokens | Blockscout + public RPCs | same, via `/api/wallet-tracker` |
 | Chain-native prices | CoinGecko free `simple/price` | same |
-| **Market page (crypto)** | CoinMarketCap `data-api/v3` + alternative.me | same, via `/api/market/cmc` |
+| **Market page (crypto)** | CoinMarketCap `data-api/v3` + CMC `public-api/v3` | same, via `/api/market/cmc` |
 
 The metal/currency change is the one deliberate behavioural divergence, and it is **load-bearing**: a metals/FX gainers table sourced Reach's way would render every row at `0.00%` and the gainer/loser split would be meaningless. Verified live: 13 of 14 symbols return a non-zero 24h move.
 
@@ -1096,7 +1096,7 @@ server-side. `/api/market/cmc` is that proxy. Two endpoints cover five tabs:
 | `…/cryptocurrency/spotlight?dataType=7&limit=30` | Trending + Most Visited (one call returns both) |
 | `…/cryptocurrency/spotlight?dataType=8&limit=30` | Recently Added |
 | `…/cryptocurrency/detail/chart?id=N&range=7D` | 7-day sparklines — the **Leaderboards → Crypto** `7d Price%` column |
-| `api.alternative.me/fng/?limit=1` | The Fear & Greed gauge on Community Sentiment |
+| `pro-api.coinmarketcap.com/public-api/v3/fear-and-greed/latest` | The Fear & Greed gauge on Community Sentiment. CMC's own index — deliberately not alternative.me's, which shares the name but uses a different methodology and prints a different number. |
 
 ⚠ `spotlight`'s `limit` is validated upstream to **5–30**; outside that range it returns a 400.
 
@@ -1283,7 +1283,7 @@ A local desktop app can trust its own input; a public web route cannot. The rout
 | `web/app/api/market/asset/descriptions.ts` | The About copy, one source per class — Nasdaq profile (stocks, live), pinned Wikipedia articles (16 commodities), a hand-written map (40 ETFs). Enforces *"about this exact asset, or absent"*; a miss returns `''`. Also owns `nasdaqTicker()` (the `BRK.B` dot form). (§16.1) |
 | `web/app/api/market/asset/tokenized.ts` | Allow-list of commodities with a tokenized proxy that has **live** CMC market pairs — gold → XAUt today. The only way a non-crypto asset gets a real CEX/DEX table. (§16.2) |
 | `web/app/home/wallet/Sidebar.tsx` | `'use client'` — Add Asset button, 5-item nav (Wallet · Wallet Tracker · Explorer · Leaderboards · Gainers & Losers), live clock; resizable + collapsible via `useSidebarResize` (§15). |
-| `web/app/home/wallet/WalletView.tsx` | `'use client'` — portfolio header (total + 24h/all-time change, hide toggle), History chart, assets table, Allocation donut, 4 stat cards — in that order. |
+| `web/app/home/wallet/WalletView.tsx` | `'use client'` — 4 stat cards, then a `1.4fr/1fr` row of History chart + Allocation donut, then the assets table — in that order. The History chart carries a hover crosshair + tooltip (nearest snapshot by x; mirrors the market chart's `.ov-mc-tip`). The stat cards and donut are wrapped in `WithHint`, which shows an explanatory box on hover/focus from the `HINTS` map. |
 | `web/app/home/wallet/AddAssetModal.tsx` | `'use client'` — 4 category tabs, search, asset grid, amount / avg-buy-price. |
 | `web/app/home/wallet/MoversView.tsx` | `'use client'` — the 8-tab market page (see below). |
 | `web/app/home/wallet/CoinIcon.tsx` | `'use client'` — CMC coin logo (crypto rows carry a `thumb` URL), falls back to a coloured initial on 404. |
@@ -1524,7 +1524,7 @@ runtime imports so it's importable under plain `node`, matching every other test
 |---|---|---|
 | CMC listing | `data-api/v3/cryptocurrency/listing?limit=500` | keyless, undocumented, needs a browser UA; **only sorts by market cap** |
 | CMC spotlight | `.../spotlight?dataType=7\|8` | trending / most-visited / recently-added — the free crowd-attention proxy |
-| Fear & Greed | `alternative.me/fng` | keyless |
+| Fear & Greed | CMC `public-api/v3/fear-and-greed/latest` | keyless |
 | Binance daily | `api/v3/ticker/24hr` (bulk) | **1.9 MB, ~3,650 pairs** — server-side only, never proxied; carries **no** 7 d/30 d field |
 | Binance weekly/monthly | `api/v3/klines?interval=1d` | one call per pair, 10-concurrent. Measured: 60 calls ≈ 1.8 s, full pass ≈ **5 s** vs the 60 s Hobby limit |
 
@@ -1622,6 +1622,22 @@ returns **`misconfigured` (500) with an explicit log**, distinct from 401. The c
 length-checked then constant-time. Locked by `cronAuth.logic.test.mjs`; the same guard is inlined in
 `keep-alive/route.ts` (which is `runtime = 'edge'` and dependency-free by design).
 
+**Cost surface — the expensive routes are credentialed.** `/api/reports/cron` and
+`/api/reports/generate` both require the `CRON_SECRET` bearer. `generate` shipped **open**, which
+made it a public "burn the Gemini free tier and hammer CMC/Binance from your own IP" button —
+one anonymous POST cost ~25 s of a 500-coin CMC pull, a 1.9 MB Binance ticker, ~174 klines calls and
+an LLM round-trip. The in-memory throttle was never a substitute: it's per-lambda-instance, so a
+burst landing on cold instances each gets a fresh budget. `preview` is public by necessity (the
+client falls back to it) and is bounded instead by its cache — hits are free and never throttled,
+misses are 20/IP/min, and an empty build caches for 60 s rather than not at all.
+
+**The service-role key can reach the mobile app's tables** (`push_tokens`/`sync_state`/`push_alerts`)
+— RLS is no defence against it. `_lib/supabase.ts` therefore enforces a hardcoded **allow-list**
+(`reports`, `report_comments`, `report_reactions`, + the one `increment_reaction` RPC) and throws on
+anything else. Every call site passes a literal today, so nothing can reach them — but the
+allow-list means a future route that threads a request param into `table` fails loudly instead of
+writing across tenants. Locked by `supabaseGuard.logic.test.mjs`.
+
 **Anonymous writes.** No accounts. `/api/reports/comment` (5/IP/10min) and `/api/reports/react`
 (20/IP/10min, emoji restricted to a fixed allow-list) validate input and hold the service-role key.
 The limiter is **module state, so per-lambda-instance** — the effective global limit is
@@ -1669,9 +1685,10 @@ Both apps reach it through their own env var names — same project:
 | `openviewapp` | `EXPO_PUBLIC_SUPABASE_URL` | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | anon only — service_role never ships in the bundle |
 
 **A different, unrelated project (`gfdebbumdbrmzvpnyvsm`) belongs to UDG**, a separate music-events
-app (venues/artists/events/promoters) under a different Supabase **account** (the UDG account).
-`~/.bashrc` exports `SUPABASE_PROJECT_REF`/`SUPABASE_ACCESS_TOKEN` for **UDG**, and UDG's own
-`.mcp.json` files depend on them — **never repoint those globals.** If a Supabase tool here returns
+app (venues/artists/events/promoters) at `~/projects/udig` (`UDG-web` + `UDG-app`), under a different
+Supabase **account** (the UDG account — not the one owning Openview). `~/.bashrc` exports
+`SUPABASE_PROJECT_REF`/`SUPABASE_ACCESS_TOKEN` for **UDG**, and both UDG `.mcp.json` files depend on
+them — **never repoint those globals.** If a Supabase tool here returns
 venues/artists/events, it is on the wrong project.
 
 ### 18.2 Every table in the project (live-verified)
@@ -1723,6 +1740,11 @@ Function: scans active `push_alerts` → prices (Coinbase / Binance) → Expo Pu
 
 - **`openvieweb/.mcp.json` is gitignored, untracked, and hardcodes the project ref + access token.**
   It used `${SUPABASE_PROJECT_REF}`/`${SUPABASE_ACCESS_TOKEN}`, which resolved to **UDG's** project.
+  **The trap in one line: an MCP config is per-project, but `${VAR}` escapes to the global shell** —
+  so a local file silently produced global behaviour, and any project reusing those generic variable
+  names inherits UDG's database. (A 2026-07-16 audit found `~/projects/zenbot` has exactly this bug:
+  its app uses its own project, its MCP reads the globals. `offix`/`fami` hardcode theirs and are
+  fine. When you find this bug, grep for other instances — configs get copy-pasted.)
   A dedicated `${OPENVIEW_SUPABASE_TOKEN}` var *still* failed: Claude Code inherits its environment
   from the **VS Code server process**, started long before any `~/.bashrc` edit, so the placeholder
   resolved empty and a stale token persisted. Hardcoding removes the inheritance puzzle; the
