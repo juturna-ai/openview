@@ -1556,8 +1556,21 @@ catalyst is worse than silence because someone may trade on it. Mitigations:
    "disclaimer" that reads as advice cannot reach the page.
 
 **Rules 1–2 are requests a model can ignore; rule 3 is enforced in code.** That asymmetry is the
-known gap: a regex/keyword scan for un-sourced event language ("partnership", "ETF", "hack") is the
-obvious next hardening step. Theses for symbols not in the report are dropped (a hallucinated row
+known gap, and it is **observable in practice** — measured on identical prompts (2026-07-16):
+
+| | Gemini (primary) | Groq (fallback) |
+|---|---|---|
+| theses using the mandated "no clear catalyst identified" | **20/20** | **0/20** |
+| invented catalysts | none | none |
+| investment advice | none | none |
+| theses for symbols not in the report | 0 | 0 |
+| canonical disclaimer | ✅ enforced | ✅ enforced |
+
+Neither model fabricates — the important property holds on both. But Gemini states its own blind
+spot outright ("…has no clear catalyst identified"), while Groq silently omits the phrase and just
+describes the numbers. So the fallback is honest, merely less explicit about what it cannot know.
+This is exactly why Groq is the fallback and not the primary. A regex/keyword scan for un-sourced
+event language ("partnership", "ETF", "hack") is the obvious next hardening step. Theses for symbols not in the report are dropped (a hallucinated row
 would imply a ranking that never happened). An empty report skips the LLM entirely — the free tier is
 a budget, not a given. Locked by `llm.logic.test.mjs`.
 
