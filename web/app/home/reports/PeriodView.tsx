@@ -43,11 +43,14 @@ interface Report {
   reportDate: string;
   coins: RankedCoin[];
   binancePairs: RankedPair[];
+  /** Every field optional: the DB column defaults to `{}` and the read routes pass it through as
+   *  `?? {}`, so the full shape is a convention of the current writer, not a guarantee of the data.
+   *  Declaring it required would be a type that lies — and `.trending.length` would throw. */
   sentiment: {
-    fearGreed: { value: number; classification: string } | null;
-    trending: string[];
-    mostVisited: string[];
-    recentlyAdded: string[];
+    fearGreed?: { value: number; classification: string } | null;
+    trending?: string[];
+    mostVisited?: string[];
+    recentlyAdded?: string[];
   };
   analysis: {
     summary: string;
@@ -99,6 +102,9 @@ function ChangePill({ pct }: { pct: number | null }) {
   return (
     <span className={'gl-change-pill ' + (pos ? 'positive' : 'negative')}>
       <Icon name={pos ? 'trending-up' : 'trending-down'} size={11} />
+      {/* The '+' matters: MoversView's pill and the feed card's chips both show it, so omitting it
+          here made the same coin read "+12.3%" on the card and "12.3%" in the table. */}
+      {pos ? '+' : ''}
       {pct.toFixed(2)}%
     </span>
   );
@@ -182,6 +188,10 @@ export default function PeriodView({ period }: { period: Period }) {
   }
 
   const { coins, binancePairs, sentiment, analysis } = report;
+  // Defaulted once here rather than guarded at each use — sentiment is stored as jsonb and may
+  // legitimately be `{}` (see the type above).
+  const trending = sentiment.trending ?? [];
+  const mostVisited = sentiment.mostVisited ?? [];
 
   return (
     <div className="gl-page">
@@ -343,12 +353,10 @@ export default function PeriodView({ period }: { period: Period }) {
         </div>
       </div>
 
-      {(sentiment.trending.length > 0 || sentiment.mostVisited.length > 0) && (
+      {(trending.length > 0 || mostVisited.length > 0) && (
         <p className="rp-meta">
-          {sentiment.trending.length > 0 && <>Trending: {sentiment.trending.slice(0, 8).join(', ')}. </>}
-          {sentiment.mostVisited.length > 0 && (
-            <>Most visited: {sentiment.mostVisited.slice(0, 8).join(', ')}.</>
-          )}
+          {trending.length > 0 && <>Trending: {trending.slice(0, 8).join(', ')}. </>}
+          {mostVisited.length > 0 && <>Most visited: {mostVisited.slice(0, 8).join(', ')}.</>}
         </p>
       )}
 

@@ -17,7 +17,7 @@
 // USDT pairs clear the volume floor, so a weekly/monthly pass is ~5s — comfortably inside Vercel's
 // 60s Hobby limit, and ~174 request weight against Binance's 6,000/min budget.
 
-import type { Period, RankedPair } from './types';
+import { PERIOD_DAYS, type Period, type RankedPair } from './types';
 
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -159,8 +159,9 @@ export async function fetchBinanceMovers(period: Period): Promise<RankedPair[]> 
       quoteVolume: p.quoteVolume,
     }));
   } else {
-    const days = period === 'weekly' ? 7 : 30;
-    ranked = await withKlineChange(liquid.slice(0, KLINES_POOL), days);
+    // PERIOD_DAYS is the single definition of the window; inlining `7 : 30` here would be a second
+    // copy free to drift from it.
+    ranked = await withKlineChange(liquid.slice(0, KLINES_POOL), PERIOD_DAYS[period]);
   }
 
   return ranked

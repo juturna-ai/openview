@@ -576,3 +576,64 @@ Vault every 15s. Rotating it would have silently killed closed-app push alerts. 
 statement or key change against a shared backend, enumerate what ELSE lives there (tables, cron
 jobs, vault secrets, edge functions). "It's a new project, it's probably empty" is an assumption,
 and assumptions about blast radius are the expensive kind.
+
+## A per-project config that reads ${GLOBAL_VAR} is a global config wearing a disguise
+openvieweb/.mcp.json was local to this repo but resolved `--project-ref=${SUPABASE_PROJECT_REF}`
+from ~/.bashrc — where it's exported for a DIFFERENT product (UDG). So a local file silently
+produced global behaviour: this project's Supabase MCP read UDG's database for months. The user's
+reasonable reaction: "I never linked UDG to this token." They didn't — variable-name collision did.
+An audit found `~/projects/zenbot/.mcp.json` has the identical bug (its app uses
+`zwrjrolbjhcoesjautok`; its MCP silently reads UDG's ref), and it's worse there because zenbot's
+`.env.local` ALSO sets SUPABASE_PROJECT_REF — which looks like a fix but isn't: `.env.local` is read
+by Next.js at runtime, never by the shell, so `.mcp.json`'s `${...}` expansion never sees it.
+Lesson: `${VAR}` in a project config is only safe if that variable is unambiguously owned by that
+project. Generic names (SUPABASE_*, API_KEY, DATABASE_URL) exported in a shell profile WILL be
+inherited by every project that uses the same name. Prefer hardcoding the non-secret identifier
+per project (a Supabase ref is public — it's in the URL) and gitignoring the file if a credential
+must live beside it. When you find this class of bug, grep for OTHER instances before declaring it
+fixed — it is almost never a one-off, because configs get copy-pasted between projects.
+
+## MCP config has THREE layers — check all of them before blaming one
+Chasing "why is openvieweb's MCP on UDG's database", I found `.mcp.json` reading ${SUPABASE_PROJECT_REF}
+from ~/.bashrc and fixed it. That was a real bug — but NOT the one causing the symptom. The actual
+driver was a **user-level `supabase` entry in ~/.claude.json**, registered for every project and
+already hardcoded to Openview. A third copy sat in ~/.claude/settings.json (pointing at Fami),
+inert but looking authoritative. Lesson: MCP servers can be declared at user level (~/.claude.json
+mcpServers), per-project inside ~/.claude.json's `projects` blocks, AND in a repo's .mcp.json.
+Before concluding why a server points somewhere, enumerate all three AND check the running process
+(`tr '\0' ' ' < /proc/<pid>/cmdline`) — the process is the only ground truth. I stated the ~/.bashrc
+globals were driving my MCP; the process list proved otherwise. Say what you verified, not what you
+inferred.
+
+## A token on a command line is worse than a token in a file
+~/.claude.json's Fami block passed `--access-token sbp_...` in argv — visible to any process on the
+machine via `ps`, and to anything reading /proc. A gitignored config file at least has filesystem
+permissions. Lesson: secrets go in the `env` block, never argv. When auditing config, grep args for
+credential-shaped strings, not just the file for a key name.
+
+## An expensive endpoint with no auth is a bug even when nothing is "leaked"
+I shipped /api/reports/generate as a public POST. No data exposure, no injection — but one
+anonymous request triggered a 500-coin CMC pull, a 1.9MB Binance sweep, ~174 klines calls and a real
+LLM call: ~25s of someone else's money, repeatable by anyone who guessed a predictable Next.js
+route path. I'd reasoned "it's just a maintenance trigger" and reached for a rate limiter, which was
+the wrong instrument: the in-memory limiter is per-lambda-instance, so a concurrent burst on cold
+instances each gets a fresh budget. Lesson: classify endpoints by COST, not just by data
+sensitivity. If a route spends money or third-party quota, it needs a credential — a rate limit is a
+second layer, never the first. Same pipeline, same cost => same credential as the cron that calls it.
+
+## "Never cache the failure" can be a DoS amplifier
+preview/route.ts deliberately skipped caching an empty result so a transient upstream blip wouldn't
+stick for 3 hours. Sound instinct, wrong conclusion: it meant that while CMC/Binance were failing —
+exactly when the app is already struggling — EVERY request re-ran the full expensive build, with no
+cache to absorb them. The fix isn't don't-cache, it's cache-briefly (60s): retried promptly, but
+never unprotected in between. Lesson: when you exempt a case from a cache, ask what happens if an
+attacker can INDUCE that case. "Don't cache errors" plus "errors are inducible" equals an
+unthrottled expensive path.
+
+## Optimistic UI must roll back EVERY piece of state it changed
+DashboardView's react() set both `counts` and `mine` optimistically, but the network-failure catch
+rolled back only `counts`. Since react() early-returns on mine.has(emoji), one offline blip left the
+button permanently inert for the session — the count visibly reverted while the interaction stayed
+dead. Lesson: extract the rollback into a single function called from every failure path (non-2xx,
+network throw, AND an unparseable 2xx body), so it's impossible to undo half the update. If an
+optimistic update touches N pieces of state, the rollback must touch the same N.

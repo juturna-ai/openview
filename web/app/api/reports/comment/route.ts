@@ -30,12 +30,16 @@ export async function POST(req: Request) {
     );
   }
 
+  // `?? {}` because a body of literal `null` is valid JSON — req.json() resolves rather than throws,
+  // so the catch never fires and the field access below would throw an uncaught TypeError, turning
+  // a 400 into an opaque 500.
   let payload: { reportId?: unknown; nickname?: unknown; body?: unknown };
   try {
-    payload = await req.json();
+    payload = ((await req.json()) as Record<string, unknown> | null) ?? {};
   } catch {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
+  if (typeof payload !== 'object') payload = {};
 
   const reportId = typeof payload.reportId === 'string' ? payload.reportId : '';
   // Mirrors the DB's CHECK constraints. Validating here too isn't redundant: it turns an opaque

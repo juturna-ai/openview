@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildReport } from '../_lib/build';
+import { allow, clientIp, retryAfter } from '../_lib/rateLimit';
 import { isPeriod, type Period, type Report } from '../_lib/types';
 
 // Live report builder — computes a report on demand and returns it, with no database involved.
@@ -20,7 +21,22 @@ export const maxDuration = 60;
 
 const CACHE_TTL_MS = 3 * 60 * 60_000;
 
+/** A build that produced nothing is cached only briefly, so the next request retries soon —
+ *  but NOT not-at-all. Never caching an empty result meant a transient upstream failure (or an
+ *  induced one) left the period permanently uncached, and every subsequent request re-ran a full
+ *  CMC + Binance + LLM pass. That turned a bad upstream minute into an unbounded cost amplifier. */
+const EMPTY_TTL_MS = 60_000;
+
+/** Backstop against someone hammering the route to force repeated full builds. The cache and
+ *  single-flight already collapse the common case, but both are per-instance, and an empty build
+ *  used to bypass the cache entirely — so a hard ceiling is worth having. Generous enough that no
+ *  real user ever meets it (a normal visit is 1-2 requests, and hits are served from cache). */
+const RATE_LIMIT = 20;
+const RATE_WINDOW_MS = 60_000;
+
 const cache = new Map<Period, { at: number; report: Report }>();
+/** Marks periods whose last build came back empty, so the shorter TTL applies to them. */
+const emptyAt = new Map<Period, number>();
 
 /* Single-flight, same reasoning as app/api/market/cmc/route.ts: concurrent misses for the same
  * period share one pass instead of each triggering their own upstream sweep and LLM call. Cleared
@@ -30,11 +46,12 @@ const inflight = new Map<Period, Promise<Report>>();
 
 async function getReport(period: Period): Promise<Report> {
   const report = await buildReport(period);
-  // Don't cache a total wipeout — a transient upstream blip would otherwise stick for three hours.
-  // A report with no coins is exactly the case worth retrying on the next request.
-  if (report.coins.length > 0 || report.binancePairs.length > 0) {
-    cache.set(period, { at: Date.now(), report });
-  }
+  const empty = report.coins.length === 0 && report.binancePairs.length === 0;
+  // Cache either way — but an empty result expires in a minute rather than three hours, so a
+  // transient upstream blip is retried promptly without leaving the route unprotected in between.
+  cache.set(period, { at: Date.now(), report });
+  if (empty) emptyAt.set(period, Date.now());
+  else emptyAt.delete(period);
   return report;
 }
 
@@ -43,8 +60,18 @@ export async function GET(req: Request) {
   const period: Period = isPeriod(raw) ? raw : 'daily';
 
   const hit = cache.get(period);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
+  const ttl = emptyAt.has(period) ? EMPTY_TTL_MS : CACHE_TTL_MS;
+  if (hit && Date.now() - hit.at < ttl) {
     return NextResponse.json(hit.report);
+  }
+
+  // Only misses reach the limiter — a cache hit is nearly free and must never be throttled.
+  const ip = clientIp(req);
+  if (!allow(`preview:${ip}`, RATE_LIMIT, RATE_WINDOW_MS)) {
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { 'Retry-After': String(retryAfter(`preview:${ip}`)) } },
+    );
   }
 
   let job = inflight.get(period);

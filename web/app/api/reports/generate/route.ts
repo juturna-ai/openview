@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { buildAndSaveReport } from '../_lib/build';
+import { checkCronAuth } from '../_lib/cronAuth';
 import { allow, retryAfter } from '../_lib/rateLimit';
 import { isPeriod, type Period } from '../_lib/types';
 
@@ -11,10 +12,17 @@ import { isPeriod, type Period } from '../_lib/types';
 // refreshes the day's report rather than duplicating it, and it can't collide with the cron:
 // whichever runs last wins, which is the correct semantic for a manual refresh.
 //
-// ── Why it's throttled globally, not per-IP ──
-// Each call costs a 500-coin CMC listing, a 1.9 MB Binance sweep, up to ~174 klines calls and an
-// LLM round-trip. A per-IP limit would still let a handful of visitors drain the Gemini free tier
-// between them. This is a maintenance action with one legitimate user, so the budget is global.
+// ── Auth: same secret as the cron ──
+// This route triggers the single most expensive operation in the app — a 500-coin CMC listing, a
+// 1.9 MB Binance ticker, up to ~174 klines calls and an LLM round-trip, ~25s of work. It shipped
+// unauthenticated at first, which made it a public "burn my Gemini quota and hammer CMC from your
+// own IP" button for anyone who guessed a predictable Next.js route path. The in-memory throttle
+// below is NOT a substitute: it's per-lambda-instance, so a burst of concurrent requests landing on
+// cold instances each get their own fresh budget. Same pipeline, same cost ⇒ same credential as
+// /api/reports/cron.
+//
+// The throttle stays as a second layer: it's keyed globally per period (not per IP), because the
+// cost is borne by shared upstream quotas, not by the caller.
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,12 +32,28 @@ const WINDOW_MS = 5 * 60_000;
 const LIMIT = 1;
 
 export async function POST(req: Request) {
+  const auth = checkCronAuth(req.headers, process.env.CRON_SECRET);
+  if (auth === 'misconfigured') {
+    console.error(
+      '[reports/generate] CRON_SECRET contains a character that cannot be sent in an HTTP header ' +
+        '(non-latin-1). No caller can authenticate. Use an ASCII value, e.g. `openssl rand -hex 32`.',
+    );
+    return NextResponse.json({ ok: false, error: 'cron secret misconfigured' }, { status: 500 });
+  }
+  if (auth === 'unauthorized') {
+    return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
+  }
+
+  // `?? {}` because a body of literal `null` is valid JSON: req.json() resolves rather than throws,
+  // so the catch below never fires and the field access would throw an uncaught TypeError — an
+  // opaque 500 where a 400 belongs.
   let payload: { period?: unknown };
   try {
-    payload = await req.json();
+    payload = ((await req.json()) as { period?: unknown } | null) ?? {};
   } catch {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
+  if (typeof payload !== 'object') payload = {};
 
   const period: Period = isPeriod(payload.period) ? payload.period : 'daily';
 

@@ -98,25 +98,32 @@ function ReportCard({ report }: { report: FeedReport }) {
     // enforce against; the server's rate limit is the real bound).
     setCounts((c) => ({ ...c, [emoji]: (c[emoji] ?? 0) + 1 }));
     setMine((m) => new Set(m).add(emoji));
+
+    // Undo BOTH halves of the optimistic update. Rolling back only `counts` while leaving `mine`
+    // set would leave the button permanently inert — react() early-returns on mine.has(emoji) — so
+    // a single offline blip would silently cost the user that reaction for the rest of the session.
+    const rollback = () => {
+      setCounts((c) => ({ ...c, [emoji]: Math.max(0, (c[emoji] ?? 1) - 1) }));
+      setMine((m) => {
+        const n = new Set(m);
+        n.delete(emoji);
+        return n;
+      });
+    };
+
     try {
       const res = await fetch('/api/reports/react', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reportId: report.id, emoji }),
       });
-      const d = await res.json();
-      if (res.ok && typeof d.count === 'number') setCounts((c) => ({ ...c, [emoji]: d.count }));
-      else if (!res.ok) {
-        // Roll back so the count never claims something the server rejected.
-        setCounts((c) => ({ ...c, [emoji]: Math.max(0, (c[emoji] ?? 1) - 1) }));
-        setMine((m) => {
-          const n = new Set(m);
-          n.delete(emoji);
-          return n;
-        });
-      }
+      // A 2xx with an unparseable body is a failure too — don't let it reach the catch and get
+      // treated as a network error with a different rollback path.
+      const d = (await res.json().catch(() => null)) as { count?: number } | null;
+      if (res.ok && typeof d?.count === 'number') setCounts((c) => ({ ...c, [emoji]: d.count as number }));
+      else rollback();
     } catch {
-      setCounts((c) => ({ ...c, [emoji]: Math.max(0, (c[emoji] ?? 1) - 1) }));
+      rollback();
     }
   };
 

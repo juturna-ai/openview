@@ -48,7 +48,10 @@ export async function GET(req: Request) {
 
   const sp = new URL(req.url).searchParams;
   const rawPeriod = sp.get('period');
-  const rawLimit = Number(sp.get('limit'));
+  // Math.floor, not just clamp: `?limit=1.5` is finite and positive, so it would otherwise reach
+  // PostgREST verbatim as `limit=1.5`. Harmless today (PostgREST tolerates it) but no unsanitised
+  // caller value should ever land in a query string.
+  const rawLimit = Math.floor(Number(sp.get('limit')));
   const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, MAX_LIMIT) : 20;
 
   // Only a known period ever reaches the query string — never interpolate caller input into a

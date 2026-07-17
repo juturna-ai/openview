@@ -12,18 +12,9 @@ export const PERIODS: Period[] = ['daily', 'weekly', 'monthly'];
 export const isPeriod = (v: unknown): v is Period =>
   typeof v === 'string' && (PERIODS as string[]).includes(v);
 
-/** Which CMC percent-change field each period ranks on. Defined in gate.ts (which must stay free of
- *  runtime imports to remain testable under plain node) and re-exported here for convenience. */
-export { CHANGE_KEY } from './gate';
-
-/** How many daily candles back each period looks when deriving Binance change from klines. */
+/** How many daily candles back each period looks when deriving Binance change from klines.
+ *  binance.ts is the only consumer. */
 export const PERIOD_DAYS: Record<Period, number> = { daily: 1, weekly: 7, monthly: 30 };
-
-export const PERIOD_LABEL: Record<Period, string> = {
-  daily: 'Daily',
-  weekly: 'Weekly',
-  monthly: 'Monthly',
-};
 
 /** A coin that survived the quality gate, ranked by its period's change. */
 export interface RankedCoin {

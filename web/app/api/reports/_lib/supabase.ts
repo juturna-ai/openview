@@ -14,6 +14,27 @@ const url = () => process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 const anonKey = () => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
 const serviceKey = () => process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
+/**
+ * The only tables and functions this module may touch.
+ *
+ * This is not theatre. The service_role key bypasses RLS **entirely**, and this database is shared
+ * with the mobile app: `push_tokens`, `sync_state` and `push_alerts` hold real user data whose
+ * own `auth.uid() = user_id` policies are no defence against this key. Today every call site passes
+ * a hardcoded literal, so nothing can reach them — but that safety lives in the callers' discipline,
+ * not in this module. One future route threading a request param into `table` would be a
+ * cross-tenant write with no other guardrail. The cost of the allow-list is a thrown error on a
+ * typo; the cost of omitting it is someone's push tokens.
+ */
+const ALLOWED_TABLES = new Set(['reports', 'report_comments', 'report_reactions']);
+const ALLOWED_FUNCTIONS = new Set(['increment_reaction']);
+
+/** Throws rather than returns: a disallowed target is always a programming error, never input. */
+function assertTable(table: string) {
+  if (!ALLOWED_TABLES.has(table)) {
+    throw new Error(`refusing to touch table "${table}" — not in the Reports allow-list`);
+  }
+}
+
 /** True when reads are possible. Routes degrade to the live builder instead of failing. */
 export const canRead = (): boolean => Boolean(url() && anonKey());
 /** True when writes are possible (cron/comment/react). */
@@ -41,6 +62,7 @@ async function call(
 
 /** SELECT with the anon key. `query` is a PostgREST query string, e.g. `select=*&limit=1`. */
 export async function selectRows<T>(table: string, query: string): Promise<T[]> {
+  assertTable(table);
   const res = await call(`${table}?${query}`, { method: 'GET', key: anonKey() });
   if (!res.ok) throw new Error(`select ${table}: HTTP ${res.status}`);
   const rows = (await res.json()) as T[];
@@ -49,6 +71,7 @@ export async function selectRows<T>(table: string, query: string): Promise<T[]> 
 
 /** INSERT with the service-role key. */
 export async function insertRow(table: string, row: unknown): Promise<void> {
+  assertTable(table);
   const res = await call(table, {
     method: 'POST',
     key: serviceKey(),
@@ -66,6 +89,7 @@ export async function insertRow(table: string, row: unknown): Promise<void> {
  * a retry — or a manual re-generate — refreshes the existing row instead.
  */
 export async function upsertRow(table: string, row: unknown, onConflict: string): Promise<void> {
+  assertTable(table);
   const res = await call(`${table}?on_conflict=${onConflict}`, {
     method: 'POST',
     key: serviceKey(),
@@ -77,6 +101,9 @@ export async function upsertRow(table: string, row: unknown, onConflict: string)
 
 /** Call a Postgres function with the service-role key (used for the atomic reaction increment). */
 export async function rpc(fn: string, args: Record<string, unknown>): Promise<unknown> {
+  if (!ALLOWED_FUNCTIONS.has(fn)) {
+    throw new Error(`refusing to call function "${fn}" — not in the Reports allow-list`);
+  }
   const res = await call(`rpc/${fn}`, {
     method: 'POST',
     key: serviceKey(),
