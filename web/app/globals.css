@@ -1215,14 +1215,16 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   font-size: 14px;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s ease;
+  opacity: 0.45;
+  transition: background 0.15s ease, opacity 0.15s ease;
 }
-.nav-item:hover { background: var(--hover); }
+.nav-item:hover { background: var(--hover); opacity: 1; }
 .nav-item.active {
   background: var(--reach-accent-gradient);
   background-size: cover;
   background-repeat: no-repeat;
   color: #fff;
+  opacity: 1;
 }
 .nav-item.active:hover { filter: brightness(1.08); }
 .nav-icon { display: flex; align-items: center; }
@@ -1717,13 +1719,13 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
    stat cards below. */
 .wallet-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
 }
 .wallet-header-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.wallet-header-name-row { display: flex; align-items: center; gap: 8px; }
+.wallet-header-name-row { position: relative; display: flex; align-items: center; gap: 8px; }
 .wallet-header-avatar {
   display: inline-flex;
   align-items: center;
@@ -1732,34 +1734,74 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   height: 24px;
   border-radius: 50%;
   background: var(--hover);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
   flex-shrink: 0;
 }
 .wallet-header-name {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0;
+  padding: 2px 4px;
+  margin: -2px -4px;
   border: 0;
+  border-radius: 7px;
   background: transparent;
   color: var(--text);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.12s ease;
 }
-.wallet-header-name svg { color: var(--muted); opacity: 0; transition: opacity 0.12s ease; }
-.wallet-header-name:hover svg { opacity: 1; }
-.wallet-header-name-input {
-  padding: 2px 6px;
+.wallet-header-name:hover { background: var(--hover); }
+.wallet-header-name svg { color: var(--muted); }
+
+/* Portfolio switch / Edit / Duplicate / Remove menu. */
+.wallet-portfolio-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 220px;
+  padding: 6px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--bg);
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
+.wallet-portfolio-menu-section {
+  padding: 6px 10px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.wallet-portfolio-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+.wallet-portfolio-menu-item:hover:not(:disabled) { background: var(--hover); }
+.wallet-portfolio-menu-item:disabled { opacity: 0.4; cursor: default; }
+.wallet-portfolio-menu-item.active { background: var(--hover); }
+.wallet-portfolio-menu-item.danger { color: var(--red); }
+.wallet-portfolio-menu-item .wallet-portfolio-menu-label { flex: 1; }
+.wallet-portfolio-menu-emoji { font-size: 15px; line-height: 1; }
+.wallet-portfolio-menu-divider { height: 1px; margin: 4px 0; background: var(--border); }
 .wallet-header-total-row { display: flex; align-items: center; gap: 8px; }
 .wallet-header-total {
   font-size: 34px;
@@ -2758,7 +2800,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: var(--panel);
+  background: transparent;
   color: var(--text);
   font-family: inherit;
   font-size: 12px;
@@ -3809,7 +3851,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   flex-shrink: 0;
   display: inline-flex; align-items: center;
   padding: 6px 12px;
-  border: 1px solid var(--border); border-radius: 999px;
+  border: 1px solid transparent; border-radius: 999px;
   background: transparent; color: var(--muted);
   cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;
   transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
