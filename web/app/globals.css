@@ -2081,6 +2081,47 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wallet-action-btn:hover { background: var(--hover); color: var(--text); }
 .wallet-action-btn.delete:hover { background: rgba(239, 83, 80, 0.12); color: var(--red); }
 
+/* ── Assets / Transactions toggle (in the assets-card header) ── */
+.wallet-asset-tabs { display: flex; align-items: center; gap: 4px; }
+.wallet-asset-tab {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wallet-asset-tab:hover { color: var(--text); }
+.wallet-asset-tab.active { background: var(--hover); color: var(--text); }
+
+/* ── Transactions table ── */
+.wallet-tx-table .wallet-thead,
+.wallet-tx-table .wallet-trow {
+  grid-template-columns: 0.9fr 1.5fr 1.6fr 1fr 1.3fr 0.9fr 1.1fr 0.8fr;
+}
+.wallet-tx-table .wallet-thead .wtx-price,
+.wallet-tx-table .wallet-thead .wtx-fees,
+.wallet-tx-table .wallet-trow .wtx-price,
+.wallet-tx-table .wallet-trow .wtx-fees { text-align: right; justify-self: end; }
+.wtx-type { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.wtx-type-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(38, 161, 123, 0.14); color: var(--green);
+}
+.wtx-date { color: var(--muted); font-variant-numeric: tabular-nums; }
+.wtx-asset { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.wtx-price { font-variant-numeric: tabular-nums; }
+.wallet-trow .wtx-amount { display: flex; flex-direction: column; gap: 2px; }
+.wtx-amount-qty { font-weight: 600; font-variant-numeric: tabular-nums; }
+.wtx-amount-qty.profit { color: var(--green); }
+.wtx-amount-usd { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.wtx-fees { color: var(--muted); font-variant-numeric: tabular-nums; }
+.wtx-notes { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* ── Empty state ── */
 .wallet-empty {
   display: flex;
@@ -3660,6 +3701,8 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   border-radius: 7px;
   font-size: 13px;
 }
+/* Timeframe pills use the app's purple, not the site's TradingView blue --accent. */
+.wallet-period-row .wallet-history-tab.active { background: #7c3aed; color: #fff; }
 
 /* Panel */
 .wallet-panel { min-height: 210px; display: flex; flex-direction: column; gap: 8px; }

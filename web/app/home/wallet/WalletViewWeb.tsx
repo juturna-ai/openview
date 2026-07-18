@@ -386,6 +386,7 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
+  const [assetTab, setAssetTab] = useState<'assets' | 'transactions'>('assets');
 
   // localStorage is client-only; seed after mount so SSR and first paint agree.
   useEffect(() => {
@@ -533,6 +534,24 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
   }, [holdings, prices]);
 
   const circumference = 2 * Math.PI * 70;
+
+  // Transactions are derived from holdings: each holding records one purchase (amount + avg buy
+  // price + date + fee + notes), which is exactly one "Buy" row. A full buy/sell log would need its
+  // own store — this reflects the data we actually have, newest purchase first.
+  const transactions = useMemo(
+    () =>
+      holdings
+        .filter((h) => h.amount > 0)
+        .map((h) => ({
+          h,
+          when: h.purchased_at ?? 0,
+          price: h.avg_buy_price || 0,
+          cost: h.amount * (h.avg_buy_price || 0),
+          fee: h.fee_pct && h.avg_buy_price ? h.amount * h.avg_buy_price * (h.fee_pct / 100) : 0,
+        }))
+        .sort((a, b) => b.when - a.when),
+    [holdings],
+  );
 
   if (holdings.length === 0) {
     return (
@@ -684,15 +703,105 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
         )}
       </div>
 
-      {/* ── Assets table ── */}
+      {/* ── Assets / Transactions ── */}
       <div className="wallet-assets-card">
         <div className="wallet-assets-header">
-          <h3 className="wallet-section-title">Assets</h3>
+          <div className="wallet-asset-tabs">
+            <button
+              className={'wallet-asset-tab' + (assetTab === 'assets' ? ' active' : '')}
+              onClick={() => setAssetTab('assets')}
+            >
+              Assets
+            </button>
+            <button
+              className={'wallet-asset-tab' + (assetTab === 'transactions' ? ' active' : '')}
+              onClick={() => setAssetTab('transactions')}
+            >
+              Transactions
+            </button>
+          </div>
           <button className="btn-primary btn-sm" onClick={openAdd}>
             <Icon name="plus" size={15} /> Add Asset
           </button>
         </div>
 
+        {assetTab === 'transactions' ? (
+          <div className="wallet-table wallet-tx-table">
+            <div className="wallet-thead">
+              <span className="wtx-type">Type</span>
+              <span className="wtx-date">Date</span>
+              <span className="wtx-asset">Assets</span>
+              <span className="wtx-price">Price</span>
+              <span className="wtx-amount">Amount</span>
+              <span className="wtx-fees">Fees</span>
+              <span className="wtx-notes">Notes</span>
+              <span className="wt-actions">Actions</span>
+            </div>
+
+            {transactions.length === 0 ? (
+              <div className="wallet-history-empty">No transactions yet.</div>
+            ) : (
+              transactions.map(({ h, when, price, cost, fee }) => (
+                <div key={h.id} className="wallet-trow">
+                  <span className="wtx-type">
+                    <span className="wtx-type-badge">
+                      <Icon name="refresh-cw" size={14} />
+                    </span>
+                    Buy
+                  </span>
+
+                  <span className="wtx-date">
+                    {when
+                      ? new Date(when).toLocaleString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })
+                      : '—'}
+                  </span>
+
+                  <span className="wtx-asset">
+                    <AssetIcon symbol={h.symbol} assetType={h.asset_type} size={26} />
+                    <span className="wt-name-text">{h.name}</span>
+                    <span className="wt-sym-text">{h.symbol}</span>
+                  </span>
+
+                  <span className="wtx-price">{price > 0 ? fmtPrice(price) : '—'}</span>
+
+                  <span className="wtx-amount">
+                    <span className="wtx-amount-qty profit">
+                      +{h.amount.toLocaleString(undefined, { maximumFractionDigits: 8 })} {h.symbol}
+                    </span>
+                    <span className="wtx-amount-usd">{cost > 0 ? fmtUsd(cost) : '—'}</span>
+                  </span>
+
+                  <span className="wtx-fees">{fee > 0 ? fmtUsd(fee) : '--'}</span>
+
+                  <span className="wtx-notes">{h.notes ? h.notes : '--'}</span>
+
+                  <span className="wt-actions">
+                    <button
+                      className="wallet-action-btn"
+                      onClick={() => openEdit(h)}
+                      aria-label={`Edit ${h.name} transaction`}
+                    >
+                      <Icon name="edit" size={15} />
+                    </button>
+                    <button
+                      className="wallet-action-btn delete"
+                      onClick={() => handleDelete(h)}
+                      aria-label={`Remove ${h.name} transaction`}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
         <div className="wallet-table">
           <div className="wallet-thead">
             <span className="wt-name">Name</span>
@@ -789,6 +898,7 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
             );
           })}
         </div>
+        )}
       </div>
 
       {modalOpen && (

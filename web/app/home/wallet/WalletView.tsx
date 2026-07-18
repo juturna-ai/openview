@@ -163,11 +163,21 @@ function ValueChart({
       if (v >= 1e3) return `$${(v / 1e3).toFixed(2)}K`;
       return `$${v.toFixed(0)}`;
     };
-    // Skip the extreme ticks (the padded min/max) so labels don't clip the box edges.
-    const yTicks = [0.2, 0.45, 0.7, 0.95].map((f) => {
-      const v = min + (max - min) * f;
-      return { y: y(v), label: fmtAxis(v) };
-    });
+    // "Nice" ticks: round the axis to human-friendly steps (…, 10K, 20K, 25K, 50K …) instead of the
+    // raw padded fractions, which produced ugly values like $257.20K / $256.46K bunched together.
+    // Aim for ~4 gridlines, snap the step to a 1/2/2.5/5 × 10ⁿ grid, then emit every round multiple
+    // that falls inside the visible [min, max] window.
+    const niceStep = (raw: number) => {
+      const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+      const norm = raw / pow;
+      const step = norm >= 5 ? 5 : norm >= 2.5 ? 2.5 : norm >= 2 ? 2 : norm >= 1 ? 1 : 0.5;
+      return step * pow;
+    };
+    const step = niceStep((max - min) / 4) || 1;
+    const yTicks: { y: number; label: string }[] = [];
+    for (let v = Math.ceil(min / step) * step; v <= max; v += step) {
+      yTicks.push({ y: y(v), label: fmtAxis(v) });
+    }
     return { W, H, pad, innerW, innerH, line, area, color, yTicks };
   }, [data, size]);
 
@@ -835,9 +845,6 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
               </div>
             ))
           )}
-          <button className="wallet-tx-fab" onClick={openAdd} aria-label="New transaction">
-            <Icon name="plus" size={24} />
-          </button>
         </div>
       ) : (
       <>
