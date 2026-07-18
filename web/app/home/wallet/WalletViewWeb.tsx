@@ -47,6 +47,18 @@ const HISTORY_PERIODS: { label: string; hours: number | null }[] = [
   { label: 'All', hours: null },
 ];
 
+// Transaction-type filter. Every derived transaction is a "Buy" (holdings record purchases only), so
+// Sell / Transfer In / Transfer Out correctly match nothing until a real buy/sell log exists — the
+// options are shown to mirror the CoinMarketCap UI and stay ready for that store.
+type TxType = 'all' | 'buy' | 'sell' | 'transfer-in' | 'transfer-out';
+const TX_TYPES: { key: TxType; label: string; icon: string }[] = [
+  { key: 'all', label: 'All Types', icon: 'grid' },
+  { key: 'buy', label: 'Buy', icon: 'trending-up' },
+  { key: 'sell', label: 'Sell', icon: 'trending-down' },
+  { key: 'transfer-in', label: 'Transfer In', icon: 'trending-up' },
+  { key: 'transfer-out', label: 'Transfer Out', icon: 'trending-down' },
+];
+
 // ── History chart ──
 
 function PortfolioHistory({
@@ -378,6 +390,65 @@ function WithHint({
   );
 }
 
+// ── Transactions filter dropdown (menu button that closes on outside-click / Escape) ──
+
+function FilterDropdown({
+  label,
+  leadingIcon,
+  options,
+}: {
+  label: string;
+  leadingIcon: string;
+  options: { key: string; label: string; icon?: string; selected: boolean; onSelect: () => void }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="wallet-tx-filter" ref={wrapRef}>
+      <button className="wallet-tx-filter-btn" onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open}>
+        <Icon name={leadingIcon} size={15} />
+        <span>{label}</span>
+        <Icon name="chevron-down" size={15} />
+      </button>
+      {open && (
+        <div className="wallet-tx-filter-menu" role="menu">
+          {options.map((o) => (
+            <button
+              key={o.key}
+              className={'wallet-tx-filter-item' + (o.selected ? ' active' : '')}
+              onClick={() => {
+                o.onSelect();
+                setOpen(false);
+              }}
+              role="menuitemradio"
+              aria-checked={o.selected}
+            >
+              {o.icon && <Icon name={o.icon} size={15} />}
+              <span className="wallet-tx-filter-item-label">{o.label}</span>
+              {o.selected && <Icon name="check" size={15} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Portfolio header (name + total + 24h change on the left, actions on the right) ──
 
 function PortfolioHeader({
@@ -387,7 +458,7 @@ function PortfolioHeader({
   onCommitName,
   onCancelRename,
   totalValue,
-  day24h,
+  change,
   hidden,
   onToggleHide,
   onAdd,
@@ -399,7 +470,7 @@ function PortfolioHeader({
   onCommitName: (value: string) => void;
   onCancelRename: () => void;
   totalValue: number;
-  day24h: { delta: number; pct: number } | null;
+  change: { delta: number; pct: number; label: string } | null;
   hidden: boolean;
   onToggleHide: () => void;
   onAdd: () => void;
@@ -407,7 +478,7 @@ function PortfolioHeader({
 }) {
   // First letter of the name, as a fallback avatar (no user-profile system in the web wallet).
   const initial = name.trim().charAt(0).toUpperCase() || 'P';
-  const up = day24h ? day24h.delta >= 0 : true;
+  const up = change ? change.delta >= 0 : true;
 
   return (
     <div className="wallet-header">
@@ -452,14 +523,16 @@ function PortfolioHeader({
           </button>
         </div>
 
-        {!hidden && day24h && (
+        {!hidden && change && (
           <div className={'wallet-header-change ' + (up ? 'profit' : 'loss')}>
             <span>
               {up ? '+' : '-'}
-              {fmtUsd(Math.abs(day24h.delta))}
+              {fmtUsd(Math.abs(change.delta))}
             </span>
             <Icon name={up ? 'trending-up' : 'trending-down'} size={14} />
-            <span>{Math.abs(day24h.pct).toFixed(2)}% (24h)</span>
+            <span>
+              {Math.abs(change.pct).toFixed(2)}% ({change.label})
+            </span>
           </div>
         )}
       </div>
@@ -491,6 +564,10 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
   const [assetTab, setAssetTab] = useState<'assets' | 'transactions'>('assets');
+  // Transactions-tab filters: by type, by coin, and a free-text search over name/symbol/notes.
+  const [txType, setTxType] = useState<TxType>('all');
+  const [txCoin, setTxCoin] = useState<string>('all');
+  const [txSearch, setTxSearch] = useState('');
   // Portfolio header: editable name + a hide-values toggle, both persisted (name to localStorage,
   // hide kept per-session).
   const [name, setName] = useState('My Portfolio');
@@ -609,12 +686,15 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
   const totalPnL = totalValue - totalCost;
   const totalPnLPct = totalCost > 0 ? (totalPnL / totalCost) * 100 : 0;
 
-  // 24h change for the header, from the snapshot nearest 24h ago. Null until enough history exists.
+  // Header change line: prefer the 24h delta (from the snapshot nearest 24h ago), but until that
+  // much history exists fall back to all-time P&L so the change area always shows something.
   const dayAgo = valueAgo(snapshots, 24);
-  const day24h =
+  const headerChange =
     dayAgo !== null && dayAgo > 0
-      ? { delta: totalValue - dayAgo, pct: ((totalValue - dayAgo) / dayAgo) * 100 }
-      : null;
+      ? { delta: totalValue - dayAgo, pct: ((totalValue - dayAgo) / dayAgo) * 100, label: '24h' }
+      : totalCost > 0
+        ? { delta: totalPnL, pct: totalPnLPct, label: 'all-time' }
+        : null;
   const money = (n: number) => (hidden ? '••••••' : fmtUsd(n));
 
   // Only holdings with both a cost basis and a live price can have a meaningful return.
@@ -676,6 +756,30 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
     [holdings],
   );
 
+  // Distinct coins present in the transaction list, for the coin filter.
+  const txCoins = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const t of transactions) if (!seen.has(t.h.symbol)) seen.set(t.h.symbol, t.h.name);
+    return [...seen.entries()].map(([symbol, name]) => ({ symbol, name }));
+  }, [transactions]);
+
+  const filteredTx = useMemo(() => {
+    const q = txSearch.trim().toLowerCase();
+    return transactions.filter(({ h }) => {
+      // Every derived row is a Buy; 'all'/'buy' pass, the rest match nothing.
+      if (txType !== 'all' && txType !== 'buy') return false;
+      if (txCoin !== 'all' && h.symbol !== txCoin) return false;
+      if (
+        q &&
+        !h.name.toLowerCase().includes(q) &&
+        !h.symbol.toLowerCase().includes(q) &&
+        !(h.notes ?? '').toLowerCase().includes(q)
+      )
+        return false;
+      return true;
+    });
+  }, [transactions, txType, txCoin, txSearch]);
+
   if (holdings.length === 0) {
     return (
       <div className="wallet-view">
@@ -686,7 +790,7 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
           onCommitName={commitName}
           onCancelRename={() => setEditingName(false)}
           totalValue={0}
-          day24h={null}
+          change={null}
           hidden={hidden}
           onToggleHide={() => setHidden((v) => !v)}
           onAdd={openAdd}
@@ -725,12 +829,71 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
         onCommitName={commitName}
         onCancelRename={() => setEditingName(false)}
         totalValue={totalValue}
-        day24h={day24h}
+        change={headerChange}
         hidden={hidden}
         onToggleHide={() => setHidden((v) => !v)}
         onAdd={openAdd}
         money={money}
       />
+
+      {/* ── Charts ── */}
+      <div className="wallet-charts-row">
+        <PortfolioHistory snapshots={snapshots} liveValue={totalValue} />
+
+        {segments.length > 0 && (
+          <WithHint hint="allocation" className="wallet-allocation-card">
+            <h3 className="wallet-section-title">Allocation</h3>
+            <div className="wallet-alloc-body">
+              <div className="wallet-donut-wrap">
+                <svg
+                  className="wallet-donut"
+                  viewBox="0 0 200 200"
+                  role="img"
+                  aria-label="Allocation by asset"
+                >
+                  {/* -90° so the first segment starts at 12 o'clock rather than 3 o'clock. */}
+                  <g transform="rotate(-90 100 100)">
+                    <circle
+                      cx="100"
+                      cy="100"
+                      r="70"
+                      fill="none"
+                      stroke="var(--border)"
+                      strokeWidth="24"
+                      opacity="0.25"
+                    />
+                    {segments.map((s) => (
+                      <circle
+                        key={s.symbol}
+                        cx="100"
+                        cy="100"
+                        r="70"
+                        fill="none"
+                        stroke={s.color}
+                        strokeWidth="24"
+                        strokeDasharray={`${s.dashLen} ${circumference - s.dashLen}`}
+                        strokeDashoffset={-s.offset}
+                      />
+                    ))}
+                  </g>
+                </svg>
+                <div className="wallet-donut-center">
+                  <span className="wallet-donut-total">{fmtUsd(totalValue, 0)}</span>
+                </div>
+              </div>
+              <div className="wallet-alloc-legend">
+                {segments.map((s) => (
+                  <div key={s.symbol} className="wallet-legend-row">
+                    <span className="wallet-legend-dot" style={{ backgroundColor: s.color }} />
+                    <span className="wallet-legend-sym">{s.symbol}</span>
+                    <span className="wallet-legend-pct">{(s.pct * 100).toFixed(2)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </WithHint>
+        )}
+      </div>
 
       {/* ── Stat cards ── */}
       <div className="wallet-stats-row">
@@ -794,65 +957,6 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
         </WithHint>
       </div>
 
-      {/* ── Charts ── */}
-      <div className="wallet-charts-row">
-        <PortfolioHistory snapshots={snapshots} liveValue={totalValue} />
-
-        {segments.length > 0 && (
-          <WithHint hint="allocation" className="wallet-allocation-card">
-            <h3 className="wallet-section-title">Allocation</h3>
-            <div className="wallet-alloc-body">
-              <div className="wallet-donut-wrap">
-                <svg
-                  className="wallet-donut"
-                  viewBox="0 0 200 200"
-                  role="img"
-                  aria-label="Allocation by asset"
-                >
-                  {/* -90° so the first segment starts at 12 o'clock rather than 3 o'clock. */}
-                  <g transform="rotate(-90 100 100)">
-                    <circle
-                      cx="100"
-                      cy="100"
-                      r="70"
-                      fill="none"
-                      stroke="var(--border)"
-                      strokeWidth="24"
-                      opacity="0.25"
-                    />
-                    {segments.map((s) => (
-                      <circle
-                        key={s.symbol}
-                        cx="100"
-                        cy="100"
-                        r="70"
-                        fill="none"
-                        stroke={s.color}
-                        strokeWidth="24"
-                        strokeDasharray={`${s.dashLen} ${circumference - s.dashLen}`}
-                        strokeDashoffset={-s.offset}
-                      />
-                    ))}
-                  </g>
-                </svg>
-                <div className="wallet-donut-center">
-                  <span className="wallet-donut-total">{fmtUsd(totalValue, 0)}</span>
-                </div>
-              </div>
-              <div className="wallet-alloc-legend">
-                {segments.map((s) => (
-                  <div key={s.symbol} className="wallet-legend-row">
-                    <span className="wallet-legend-dot" style={{ backgroundColor: s.color }} />
-                    <span className="wallet-legend-sym">{s.symbol}</span>
-                    <span className="wallet-legend-pct">{(s.pct * 100).toFixed(2)}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </WithHint>
-        )}
-      </div>
-
       {/* ── Assets / Transactions ── */}
       <div className="wallet-assets-card">
         <div className="wallet-assets-header">
@@ -875,6 +979,45 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
           </button>
         </div>
 
+        {assetTab === 'transactions' && (
+          <div className="wallet-tx-filters">
+            <FilterDropdown
+              label={TX_TYPES.find((t) => t.key === txType)?.label ?? 'All Types'}
+              leadingIcon={TX_TYPES.find((t) => t.key === txType)?.icon ?? 'grid'}
+              options={TX_TYPES.map((t) => ({
+                key: t.key,
+                label: t.label,
+                icon: t.icon,
+                selected: txType === t.key,
+                onSelect: () => setTxType(t.key),
+              }))}
+            />
+            <FilterDropdown
+              label={txCoin === 'all' ? 'All Coins' : txCoin}
+              leadingIcon="grid"
+              options={[
+                { key: 'all', label: 'All Coins', selected: txCoin === 'all', onSelect: () => setTxCoin('all') },
+                ...txCoins.map((c) => ({
+                  key: c.symbol,
+                  label: c.symbol,
+                  selected: txCoin === c.symbol,
+                  onSelect: () => setTxCoin(c.symbol),
+                })),
+              ]}
+            />
+            <div className="wallet-tx-search">
+              <Icon name="search" size={15} />
+              <input
+                type="text"
+                placeholder="Search"
+                value={txSearch}
+                onChange={(e) => setTxSearch(e.target.value)}
+                aria-label="Search transactions"
+              />
+            </div>
+          </div>
+        )}
+
         {assetTab === 'transactions' ? (
           <div className="wallet-table wallet-tx-table">
             <div className="wallet-thead">
@@ -888,10 +1031,12 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
               <span className="wt-actions">Actions</span>
             </div>
 
-            {transactions.length === 0 ? (
-              <div className="wallet-history-empty">No transactions yet.</div>
+            {filteredTx.length === 0 ? (
+              <div className="wallet-history-empty">
+                {transactions.length === 0 ? 'No transactions yet.' : 'No transactions match these filters.'}
+              </div>
             ) : (
-              transactions.map(({ h, when, price, cost, fee }) => (
+              filteredTx.map(({ h, when, price, cost, fee }) => (
                 <div key={h.id} className="wallet-trow">
                   <span className="wtx-type">
                     <span className="wtx-type-badge">
