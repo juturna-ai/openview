@@ -14,8 +14,10 @@ import {
   recordSnapshot,
   type Snapshot,
   updateHolding,
+  valueAgo,
 } from './holdings';
 import { Icon } from './icons';
+import { loadWalletName, saveWalletName } from './walletName';
 
 // Portfolio view — ported from Reach's WalletView.jsx.
 //
@@ -376,6 +378,108 @@ function WithHint({
   );
 }
 
+// ── Portfolio header (name + total + 24h change on the left, actions on the right) ──
+
+function PortfolioHeader({
+  name,
+  editingName,
+  onStartRename,
+  onCommitName,
+  onCancelRename,
+  totalValue,
+  day24h,
+  hidden,
+  onToggleHide,
+  onAdd,
+  money,
+}: {
+  name: string;
+  editingName: boolean;
+  onStartRename: () => void;
+  onCommitName: (value: string) => void;
+  onCancelRename: () => void;
+  totalValue: number;
+  day24h: { delta: number; pct: number } | null;
+  hidden: boolean;
+  onToggleHide: () => void;
+  onAdd: () => void;
+  money: (n: number) => string;
+}) {
+  // First letter of the name, as a fallback avatar (no user-profile system in the web wallet).
+  const initial = name.trim().charAt(0).toUpperCase() || 'P';
+  const up = day24h ? day24h.delta >= 0 : true;
+
+  return (
+    <div className="wallet-header">
+      <div className="wallet-header-main">
+        <div className="wallet-header-name-row">
+          <span className="wallet-header-avatar" aria-hidden="true">
+            {initial}
+          </span>
+          {editingName ? (
+            <input
+              className="wallet-header-name-input"
+              defaultValue={name}
+              autoFocus
+              onBlur={(e) => onCommitName(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onCommitName(e.currentTarget.value);
+                if (e.key === 'Escape') onCancelRename();
+              }}
+              aria-label="Portfolio name"
+            />
+          ) : (
+            <button
+              className="wallet-header-name"
+              onClick={onStartRename}
+              title="Rename portfolio"
+            >
+              {name}
+              <Icon name="edit" size={13} />
+            </button>
+          )}
+        </div>
+
+        <div className="wallet-header-total-row">
+          <span className="wallet-header-total">{hidden ? '••••••' : money(totalValue)}</span>
+          <button
+            className="wallet-eye-btn"
+            onClick={onToggleHide}
+            aria-label={hidden ? 'Show value' : 'Hide value'}
+            aria-pressed={hidden}
+          >
+            <Icon name={hidden ? 'eye-off' : 'eye'} size={16} />
+          </button>
+        </div>
+
+        {!hidden && day24h && (
+          <div className={'wallet-header-change ' + (up ? 'profit' : 'loss')}>
+            <span>
+              {up ? '+' : '-'}
+              {fmtUsd(Math.abs(day24h.delta))}
+            </span>
+            <Icon name={up ? 'trending-up' : 'trending-down'} size={14} />
+            <span>{Math.abs(day24h.pct).toFixed(2)}% (24h)</span>
+          </div>
+        )}
+      </div>
+
+      <div className="wallet-header-actions">
+        <button className="btn-primary" onClick={onAdd}>
+          <Icon name="plus" size={16} /> Add Transaction
+        </button>
+        {/* Export and ⋯ are visual-only for now — no CSV/menu wired yet. */}
+        <button className="wallet-header-btn" type="button" aria-label="Export" disabled>
+          <Icon name="download" size={15} /> Export
+        </button>
+        <button className="wallet-header-btn wallet-header-btn-icon" type="button" aria-label="More" disabled>
+          <Icon name="more-horizontal" size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main view ──
 
 export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?: number }) {
@@ -387,12 +491,23 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
   const [assetTab, setAssetTab] = useState<'assets' | 'transactions'>('assets');
+  // Portfolio header: editable name + a hide-values toggle, both persisted (name to localStorage,
+  // hide kept per-session).
+  const [name, setName] = useState('My Portfolio');
+  const [editingName, setEditingName] = useState(false);
+  const [hidden, setHidden] = useState(false);
 
   // localStorage is client-only; seed after mount so SSR and first paint agree.
   useEffect(() => {
     setHoldings(loadHoldings());
     setSnapshots(loadSnapshots());
+    setName(loadWalletName());
   }, []);
+
+  const commitName = (value: string) => {
+    setName(saveWalletName(value));
+    setEditingName(false);
+  };
 
   // The sidebar's Add Asset button bumps a counter rather than calling in directly (same pattern as
   // JournalShell's New Trade); opening the modal is this component's business.
@@ -494,6 +609,14 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
   const totalPnL = totalValue - totalCost;
   const totalPnLPct = totalCost > 0 ? (totalPnL / totalCost) * 100 : 0;
 
+  // 24h change for the header, from the snapshot nearest 24h ago. Null until enough history exists.
+  const dayAgo = valueAgo(snapshots, 24);
+  const day24h =
+    dayAgo !== null && dayAgo > 0
+      ? { delta: totalValue - dayAgo, pct: ((totalValue - dayAgo) / dayAgo) * 100 }
+      : null;
+  const money = (n: number) => (hidden ? '••••••' : fmtUsd(n));
+
   // Only holdings with both a cost basis and a live price can have a meaningful return.
   const perf = holdings
     .filter((h) => h.avg_buy_price > 0 && (prices[h.symbol]?.price ?? 0) > 0)
@@ -556,6 +679,19 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
   if (holdings.length === 0) {
     return (
       <div className="wallet-view">
+        <PortfolioHeader
+          name={name}
+          editingName={editingName}
+          onStartRename={() => setEditingName(true)}
+          onCommitName={commitName}
+          onCancelRename={() => setEditingName(false)}
+          totalValue={0}
+          day24h={null}
+          hidden={hidden}
+          onToggleHide={() => setHidden((v) => !v)}
+          onAdd={openAdd}
+          money={money}
+        />
         <div className="wallet-empty">
           <span className="wallet-empty-icon">
             <Icon name="box" size={44} />
@@ -582,6 +718,20 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
 
   return (
     <div className="wallet-view">
+      <PortfolioHeader
+        name={name}
+        editingName={editingName}
+        onStartRename={() => setEditingName(true)}
+        onCommitName={commitName}
+        onCancelRename={() => setEditingName(false)}
+        totalValue={totalValue}
+        day24h={day24h}
+        hidden={hidden}
+        onToggleHide={() => setHidden((v) => !v)}
+        onAdd={openAdd}
+        money={money}
+      />
+
       {/* ── Stat cards ── */}
       <div className="wallet-stats-row">
         <WithHint hint="all-time-profit" className="wallet-stat-card">

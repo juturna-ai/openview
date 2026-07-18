@@ -1712,16 +1712,62 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wallet-view { display: flex; flex-direction: column; gap: 16px; }
 
 /* ── Portfolio header ──
-   The headline total, as on the phone-app reference: value first, deltas under it. No border/panel
-   — it reads as page-level content, not another card competing with the stat cards below. */
-.wallet-header { display: flex; flex-direction: column; gap: 6px; }
-.wallet-header-main { display: flex; align-items: center; gap: 10px; }
-.wallet-total {
+   Name + headline total + 24h change on the left; actions (Add Transaction / Export / ⋯) on the
+   right. No border/panel — it reads as page-level content, not another card competing with the
+   stat cards below. */
+.wallet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.wallet-header-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.wallet-header-name-row { display: flex; align-items: center; gap: 8px; }
+.wallet-header-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.wallet-header-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wallet-header-name svg { color: var(--muted); opacity: 0; transition: opacity 0.12s ease; }
+.wallet-header-name:hover svg { opacity: 1; }
+.wallet-header-name-input {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.wallet-header-total-row { display: flex; align-items: center; gap: 8px; }
+.wallet-header-total {
   font-size: 34px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  line-height: 1.1;
 }
 .wallet-eye-btn {
   display: inline-flex;
@@ -1736,24 +1782,34 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   transition: color 0.12s ease, background 0.12s ease;
 }
 .wallet-eye-btn:hover { color: var(--text); background: var(--hover); }
-/* Pushed to the far end so the total and the action don't crowd each other. */
-.wallet-header-add { margin-left: auto; }
-.wallet-header-changes { display: flex; flex-direction: column; gap: 2px; }
-.wallet-change-row {
+.wallet-header-change {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   font-size: 13px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.wallet-change-label { color: var(--muted); }
-.wallet-change-val { font-weight: 600; }
-.wallet-change-val.profit,
-.wallet-change-pct.profit { color: var(--green); }
-.wallet-change-val.loss,
-.wallet-change-pct.loss { color: var(--red); }
-.wallet-change-pct { color: var(--muted); }
-.wallet-change-none { color: var(--muted); }
+.wallet-header-change.profit { color: var(--green); }
+.wallet-header-change.loss { color: var(--red); }
+.wallet-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.wallet-header-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.wallet-header-btn:hover:not(:disabled) { background: var(--hover); }
+.wallet-header-btn:disabled { opacity: 0.55; cursor: default; }
+.wallet-header-btn-icon { padding: 8px; }
 
 /* ── Asset icon ── */
 .wallet-asset-icon {
@@ -3643,9 +3699,9 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wallet-cmc-add {
   margin-left: auto; display: inline-flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; border: 0; border-radius: 10px;
-  background: var(--hover); color: var(--text); cursor: pointer;
+  background: transparent; color: var(--text); cursor: pointer;
 }
-.wallet-cmc-add:hover { background: var(--border); }
+.wallet-cmc-add:hover { background: var(--hover); }
 .wallet-cmc-changes { display: flex; flex-direction: column; gap: 2px; }
 .wallet-cmc-change {
   display: flex; align-items: center; gap: 6px; font-size: 13px; font-variant-numeric: tabular-nums;
@@ -3657,27 +3713,26 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 
 /* Chips */
 .wallet-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
-/* Match the leaderboard asset-class pills (.gl-class-tabs .gl-class-tab): rounded, bordered,
-   transparent idle, dark-purple sidebar accent when active. */
+/* Idle chips blend into the background (no grey border/fill); the active chip is the app's
+   solid purple #4E3470 — the exact colour of the phone app's "Create alert" button (theme.accent). */
 .wallet-chip {
   flex-shrink: 0;
   display: inline-flex; align-items: center;
   padding: 6px 12px;
-  border: 1px solid var(--border); border-radius: 999px;
+  border: 1px solid transparent; border-radius: 999px;
   background: transparent; color: var(--muted);
   cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;
   transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 .wallet-chip:hover {
-  background: rgba(124, 92, 191, 0.10);
-  border-color: #7c5cbf;
-  color: #b79cff;
+  background: rgba(78, 52, 112, 0.20);
+  color: var(--text);
 }
 .wallet-chip.active,
 .wallet-chip.active:hover {
-  border-color: #7c5cbf;
-  background: rgba(124, 92, 191, 0.14);
-  color: #b79cff;
+  border-color: #4E3470;
+  background: #4E3470;
+  color: #fff;
 }
 .wallet-chip-analyze {
   display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
@@ -3701,8 +3756,8 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   border-radius: 7px;
   font-size: 13px;
 }
-/* Timeframe pills use the app's purple, not the site's TradingView blue --accent. */
-.wallet-period-row .wallet-history-tab.active { background: #7c3aed; color: #fff; }
+/* Timeframe pills use the app's purple (theme.accent / "Create alert"), not the site's blue --accent. */
+.wallet-period-row .wallet-history-tab.active { background: #4E3470; color: #fff; }
 
 /* Panel */
 .wallet-panel { min-height: 210px; display: flex; flex-direction: column; gap: 8px; }
