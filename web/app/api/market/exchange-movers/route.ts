@@ -24,10 +24,10 @@ export const dynamic = 'force-dynamic';
 const UPSTREAM_TIMEOUT_MS = 10_000;
 const CACHE_TTL_MS = 60_000;
 
-// api.bybit.com geo-blocks US datacenter IPs (Vercel's default region), returning nothing — which
-// left the Bybit tab permanently empty in production. api.bytick.com is Bybit's official mirror with
-// the identical /v5/* API, reachable from those IPs.
-const BYBIT_HOST = 'https://api.bytick.com';
+// Bybit CloudFront country-blocks US IPs (403) on every host — api.bybit.com, api.bytick.com and
+// api.bybit.nl alike. The fix is running this function from a non-US region (see web/vercel.json
+// `regions`), not swapping the host, so the canonical host is used.
+const BYBIT_HOST = 'https://api.bybit.com';
 
 /** One normalised ticker row. `volume` is 24h quote volume in dollars. */
 export interface ExchangeRow {
