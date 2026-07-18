@@ -88,12 +88,15 @@ function ValueChart({
   snapshots,
   liveValue,
   period,
+  onHover,
 }: {
   snapshots: Snapshot[];
   liveValue: number;
   period: (typeof PERIODS)[number];
+  onHover?: (value: number | null) => void;
 }) {
   const { ref, size } = useChartSize();
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const data = useMemo(() => {
     const now = Date.now();
@@ -178,8 +181,27 @@ function ValueChart({
     for (let v = Math.ceil(min / step) * step; v <= max; v += step) {
       yTicks.push({ y: y(v), label: fmtAxis(v) });
     }
-    return { W, H, pad, innerW, innerH, line, area, color, yTicks };
+    // Screen position of each snapshot so the hover layer can hit-test without redoing the scales.
+    const points = data.map((d) => ({ x: x(d.t), y: y(d.value), value: d.value }));
+    return { W, H, pad, innerW, innerH, line, area, color, yTicks, points };
   }, [data, size]);
+
+  // Nearest snapshot to the pointer's x; reports its value up so the header total can follow.
+  const handleMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!chart) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * chart.W;
+    let nearest = 0;
+    let best = Infinity;
+    for (let i = 0; i < chart.points.length; i++) {
+      const d = Math.abs(chart.points[i].x - px);
+      if (d < best) { best = d; nearest = i; }
+    }
+    setHoverIdx(nearest);
+    onHover?.(chart.points[nearest].value);
+  };
+  const clearHover = () => { setHoverIdx(null); onHover?.(null); };
+  const hovered = chart && hoverIdx !== null ? chart.points[hoverIdx] : null;
 
   return (
     <div className="wallet-chart-box" ref={ref}>
@@ -196,6 +218,10 @@ function ValueChart({
             viewBox={`0 0 ${chart.W} ${chart.H}`}
             role="img"
             aria-label="Portfolio value over time"
+            onPointerMove={handleMove}
+            onPointerDown={handleMove}
+            onPointerLeave={clearHover}
+            onPointerUp={clearHover}
           >
             <defs>
               <linearGradient id="ovValGrad" x1="0" y1="0" x2="0" y2="1">
@@ -230,6 +256,22 @@ function ValueChart({
                 {t.label}
               </text>
             ))}
+            {/* Hover crosshair + dot (dot matches the line colour — green when up). */}
+            {hovered && (
+              <g pointerEvents="none">
+                <line
+                  x1={hovered.x}
+                  y1={chart.pad.top}
+                  x2={hovered.x}
+                  y2={chart.pad.top + chart.innerH}
+                  stroke="var(--muted)"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                  opacity="0.6"
+                />
+                <circle cx={hovered.x} cy={hovered.y} r="4.5" fill={chart.color} stroke="var(--bg)" strokeWidth="1.5" />
+              </g>
+            )}
           </svg>
         )
       )}
@@ -544,6 +586,8 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
   const [chip, setChip] = useState<ChipKey>('holdings');
   const [period, setPeriod] = useState(PERIODS[0]);
   const [sortDesc, setSortDesc] = useState(true);
+  // While the finger/cursor is on the chart, the header total shows the hovered snapshot's value.
+  const [hoverValue, setHoverValue] = useState<number | null>(null);
 
   // Migrate/seed portfolios, then load the active portfolio's holdings + snapshots.
   useEffect(() => {
@@ -810,6 +854,7 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
         portfolios={portfolios}
         activeId={activeId}
         totalValue={totalValue}
+        displayValue={chip === 'holdings' ? hoverValue : null}
         totalCost={totalCost}
         dayAgo={dayAgo}
         hidden={hidden}
@@ -896,7 +941,7 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
       {/* ── Panel (swaps with the chip) ── */}
       <div className="wallet-panel">
         {chip === 'holdings' && (
-          <ValueChart snapshots={snapshots} liveValue={totalValue} period={period} />
+          <ValueChart snapshots={snapshots} liveValue={totalValue} period={period} onHover={setHoverValue} />
         )}
         {chip === 'profit' && (
           <ProfitChart
@@ -1001,6 +1046,7 @@ function PortfolioHeaderBar({
   portfolios,
   activeId,
   totalValue,
+  displayValue,
   totalCost,
   dayAgo,
   hidden,
@@ -1014,6 +1060,7 @@ function PortfolioHeaderBar({
   portfolios: PortfolioMeta[];
   activeId: string;
   totalValue: number;
+  displayValue?: number | null;
   totalCost: number;
   dayAgo: number | null;
   hidden: boolean;
@@ -1042,7 +1089,7 @@ function PortfolioHeaderBar({
       </div>
 
       <div className="wallet-cmc-totalrow">
-        <span className="wallet-cmc-total">{hidden ? '••••••' : fmtUsd(totalValue)}</span>
+        <span className="wallet-cmc-total">{hidden ? '••••••' : fmtUsd(displayValue ?? totalValue)}</span>
         <button className="wallet-eye-btn" onClick={onToggleHide} aria-label={hidden ? 'Show value' : 'Hide value'} aria-pressed={hidden}>
           <Icon name={hidden ? 'eye-off' : 'eye'} size={18} />
         </button>
