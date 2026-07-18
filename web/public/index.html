@@ -1743,6 +1743,20 @@ let activeTF = "1d";  // timeframe key into TF{}
 // NOT persist active state (so grid panels don't clobber each other or the main app).
 const _params = new URLSearchParams(location.search);
 const IS_EMBED = _params.get("embed")==="1";
+// Fractional devicePixelRatio (common in Android WebViews, e.g. 2.625) makes lightweight-charts'
+// 1px horizontal gridlines straddle two physical pixel rows and anti-alias into two faint "doubled"
+// lines. Desktop reports a clean integer DPR (1/2) so it looks crisp there. Round DPR to the nearest
+// integer for ALL canvas backing-store sizing (LWC's own canvas + our overlay sizeCanvas) so lines
+// land on whole physical pixels. No-op where DPR is already integer.
+try {
+  const _realDpr = window.devicePixelRatio || 1;
+  if (_realDpr % 1 !== 0) {
+    Object.defineProperty(window, "devicePixelRatio", {
+      configurable:true, get:()=>Math.max(1, Math.round(window.__realDpr || 1))
+    });
+    window.__realDpr = _realDpr;
+  }
+} catch(e){}
 // Apply embed layout NOW, before any DOM/chart construction below. Adding it at the end
 // of the script (as before) let mobile WebViews commit a layout pass with the watchlist/
 // right-rail still visible, so the chart canvas was created ~40px narrower than the
