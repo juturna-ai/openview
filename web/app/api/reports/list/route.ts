@@ -65,12 +65,7 @@ export async function GET(req: Request) {
         `${filter}&order=report_date.desc,created_at.desc&limit=${limit}`,
     );
     return NextResponse.json({ reports: rows.map(toReport), configured: true });
-  } catch (e) {
-    // TEMP diagnostic (revert): surface the inner PostgREST error message. Contains an HTTP
-    // status code only — no keys, no row data.
-    return NextResponse.json(
-      { error: 'Could not load reports', detail: String((e as Error)?.message ?? e) },
-      { status: 502 },
-    );
+  } catch {
+    return NextResponse.json({ error: 'Could not load reports' }, { status: 502 });
   }
 }
