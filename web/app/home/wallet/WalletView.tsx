@@ -14,17 +14,26 @@ import {
   recordSnapshot,
   type Snapshot,
   updateHolding,
+  valueAgo,
 } from './holdings';
 import { Icon } from './icons';
+import {
+  createPortfolio,
+  deletePortfolio,
+  ensurePortfolios,
+  getActiveId,
+  loadPortfolios,
+  type PortfolioMeta,
+  renamePortfolio,
+  setActivePortfolio,
+} from './portfolios';
 
-// Portfolio view — ported from Reach's WalletView.jsx.
+// CoinMarketCap-style Portfolio view. The three Overview chips each swap the whole panel below them
+// — a filter row would only hide rows; here Holdings / All-time profit / Allocation change the chart
+// AND the asset table's third column, matching the CMC phone app the design was taken from.
 //
-// Both charts are hand-rolled inline SVG, as in Reach: no charting library is pulled in for a
-// sparkline and a donut. Prices come from our own /api/market/prices route (Reach reaches them
-// through Electron IPC, which has no web equivalent).
-//
-// Not ported: Reach's drag-to-reorder stat cards and swap-charts gestures — extra state and
-// localStorage keys for a rearrangement nobody asked for.
+// Charts are hand-rolled inline SVG (no charting lib for a couple of lines and a donut). Live prices
+// come from /api/market/prices; the orange "BTC trend" comparison line from /api/market/klines.
 
 interface Quote {
   price: number;
@@ -33,40 +42,35 @@ interface Quote {
 type PriceMap = Record<string, Quote | null>;
 
 const POLL_MS = 30_000;
+const CHART_H = 200;
 
-// Must match .wallet-history-chart's height in globals.css — used as the pre-measurement fallback.
-const CHART_H = 220;
-
-const HISTORY_PERIODS: { label: string; hours: number | null }[] = [
-  { label: '24h', hours: 24 },
-  { label: '7d', hours: 168 },
-  { label: '30d', hours: 720 },
-  { label: '90d', hours: 2160 },
-  { label: 'All', hours: null },
+type ChipKey = 'holdings' | 'profit' | 'allocation';
+const CHIPS: { key: ChipKey; label: string }[] = [
+  { key: 'holdings', label: 'Holdings' },
+  { key: 'profit', label: 'All-time profit' },
+  { key: 'allocation', label: 'Allocation' },
 ];
 
-// ── History chart ──
+const PERIODS: { label: string; hours: number | null; range: string }[] = [
+  { label: '24h', hours: 24, range: '24h' },
+  { label: '7d', hours: 168, range: '7d' },
+  { label: '30d', hours: 720, range: '30d' },
+  { label: '90d', hours: 2160, range: '90d' },
+  { label: 'All', hours: null, range: 'all' },
+];
 
-function PortfolioHistory({
-  snapshots,
-  liveValue,
-}: {
-  snapshots: Snapshot[];
-  liveValue: number;
-}) {
-  const [period, setPeriod] = useState(HISTORY_PERIODS[0]);
+interface KlinePoint {
+  t: number;
+  close: number;
+}
 
-  // The SVG is drawn at the container's true pixel size (1 user unit = 1 CSS px) rather than being
-  // scaled from a fixed viewBox — a fixed 400×200 box stretched to fill a ~900×220 container scales
-  // x and y by different factors, which distorts and blurs the axis text. Measured here so the
-  // geometry can be recomputed on resize.
-  const chartRef = useRef<HTMLDivElement | null>(null);
+// ── Small shared chart helpers ──
+
+function useChartSize() {
+  const ref = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: CHART_H });
-  // Index of the snapshot nearest the cursor; null when the pointer is away.
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-
   useEffect(() => {
-    const el = chartRef.current;
+    const el = ref.current;
     if (!el) return;
     const ro = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
@@ -75,164 +79,84 @@ function PortfolioHistory({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  return { ref, size };
+}
+
+// ── Holdings chart: portfolio value over time (filled area) ──
+
+function ValueChart({
+  snapshots,
+  liveValue,
+  period,
+}: {
+  snapshots: Snapshot[];
+  liveValue: number;
+  period: (typeof PERIODS)[number];
+}) {
+  const { ref, size } = useChartSize();
 
   const data = useMemo(() => {
     const cutoff = period.hours ? Date.now() - period.hours * 3600_000 : 0;
     const inRange = snapshots.filter((s) => s.t >= cutoff);
-    // Append the live value so the line always reaches "now" instead of stopping at the last
-    // 5-minute snapshot.
     return liveValue > 0 ? [...inRange, { t: Date.now(), value: liveValue }] : inRange;
   }, [snapshots, liveValue, period]);
 
   const chart = useMemo(() => {
-    // Width is 0 until the ResizeObserver reports; skip the geometry until then.
     if (data.length < 2 || size.w === 0) return null;
-
     const W = size.w;
     const H = size.h;
-    const pad = { top: 10, right: 16, bottom: 28, left: 60 };
+    // The line spans the full width (x starts at 0); labels float over the right edge like the CMC
+    // reference, so there's no left gutter and no right column stealing plot width. A little top/
+    // bottom breathing room keeps the curve off the edges.
+    const pad = { top: 12, right: 4, bottom: 22, left: 0 };
     const innerW = W - pad.left - pad.right;
     const innerH = H - pad.top - pad.bottom;
-
     const values = data.map((d) => d.value);
     let min = Math.min(...values);
     let max = Math.max(...values);
-    // A dead-flat series has no range to scale against — pad it so the line lands mid-box.
-    if (min === max) {
-      min = min * 0.995;
-      max = max * 1.005 || 1;
+    // Floor the visible span at 1% of the value. Without this, two snapshots $40 apart on a $255k
+    // portfolio get scaled to fill the whole box — turning sub-0.02% noise into a jagged "broken"
+    // line. A 1% floor keeps a genuinely flat portfolio reading flat until the moves are real.
+    const mid = (min + max) / 2 || 1;
+    const minSpan = Math.abs(mid) * 0.01;
+    if (max - min < minSpan) {
+      min = mid - minSpan / 2;
+      max = mid + minSpan / 2;
     }
-
+    // Pad the value range 8% each side so the line never rides the very top/bottom of the box.
+    const spanPad = (max - min) * 0.08;
+    min -= spanPad;
+    max += spanPad;
     const t0 = data[0].t;
     const tSpan = data[data.length - 1].t - t0 || 1;
     const x = (t: number) => pad.left + ((t - t0) / tSpan) * innerW;
     const y = (v: number) => pad.top + (1 - (v - min) / (max - min)) * innerH;
-
     const line = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(d.t)},${y(d.value)}`).join(' ');
     const area = `${line} L${x(data[data.length - 1].t)},${pad.top + innerH} L${x(t0)},${pad.top + innerH} Z`;
-
     const up = values[values.length - 1] >= values[0];
     const color = up ? '#22c55e' : '#ef4444';
 
-    // Decimals scale with the axis span, not the magnitude: a $62,700–$62,800 range at one decimal
-    // renders five ticks that all read "$62.8K". Enough digits are kept to separate adjacent ticks.
-    const span = max - min;
-    const digitsFor = (unit: number) => {
-      const step = span / 4 / unit;
-      if (step <= 0) return 1;
-      return Math.min(3, Math.max(0, Math.ceil(-Math.log10(step)) + 1));
-    };
     const fmtAxis = (v: number) => {
-      if (v >= 1e6) return `$${(v / 1e6).toFixed(digitsFor(1e6))}M`;
-      if (v >= 1e3) {
-        const d = digitsFor(1e3);
-        // "$62.700K" is a worse way to write "$62,700" — past 2 decimals, drop the K suffix.
-        if (d > 2) return `$${Math.round(v).toLocaleString()}`;
-        return `$${(v / 1e3).toFixed(d)}K`;
-      }
-      return `$${v.toFixed(span < 5 ? 2 : 0)}`;
+      if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+      if (v >= 1e3) return `$${(v / 1e3).toFixed(2)}K`;
+      return `$${v.toFixed(0)}`;
     };
-
-    const yTicks = Array.from({ length: 5 }, (_, i) => {
-      const v = min + ((max - min) * i) / 4;
-      return { v, y: y(v), label: fmtAxis(v) };
+    // Skip the extreme ticks (the padded min/max) so labels don't clip the box edges.
+    const yTicks = [0.2, 0.45, 0.7, 0.95].map((f) => {
+      const v = min + (max - min) * f;
+      return { y: y(v), label: fmtAxis(v) };
     });
-
-    const hours = period.hours;
-    const fmtTime = (t: number) => {
-      const d = new Date(t);
-      if (hours && hours <= 24) {
-        return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      }
-      if (hours && hours <= 720) {
-        return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-      }
-      return d.toLocaleDateString([], { month: 'short', year: '2-digit' });
-    };
-
-    const xTicks = Array.from({ length: 5 }, (_, i) => {
-      const t = t0 + (tSpan * i) / 4;
-      return { x: x(t), label: fmtTime(t) };
-    });
-
-    // Screen positions for each snapshot, so the hover layer can hit-test without redoing the scales.
-    const points = data.map((d) => ({ x: x(d.t), y: y(d.value), t: d.t, value: d.value }));
-
-    return { W, H, pad, innerW, innerH, line, area, color, yTicks, xTicks, points };
-  }, [data, period, size]);
-
-  // Snap to the nearest point by x. The SVG is drawn at true pixel size, so client px map straight
-  // onto chart units — no viewBox transform to undo.
-  const handleMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!chart) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    let nearest = 0;
-    let best = Infinity;
-    for (let i = 0; i < chart.points.length; i++) {
-      const d = Math.abs(chart.points[i].x - px);
-      if (d < best) {
-        best = d;
-        nearest = i;
-      }
-    }
-    setHoverIdx(nearest);
-  };
-
-  const hovered = chart && hoverIdx !== null ? chart.points[hoverIdx] : null;
-
-  // Full date + time; the axis labels are deliberately terse and ambiguous up close.
-  const fmtStamp = (t: number) =>
-    new Date(t).toLocaleString([], {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    return { W, H, pad, innerW, innerH, line, area, color, yTicks };
+  }, [data, size]);
 
   return (
-    <div className="wallet-history-card">
-      <div className="wallet-history-header">
-        <h3 className="wallet-section-title">
-          History
-          <span
-            className="wallet-info-icon"
-            title="Portfolio value is recorded each time prices refresh, so history builds up as you use the app."
-          >
-            <Icon name="info" size={13} />
-          </span>
-        </h3>
-        <div className="wallet-history-tabs">
-          {HISTORY_PERIODS.map((p) => (
-            <button
-              key={p.label}
-              className={'wallet-history-tab' + (period.label === p.label ? ' active' : '')}
-              // Drop the hover with the period: hoverIdx indexes into the OLD points array, so
-              // keeping it would leave a crosshair pinned to a different snapshot's value.
-              onClick={() => {
-                setPeriod(p);
-                setHoverIdx(null);
-              }}
-            >
-              {p.label}
-            </button>
-          ))}
+    <div className="wallet-chart-box" ref={ref}>
+      {data.length < 2 ? (
+        <div className="wallet-history-empty">
+          Collecting data — chart will appear as portfolio values are recorded.
         </div>
-      </div>
-
-      {/* Mounted unconditionally, empty state and all: the ResizeObserver attaches once on mount,
-          so a container that only appears with data would never get observed — the effect would
-          have already run and bailed on a null ref, leaving size.w at 0 and the SVG permanently
-          unrendered. The empty state lives inside for the same reason. */}
-      <div className="wallet-history-chart" ref={chartRef}>
-        {data.length < 2 ? (
-          <div className="wallet-history-empty">
-            Collecting data — chart will appear as portfolio values are recorded.
-          </div>
-        ) : (
-          <>
-            {chart && (
+      ) : (
+        chart && (
           <svg
             className="wallet-history-svg"
             width={chart.W}
@@ -240,15 +164,137 @@ function PortfolioHistory({
             viewBox={`0 0 ${chart.W} ${chart.H}`}
             role="img"
             aria-label="Portfolio value over time"
-            onPointerMove={handleMove}
-            onPointerLeave={() => setHoverIdx(null)}
           >
             <defs>
-              <linearGradient id="ovAreaGrad" x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id="ovValGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={chart.color} stopOpacity="0.25" />
                 <stop offset="100%" stopColor={chart.color} stopOpacity="0.02" />
               </linearGradient>
             </defs>
+            {chart.yTicks.map((t, i) => (
+              <g key={i}>
+                <line
+                  x1={0}
+                  y1={t.y}
+                  x2={chart.W}
+                  y2={t.y}
+                  stroke="var(--border)"
+                  strokeWidth="0.5"
+                  opacity="0.35"
+                />
+                <text x={chart.W - chart.pad.right} y={t.y - 4} textAnchor="end" className="wallet-axis-label">
+                  {t.label}
+                </text>
+              </g>
+            ))}
+            <path d={chart.area} fill="url(#ovValGrad)" />
+            <path d={chart.line} fill="none" stroke={chart.color} strokeWidth="2" />
+          </svg>
+        )
+      )}
+    </div>
+  );
+}
+
+// ── All-time-profit chart: portfolio profit-% line + BTC trend-% line ──
+
+function ProfitChart({
+  snapshots,
+  liveValue,
+  totalCost,
+  btc,
+  period,
+  profitPct,
+}: {
+  snapshots: Snapshot[];
+  liveValue: number;
+  totalCost: number;
+  btc: KlinePoint[];
+  period: (typeof PERIODS)[number];
+  profitPct: number;
+}) {
+  const { ref, size } = useChartSize();
+
+  // Portfolio profit as a % of cost, over time. Snapshot value → (value - cost)/cost.
+  const profitSeries = useMemo(() => {
+    if (totalCost <= 0) return [];
+    const cutoff = period.hours ? Date.now() - period.hours * 3600_000 : 0;
+    const pts = snapshots
+      .filter((s) => s.t >= cutoff)
+      .map((s) => ({ t: s.t, v: ((s.value - totalCost) / totalCost) * 100 }));
+    if (liveValue > 0) pts.push({ t: Date.now(), v: ((liveValue - totalCost) / totalCost) * 100 });
+    return pts;
+  }, [snapshots, liveValue, totalCost, period]);
+
+  // BTC as a % change relative to the window's first close — a trend line, not an absolute price.
+  const btcSeries = useMemo(() => {
+    const cutoff = period.hours ? Date.now() - period.hours * 3600_000 : 0;
+    const inRange = btc.filter((p) => p.t >= cutoff);
+    if (inRange.length < 2) return [];
+    const base = inRange[0].close;
+    return inRange.map((p) => ({ t: p.t, v: ((p.close - base) / base) * 100 }));
+  }, [btc, period]);
+
+  const chart = useMemo(() => {
+    const all = [...profitSeries, ...btcSeries];
+    if (all.length < 2 || size.w === 0) return null;
+    const W = size.w;
+    const H = size.h;
+    const pad = { top: 10, right: 46, bottom: 24, left: 12 };
+    const innerW = W - pad.left - pad.right;
+    const innerH = H - pad.top - pad.bottom;
+
+    const ts = all.map((p) => p.t);
+    const t0 = Math.min(...ts);
+    const t1 = Math.max(...ts);
+    const tSpan = t1 - t0 || 1;
+    const vs = all.map((p) => p.v);
+    let min = Math.min(...vs, 0);
+    let max = Math.max(...vs, 0);
+    if (min === max) {
+      min -= 1;
+      max += 1;
+    }
+    const x = (t: number) => pad.left + ((t - t0) / tSpan) * innerW;
+    const y = (v: number) => pad.top + (1 - (v - min) / (max - min)) * innerH;
+    const path = (pts: { t: number; v: number }[]) =>
+      pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t)},${y(p.v)}`).join(' ');
+
+    const yTicks = Array.from({ length: 4 }, (_, i) => {
+      const v = min + ((max - min) * i) / 3;
+      return { y: y(v), label: `${v.toFixed(1)}%` };
+    });
+    return {
+      W,
+      H,
+      pad,
+      innerH,
+      profitPath: profitSeries.length > 1 ? path(profitSeries) : '',
+      btcPath: btcSeries.length > 1 ? path(btcSeries) : '',
+      yTicks,
+    };
+  }, [profitSeries, btcSeries, size]);
+
+  const btcTrendPct = btcSeries.length > 1 ? btcSeries[btcSeries.length - 1].v : 0;
+
+  return (
+    <>
+      <div className="wallet-chart-box" ref={ref}>
+        {!chart || totalCost <= 0 ? (
+          <div className="wallet-history-empty">
+            {totalCost <= 0
+              ? 'Add a buy price to see profit over time.'
+              : 'Collecting data — chart will appear as portfolio values are recorded.'}
+          </div>
+        ) : (
+          <svg
+            className="wallet-history-svg"
+            width={chart.W}
+            height={chart.H}
+            viewBox={`0 0 ${chart.W} ${chart.H}`}
+            role="img"
+            aria-label="All-time profit over time"
+          >
             {chart.yTicks.map((t, i) => (
               <g key={i}>
                 <line
@@ -260,116 +306,162 @@ function PortfolioHistory({
                   strokeWidth="0.5"
                   opacity="0.4"
                 />
-                <text x={chart.pad.left - 8} y={t.y + 3} textAnchor="end" className="wallet-axis-label">
+                <text x={chart.W - chart.pad.right + 4} y={t.y + 3} textAnchor="start" className="wallet-axis-label">
                   {t.label}
                 </text>
               </g>
             ))}
-            {chart.xTicks.map((t, i) => (
-              <text
-                key={i}
-                x={t.x}
-                y={chart.H - 10}
-                textAnchor="middle"
-                className="wallet-axis-label"
-              >
-                {t.label}
-              </text>
-            ))}
-            <path d={chart.area} fill="url(#ovAreaGrad)" />
-            <path d={chart.line} fill="none" stroke={chart.color} strokeWidth="2" />
-
-            {hovered && (
-              <g className="wallet-hover-marker" pointerEvents="none">
-                <line
-                  x1={hovered.x}
-                  y1={chart.pad.top}
-                  x2={hovered.x}
-                  y2={chart.pad.top + chart.innerH}
-                  stroke="var(--muted)"
-                  strokeWidth="1"
-                  strokeDasharray="3 3"
-                  opacity="0.6"
-                />
-                <circle cx={hovered.x} cy={hovered.y} r="4" fill={chart.color} />
-                <circle
-                  cx={hovered.x}
-                  cy={hovered.y}
-                  r="4"
-                  fill="none"
-                  stroke="var(--bg)"
-                  strokeWidth="1.5"
-                />
-              </g>
+            {chart.btcPath && (
+              <path d={chart.btcPath} fill="none" stroke="#e0a463" strokeWidth="1.5" opacity="0.9" />
+            )}
+            {chart.profitPath && (
+              <path d={chart.profitPath} fill="none" stroke="#3b6ef6" strokeWidth="2" />
             )}
           </svg>
-          )}
-
-          {chart && hovered && (
-            // Flips to the left of the cursor near the right edge so it never spills the card.
-            <div
-              className="wallet-chart-tooltip"
-              style={
-                hovered.x > chart.W - 150
-                  ? { right: chart.W - hovered.x + 12 }
-                  : { left: hovered.x + 12 }
-              }
-            >
-              <div className="wallet-tooltip-time">{fmtStamp(hovered.t)}</div>
-              <div className="wallet-tooltip-row">
-                <span className="wallet-tooltip-dot" style={{ backgroundColor: chart.color }} />
-                <span className="wallet-tooltip-label">Portfolio:</span>
-                <span className="wallet-tooltip-value">{fmtUsd(hovered.value)}</span>
-              </div>
-            </div>
-            )}
-          </>
         )}
+      </div>
+      <div className="wallet-profit-legend">
+        <span className="wallet-legend-row">
+          <span className="wallet-legend-dot" style={{ backgroundColor: '#3b6ef6' }} />
+          <span className="wallet-legend-sym">All-time Profit:</span>
+          <span className={profitPct >= 0 ? 'profit' : 'loss'}>
+            {profitPct >= 0 ? '▲' : '▼'} {Math.abs(profitPct).toFixed(2)}%
+          </span>
+        </span>
+        <span className="wallet-legend-row">
+          <span className="wallet-legend-dot" style={{ backgroundColor: '#e0a463' }} />
+          <span className="wallet-legend-sym">BTC trend:</span>
+          <span className={btcTrendPct >= 0 ? 'profit' : 'loss'}>
+            {btcTrendPct >= 0 ? '▲' : '▼'} {Math.abs(btcTrendPct).toFixed(2)}%
+          </span>
+        </span>
+      </div>
+    </>
+  );
+}
+
+// ── Allocation donut ──
+
+function AllocationPanel({
+  segments,
+  totalValue,
+}: {
+  segments: { symbol: string; pct: number; color: string; dashLen: number; offset: number }[];
+  totalValue: number;
+}) {
+  const circumference = 2 * Math.PI * 70;
+  if (segments.length === 0) {
+    return <div className="wallet-history-empty">Add an asset to see your allocation.</div>;
+  }
+  return (
+    <div className="wallet-alloc-body">
+      <div className="wallet-donut-wrap">
+        <svg className="wallet-donut" viewBox="0 0 200 200" role="img" aria-label="Allocation by asset">
+          <g transform="rotate(-90 100 100)">
+            <circle cx="100" cy="100" r="70" fill="none" stroke="var(--border)" strokeWidth="22" opacity="0.25" />
+            {segments.map((s) => (
+              <circle
+                key={s.symbol}
+                cx="100"
+                cy="100"
+                r="70"
+                fill="none"
+                stroke={s.color}
+                strokeWidth="22"
+                strokeDasharray={`${s.dashLen} ${circumference - s.dashLen}`}
+                strokeDashoffset={-s.offset}
+              />
+            ))}
+          </g>
+        </svg>
+        <div className="wallet-donut-center">
+          <span className="wallet-donut-total">{fmtUsd(totalValue, 0)}</span>
+        </div>
+      </div>
+      <div className="wallet-alloc-legend">
+        {segments.map((s) => (
+          <div key={s.symbol} className="wallet-legend-row">
+            <span className="wallet-legend-dot" style={{ backgroundColor: s.color }} />
+            <span className="wallet-legend-sym">{s.symbol}</span>
+            <span className="wallet-legend-pct">{(s.pct * 100).toFixed(2)}%</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// ── Hover hints ──
+// ── Portfolio switcher (name ▾ with switch / create / rename / delete) ──
 
-/** What each dashboard panel means, in a few words. Keyed by the hint's target. */
-const HINTS: Record<string, string> = {
-  'all-time-profit': 'Current value minus what you paid.',
-  'cost-basis': 'Total paid for your holdings.',
-  'best-performer': 'Biggest gain vs. buy price.',
-  'worst-performer': 'Biggest loss vs. buy price.',
-  allocation: 'Share of portfolio value per asset.',
-};
-
-/**
- * Wraps a panel and shows an explanatory box on hover. Focusable so the hint is reachable by
- * keyboard, not just by mouse — the panels themselves aren't interactive otherwise.
- */
-function WithHint({
-  hint,
-  className,
-  children,
+function PortfolioSwitcher({
+  portfolios,
+  activeId,
+  onSwitch,
+  onCreate,
+  onRename,
+  onDelete,
 }: {
-  hint: keyof typeof HINTS | string;
-  className: string;
-  children: React.ReactNode;
+  portfolios: PortfolioMeta[];
+  activeId: string;
+  onSwitch: (id: string) => void;
+  onCreate: (name: string) => void;
+  onRename: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const text = HINTS[hint];
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const active = portfolios.find((p) => p.id === activeId) ?? portfolios[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  const create = () => {
+    const name = window.prompt('New portfolio name');
+    if (name && name.trim()) onCreate(name.trim());
+    setOpen(false);
+  };
+  const rename = (p: PortfolioMeta) => {
+    const name = window.prompt('Rename portfolio', p.name);
+    if (name && name.trim()) onRename(p.id, name.trim());
+  };
+  const del = (p: PortfolioMeta) => {
+    if (portfolios.length <= 1) return;
+    if (window.confirm(`Delete "${p.name}"? Its holdings will be removed.`)) onDelete(p.id);
+  };
 
   return (
-    <div
-      className={className + ' wallet-hinted'}
-      onPointerEnter={() => setOpen(true)}
-      onPointerLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={() => setOpen(false)}
-      tabIndex={0}
-    >
-      {children}
-      {open && text && (
-        <div className="wallet-tip" role="tooltip">
-          {text}
+    <div className="wallet-switcher" ref={wrapRef}>
+      <button className="wallet-switcher-btn" onClick={() => setOpen((v) => !v)}>
+        <span className="wallet-switcher-name">{active?.name ?? 'Portfolio'}</span>
+        <Icon name="chevron-down" size={18} />
+      </button>
+      {open && (
+        <div className="wallet-switcher-menu" role="menu">
+          {portfolios.map((p) => (
+            <div key={p.id} className={'wallet-switcher-item' + (p.id === activeId ? ' active' : '')}>
+              <button className="wallet-switcher-pick" onClick={() => { onSwitch(p.id); setOpen(false); }}>
+                {p.id === activeId && <Icon name="check" size={14} />}
+                <span>{p.name}</span>
+              </button>
+              <button className="wallet-switcher-edit" onClick={() => rename(p)} aria-label={`Rename ${p.name}`}>
+                <Icon name="edit" size={13} />
+              </button>
+              {portfolios.length > 1 && (
+                <button className="wallet-switcher-edit" onClick={() => del(p)} aria-label={`Delete ${p.name}`}>
+                  <Icon name="trash" size={13} />
+                </button>
+              )}
+            </div>
+          ))}
+          <button className="wallet-switcher-new" onClick={create}>
+            <Icon name="plus" size={14} /> New portfolio
+          </button>
         </div>
       )}
     </div>
@@ -379,22 +471,29 @@ function WithHint({
 // ── Main view ──
 
 export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: number }) {
+  const [portfolios, setPortfolios] = useState<PortfolioMeta[]>([]);
+  const [activeId, setActiveId] = useState<string>('main');
   const [holdings, setHoldings] = useState<Holding[]>([]);
-  // Seed from the session cache so a revisit (or a return from another folder tab) shows the last
-  // prices immediately instead of an empty table; the poll below refreshes them.
   const [prices, setPrices] = useState<PriceMap>(() => getMarketPrices() ?? {});
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [btc, setBtc] = useState<KlinePoint[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
+  const [hidden, setHidden] = useState(false);
+  const [tab, setTab] = useState<'overview' | 'transactions'>('overview');
+  const [chip, setChip] = useState<ChipKey>('holdings');
+  const [period, setPeriod] = useState(PERIODS[0]);
+  const [sortDesc, setSortDesc] = useState(true);
 
-  // localStorage is client-only; seed after mount so SSR and first paint agree.
+  // Migrate/seed portfolios, then load the active portfolio's holdings + snapshots.
   useEffect(() => {
+    ensurePortfolios();
+    setPortfolios(loadPortfolios());
+    setActiveId(getActiveId());
     setHoldings(loadHoldings());
     setSnapshots(loadSnapshots());
   }, []);
 
-  // The sidebar's Add Asset button bumps a counter rather than calling in directly (same pattern as
-  // JournalShell's New Trade); opening the modal is this component's business.
   useEffect(() => {
     if (addAssetSignal > 0) {
       setEditing(null);
@@ -411,19 +510,16 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
       const res = await fetch('/api/market/prices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          current.map((h) => ({ symbol: h.symbol, asset_type: h.asset_type })),
-        ),
+        body: JSON.stringify(current.map((h) => ({ symbol: h.symbol, asset_type: h.asset_type }))),
       });
       if (!res.ok) return;
       const data = (await res.json()) as PriceMap;
       setPrices(data);
       setMarketPrices(data);
-
       const total = current.reduce((sum, h) => sum + h.amount * (data[h.symbol]?.price || 0), 0);
       if (total > 0) setSnapshots(recordSnapshot(total));
     } catch {
-      // Keep the last known prices rather than blanking the table on a transient failure.
+      /* keep last prices on a transient failure */
     }
   }, []);
 
@@ -433,6 +529,28 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
     const id = setInterval(() => void fetchPrices(holdings), POLL_MS);
     return () => clearInterval(id);
   }, [holdings, fetchPrices]);
+
+  // BTC trend line for the All-time-profit chart. Refetched when the window changes; only needed
+  // while that chip is showing.
+  useEffect(() => {
+    if (chip !== 'profit') return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/market/klines?symbol=BTC&range=${period.range}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { points: KlinePoint[] };
+        if (alive) setBtc(data.points ?? []);
+      } catch {
+        /* no trend line this time */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [chip, period]);
+
+  const refreshHoldings = (next: Holding[]) => setHoldings(next);
 
   const handleSave = (data: {
     assetType: AssetType;
@@ -445,7 +563,7 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
     notes: string;
   }) => {
     if (editing) {
-      setHoldings(
+      refreshHoldings(
         updateHolding(editing.id, {
           amount: data.amount,
           avg_buy_price: data.avgBuyPrice,
@@ -455,7 +573,7 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
         }),
       );
     } else {
-      setHoldings(
+      refreshHoldings(
         addHolding({
           symbol: data.symbol,
           name: data.name,
@@ -474,17 +592,41 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
 
   const handleDelete = (h: Holding) => {
     if (!window.confirm(`Remove ${h.name} from your wallet?`)) return;
-    setHoldings(removeHolding(h.id));
+    refreshHoldings(removeHolding(h.id));
   };
-
   const openEdit = (h: Holding) => {
     setEditing(h);
     setModalOpen(true);
   };
-
   const openAdd = () => {
     setEditing(null);
     setModalOpen(true);
+  };
+
+  // Switching portfolios re-points holdings.ts at the new key, so reload from it.
+  const switchTo = (id: string) => {
+    setActivePortfolio(id);
+    setActiveId(id);
+    setHoldings(loadHoldings());
+    setPrices({});
+  };
+  const doCreate = (name: string) => {
+    createPortfolio(name);
+    setPortfolios(loadPortfolios());
+    setActiveId(getActiveId());
+    setHoldings(loadHoldings());
+    setPrices({});
+  };
+  const doRename = (id: string, name: string) => {
+    renamePortfolio(id, name);
+    setPortfolios(loadPortfolios());
+  };
+  const doDelete = (id: string) => {
+    deletePortfolio(id);
+    setPortfolios(loadPortfolios());
+    setActiveId(getActiveId());
+    setHoldings(loadHoldings());
+    setPrices({});
   };
 
   // ── Derived figures ──
@@ -493,22 +635,7 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
   const totalPnL = totalValue - totalCost;
   const totalPnLPct = totalCost > 0 ? (totalPnL / totalCost) * 100 : 0;
 
-  // Only holdings with both a cost basis and a live price can have a meaningful return.
-  const perf = holdings
-    .filter((h) => h.avg_buy_price > 0 && (prices[h.symbol]?.price ?? 0) > 0)
-    .map((h) => {
-      const price = prices[h.symbol]!.price;
-      return {
-        ...h,
-        pnlPct: ((price - h.avg_buy_price) / h.avg_buy_price) * 100,
-        pnlUsd: (price - h.avg_buy_price) * h.amount,
-      };
-    })
-    .sort((a, b) => b.pnlPct - a.pnlPct);
-
-  const best = perf.length > 0 ? perf[0] : null;
-  // With a single eligible holding, best and worst would be the same row — suppress worst.
-  const worst = perf.length > 1 ? perf[perf.length - 1] : null;
+  const dayAgo = valueAgo(snapshots, 24);
 
   const segments = useMemo(() => {
     const rows = holdings
@@ -519,10 +646,8 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
       }))
       .filter((h) => h.value > 0)
       .sort((a, b) => b.value - a.value);
-
     const total = rows.reduce((s, r) => s + r.value, 0);
-    const radius = 70;
-    const circumference = 2 * Math.PI * radius;
+    const circumference = 2 * Math.PI * 70;
     let offset = 0;
     return rows.map((r) => {
       const pct = total > 0 ? r.value / total : 0;
@@ -532,11 +657,76 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
     });
   }, [holdings, prices]);
 
-  const circumference = 2 * Math.PI * 70;
+  // Per-row figures for the asset table, plus the sort key that the active chip drives.
+  const rows = useMemo(() => {
+    const mapped = holdings.map((h) => {
+      const quote = prices[h.symbol];
+      const price = quote?.price ?? 0;
+      const change = quote?.change24h ?? 0;
+      const value = h.amount * price;
+      const cost = h.amount * (h.avg_buy_price || 0);
+      const pnl = value - cost;
+      const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
+      const alloc = totalValue > 0 ? value / totalValue : 0;
+      const hasPnL = h.avg_buy_price > 0 && price > 0;
+      return { h, quote, price, change, value, pnl, pnlPct, alloc, hasPnL };
+    });
+    const key =
+      chip === 'profit' ? (r: (typeof mapped)[number]) => r.pnl
+      : chip === 'allocation' ? (r: (typeof mapped)[number]) => r.alloc
+      : (r: (typeof mapped)[number]) => r.value;
+    mapped.sort((a, b) => (sortDesc ? key(b) - key(a) : key(a) - key(b)));
+    return mapped;
+  }, [holdings, prices, totalValue, chip, sortDesc]);
 
+  const thirdColLabel = chip === 'profit' ? 'All-time profit' : chip === 'allocation' ? 'Allocation' : 'Holdings';
+  const showPills = chip !== 'allocation';
+
+  // Transactions are derived from holdings: each holding records one purchase (amount + avg buy
+  // price + date), which is exactly one "Buy" row. A full buy/sell log would need its own store —
+  // this reflects the data we actually have, grouped by purchase day (newest first).
+  const txGroups = useMemo(() => {
+    const txns = holdings
+      .filter((h) => h.amount > 0)
+      .map((h) => ({
+        h,
+        when: h.purchased_at ?? 0,
+        cost: h.amount * (h.avg_buy_price || 0),
+      }))
+      .sort((a, b) => b.when - a.when);
+
+    const groups: { day: string; items: typeof txns }[] = [];
+    for (const tx of txns) {
+      const day = tx.when
+        ? new Date(tx.when).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+        : 'Date unknown';
+      const last = groups[groups.length - 1];
+      if (last && last.day === day) last.items.push(tx);
+      else groups.push({ day, items: [tx] });
+    }
+    return groups;
+  }, [holdings]);
+
+  const money = (n: number) => (hidden ? '••••' : fmtUsd(n));
+
+  // ── Empty state ──
   if (holdings.length === 0) {
     return (
       <div className="wallet-view">
+        <PortfolioHeaderBar
+          portfolios={portfolios}
+          activeId={activeId}
+          totalValue={0}
+          totalCost={0}
+          dayAgo={null}
+          hidden={hidden}
+          onToggleHide={() => setHidden((v) => !v)}
+          onAdd={openAdd}
+          onSwitch={switchTo}
+          onCreate={doCreate}
+          onRename={doRename}
+          onDelete={doDelete}
+        />
         <div className="wallet-empty">
           <span className="wallet-empty-icon">
             <Icon name="box" size={44} />
@@ -548,14 +738,7 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
           </button>
         </div>
         {modalOpen && (
-          <AddAssetModal
-            holding={editing}
-            onSave={handleSave}
-            onClose={() => {
-              setModalOpen(false);
-              setEditing(null);
-            }}
-          />
+          <AddAssetModal holding={editing} onSave={handleSave} onClose={() => { setModalOpen(false); setEditing(null); }} />
         )}
       </div>
     );
@@ -563,244 +746,284 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
 
   return (
     <div className="wallet-view">
-      {/* ── Stat cards ── */}
-      <div className="wallet-stats-row">
-        <WithHint hint="all-time-profit" className="wallet-stat-card">
-          <span className="wallet-stat-label">All-Time Profit</span>
-          <span className={'wallet-stat-value ' + (totalPnL >= 0 ? 'profit' : 'loss')}>
-            {totalPnL < 0 ? '-' : ''}
-            {fmtUsd(totalPnL)}
-          </span>
-          {totalCost > 0 && (
-            <span className={'wallet-stat-sub ' + (totalPnL >= 0 ? 'profit' : 'loss')}>
-              <Icon name={totalPnL >= 0 ? 'trending-up' : 'trending-down'} size={13} />
-              {Math.abs(totalPnLPct).toFixed(2)}%
-            </span>
-          )}
-        </WithHint>
+      <PortfolioHeaderBar
+        portfolios={portfolios}
+        activeId={activeId}
+        totalValue={totalValue}
+        totalCost={totalCost}
+        dayAgo={dayAgo}
+        hidden={hidden}
+        onToggleHide={() => setHidden((v) => !v)}
+        onAdd={openAdd}
+        onSwitch={switchTo}
+        onCreate={doCreate}
+        onRename={doRename}
+        onDelete={doDelete}
+      />
 
-        <WithHint hint="cost-basis" className="wallet-stat-card">
-          <span className="wallet-stat-label">Cost Basis</span>
-          <span className="wallet-stat-value neutral">{fmtUsd(totalCost)}</span>
-        </WithHint>
-
-        <WithHint hint="best-performer" className="wallet-stat-card">
-          <span className="wallet-stat-label">Best Performer</span>
-          {best ? (
-            <>
-              <span className="wallet-stat-performer">
-                <AssetIcon symbol={best.symbol} assetType={best.asset_type} size={26} />
-                <span className="wallet-performer-name">{best.symbol}</span>
-              </span>
-              <span className={'wallet-stat-sub ' + (best.pnlUsd >= 0 ? 'profit' : 'loss')}>
-                {best.pnlUsd >= 0 ? '+' : '-'}
-                {fmtUsd(best.pnlUsd)}
-                <Icon name={best.pnlPct >= 0 ? 'trending-up' : 'trending-down'} size={13} />
-                {Math.abs(best.pnlPct).toFixed(2)}%
-              </span>
-            </>
-          ) : (
-            <span className="wallet-stat-value neutral">—</span>
-          )}
-        </WithHint>
-
-        <WithHint hint="worst-performer" className="wallet-stat-card">
-          <span className="wallet-stat-label">Worst Performer</span>
-          {worst ? (
-            <>
-              <span className="wallet-stat-performer">
-                <AssetIcon symbol={worst.symbol} assetType={worst.asset_type} size={26} />
-                <span className="wallet-performer-name">{worst.symbol}</span>
-              </span>
-              <span className={'wallet-stat-sub ' + (worst.pnlUsd >= 0 ? 'profit' : 'loss')}>
-                {worst.pnlUsd >= 0 ? '+' : '-'}
-                {fmtUsd(worst.pnlUsd)}
-                <Icon name={worst.pnlPct >= 0 ? 'trending-up' : 'trending-down'} size={13} />
-                {Math.abs(worst.pnlPct).toFixed(2)}%
-              </span>
-            </>
-          ) : (
-            <span className="wallet-stat-value neutral">—</span>
-          )}
-        </WithHint>
+      {/* ── Overview / Transactions tab strip ── */}
+      <div className="wallet-tabstrip">
+        <button
+          className={'wallet-tab' + (tab === 'overview' ? ' active' : '')}
+          onClick={() => setTab('overview')}
+        >
+          Overview
+        </button>
+        <button
+          className={'wallet-tab' + (tab === 'transactions' ? ' active' : '')}
+          onClick={() => setTab('transactions')}
+        >
+          Transactions
+        </button>
       </div>
 
-      {/* ── Charts ── */}
-      <div className="wallet-charts-row">
-        <PortfolioHistory snapshots={snapshots} liveValue={totalValue} />
-
-        {segments.length > 0 && (
-          <WithHint hint="allocation" className="wallet-allocation-card">
-            <h3 className="wallet-section-title">Allocation</h3>
-            <div className="wallet-alloc-body">
-              <div className="wallet-donut-wrap">
-                <svg
-                  className="wallet-donut"
-                  viewBox="0 0 200 200"
-                  role="img"
-                  aria-label="Allocation by asset"
-                >
-                  {/* -90° so the first segment starts at 12 o'clock rather than 3 o'clock. */}
-                  <g transform="rotate(-90 100 100)">
-                    <circle
-                      cx="100"
-                      cy="100"
-                      r="70"
-                      fill="none"
-                      stroke="var(--border)"
-                      strokeWidth="24"
-                      opacity="0.25"
-                    />
-                    {segments.map((s) => (
-                      <circle
-                        key={s.symbol}
-                        cx="100"
-                        cy="100"
-                        r="70"
-                        fill="none"
-                        stroke={s.color}
-                        strokeWidth="24"
-                        strokeDasharray={`${s.dashLen} ${circumference - s.dashLen}`}
-                        strokeDashoffset={-s.offset}
-                      />
-                    ))}
-                  </g>
-                </svg>
-                <div className="wallet-donut-center">
-                  <span className="wallet-donut-total">{fmtUsd(totalValue, 0)}</span>
-                </div>
-              </div>
-              <div className="wallet-alloc-legend">
-                {segments.map((s) => (
-                  <div key={s.symbol} className="wallet-legend-row">
-                    <span className="wallet-legend-dot" style={{ backgroundColor: s.color }} />
-                    <span className="wallet-legend-sym">{s.symbol}</span>
-                    <span className="wallet-legend-pct">{(s.pct * 100).toFixed(2)}%</span>
+      {tab === 'transactions' ? (
+        <div className="wallet-tx-list">
+          {txGroups.length === 0 ? (
+            <div className="wallet-history-empty">No transactions yet.</div>
+          ) : (
+            txGroups.map((g) => (
+              <div key={g.day} className="wallet-tx-group">
+                <div className="wallet-tx-day">{g.day}</div>
+                {g.items.map(({ h, cost }) => (
+                  <div key={h.id} className="wallet-tx-row" onClick={() => openEdit(h)}>
+                    <span className="wallet-tx-left">
+                      <AssetIcon symbol={h.symbol} assetType={h.asset_type} size={32} />
+                      <span className="wallet-tx-type">Buy</span>
+                    </span>
+                    <span className="wallet-tx-right">
+                      <span className="wallet-tx-amount profit">
+                        + {hidden ? '••••' : `${h.amount.toLocaleString(undefined, { maximumFractionDigits: 8 })} ${h.symbol}`}
+                      </span>
+                      <span className="wallet-tx-cost">{hidden ? '••••' : fmtUsd(cost)}</span>
+                    </span>
                   </div>
                 ))}
               </div>
-            </div>
-          </WithHint>
-        )}
+            ))
+          )}
+          <button className="wallet-tx-fab" onClick={openAdd} aria-label="New transaction">
+            <Icon name="plus" size={24} />
+          </button>
+        </div>
+      ) : (
+      <>
+      {/* ── Chips ── */}
+      <div className="wallet-chips">
+        {CHIPS.map((c) => (
+          <button
+            key={c.key}
+            className={'wallet-chip' + (chip === c.key ? ' active' : '')}
+            onClick={() => setChip(c.key)}
+          >
+            {c.label}
+          </button>
+        ))}
       </div>
 
-      {/* ── Assets table ── */}
-      <div className="wallet-assets-card">
-        <div className="wallet-assets-header">
-          <h3 className="wallet-section-title">Assets</h3>
-          <button className="btn-primary btn-sm" onClick={openAdd}>
-            <Icon name="plus" size={15} /> Add Asset
+      {/* ── Timeframe pills (not on Allocation) ── */}
+      {showPills && (
+        <div className="wallet-history-tabs wallet-period-row">
+          {PERIODS.map((p) => (
+            <button
+              key={p.label}
+              className={'wallet-history-tab' + (period.label === p.label ? ' active' : '')}
+              onClick={() => setPeriod(p)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Panel (swaps with the chip) ── */}
+      <div className="wallet-panel">
+        {chip === 'holdings' && (
+          <ValueChart snapshots={snapshots} liveValue={totalValue} period={period} />
+        )}
+        {chip === 'profit' && (
+          <ProfitChart
+            snapshots={snapshots}
+            liveValue={totalValue}
+            totalCost={totalCost}
+            btc={btc}
+            period={period}
+            profitPct={totalPnLPct}
+          />
+        )}
+        {chip === 'allocation' && <AllocationPanel segments={segments} totalValue={totalValue} />}
+      </div>
+
+      {/* ── Asset table ── */}
+      <div className="wallet-cmc-table">
+        <div className="wallet-cmc-head">
+          <span className="wc-asset">Asset</span>
+          <span className="wc-price">Price</span>
+          <button className="wc-third wc-sortable" onClick={() => setSortDesc((v) => !v)}>
+            {thirdColLabel}
+            <Icon name={sortDesc ? 'chevron-down' : 'chevron-up'} size={14} />
           </button>
         </div>
 
-        <div className="wallet-table">
-          <div className="wallet-thead">
-            <span className="wt-name">Name</span>
-            <span className="wt-price">Price</span>
-            <span className="wt-change">24h%</span>
-            <span className="wt-holdings">Holdings</span>
-            <span className="wt-avg">Avg. Buy Price</span>
-            <span className="wt-pnl">Profit/Loss</span>
-            <span className="wt-actions">Actions</span>
+        {rows.map(({ h, quote, price, change, value, pnl, pnlPct, alloc, hasPnL }) => (
+          <div key={h.id} className="wallet-cmc-row" onClick={() => openEdit(h)}>
+            <span className="wc-asset">
+              <AssetIcon symbol={h.symbol} assetType={h.asset_type} size={28} />
+              <span className="wc-asset-names">
+                <span className="wc-asset-name">{h.name}</span>
+                <span className="wc-asset-sym">{h.symbol}</span>
+              </span>
+            </span>
+
+            <span className="wc-price">
+              <span className="wc-price-val">{price > 0 ? fmtPrice(price) : '—'}</span>
+              {quote && (
+                <span className={'wc-price-chg ' + (change >= 0 ? 'profit' : 'loss')}>
+                  {change >= 0 ? '▲' : '▼'} {Math.abs(change).toFixed(2)}%
+                </span>
+              )}
+            </span>
+
+            {/* Third column swaps with the active chip. */}
+            {chip === 'holdings' && (
+              <span className="wc-third">
+                <span className="wc-third-val">{price > 0 ? money(value) : '—'}</span>
+                <span className="wc-third-sub">
+                  {hidden ? '••••' : `${h.amount.toLocaleString(undefined, { maximumFractionDigits: 8 })} ${h.symbol}`}
+                </span>
+              </span>
+            )}
+            {chip === 'profit' && (
+              <span className="wc-third">
+                {hasPnL ? (
+                  <>
+                    <span className={'wc-third-val ' + (pnl >= 0 ? 'profit' : 'loss')}>
+                      {pnl >= 0 ? '+ ' : '- '}
+                      {money(Math.abs(pnl))}
+                    </span>
+                    <span className={'wc-third-sub ' + (pnl >= 0 ? 'profit' : 'loss')}>
+                      {pnl >= 0 ? '▲' : '▼'} {Math.abs(pnlPct).toFixed(2)}%
+                    </span>
+                  </>
+                ) : (
+                  <span className="wc-third-val">—</span>
+                )}
+              </span>
+            )}
+            {chip === 'allocation' && (
+              <span className="wc-third">
+                <span className="wc-third-val">{(alloc * 100).toFixed(2)}%</span>
+                <span className="wc-alloc-bar">
+                  <span
+                    className="wc-alloc-fill"
+                    style={{ width: `${Math.min(100, alloc * 100)}%`, backgroundColor: getAssetColor(h.symbol) }}
+                  />
+                </span>
+              </span>
+            )}
           </div>
-
-          {holdings.map((h) => {
-            const quote = prices[h.symbol];
-            const price = quote?.price ?? 0;
-            const change = quote?.change24h ?? 0;
-            const value = h.amount * price;
-            const cost = h.amount * (h.avg_buy_price || 0);
-            const pnl = value - cost;
-            const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
-            const hasPnL = h.avg_buy_price > 0 && price > 0;
-
-            return (
-              <div key={h.id} className="wallet-trow">
-                <span className="wt-name">
-                  <AssetIcon symbol={h.symbol} assetType={h.asset_type} size={34} />
-                  <span className="wt-name-text">{h.name}</span>
-                  <span className="wt-sym-text">{h.symbol}</span>
-                </span>
-
-                <span className="wt-price">{price > 0 ? fmtPrice(price) : '—'}</span>
-
-                <span className={'wt-change ' + (change >= 0 ? 'profit' : 'loss')}>
-                  {quote ? (
-                    <>
-                      <Icon name={change >= 0 ? 'trending-up' : 'trending-down'} size={13} />
-                      {Math.abs(change).toFixed(2)}%
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </span>
-
-                <span className="wt-holdings">
-                  {price > 0 ? (
-                    <>
-                      <span className="wt-h-value">{fmtUsd(value)}</span>
-                      <span className="wt-h-amount">
-                        {h.amount.toLocaleString(undefined, { maximumFractionDigits: 8 })} {h.symbol}
-                      </span>
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </span>
-
-                <span className="wt-avg">
-                  {h.avg_buy_price > 0 ? fmtPrice(h.avg_buy_price) : '—'}
-                </span>
-
-                <span className={'wt-pnl ' + (hasPnL ? (pnl >= 0 ? 'profit' : 'loss') : '')}>
-                  {hasPnL ? (
-                    <>
-                      <span className="wt-pnl-usd">
-                        {pnl >= 0 ? '+' : '-'}
-                        {fmtUsd(pnl)}
-                      </span>
-                      <span className="wt-pnl-pct">
-                        <Icon name={pnl >= 0 ? 'trending-up' : 'trending-down'} size={12} />
-                        {Math.abs(pnlPct).toFixed(2)}%
-                      </span>
-                    </>
-                  ) : (
-                    '—'
-                  )}
-                </span>
-
-                <span className="wt-actions">
-                  <button
-                    className="wallet-action-btn"
-                    onClick={() => openEdit(h)}
-                    aria-label={`Edit ${h.name}`}
-                  >
-                    <Icon name="edit" size={15} />
-                  </button>
-                  <button
-                    className="wallet-action-btn delete"
-                    onClick={() => handleDelete(h)}
-                    aria-label={`Remove ${h.name}`}
-                  >
-                    <Icon name="trash" size={15} />
-                  </button>
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        ))}
       </div>
 
-      {modalOpen && (
-        <AddAssetModal
-          holding={editing}
-          onSave={handleSave}
-          onClose={() => {
-            setModalOpen(false);
-            setEditing(null);
-          }}
-        />
+      <button className="wallet-new-tx" onClick={openAdd}>
+        <Icon name="plus" size={16} /> New transaction
+      </button>
+      </>
       )}
+
+      {modalOpen && (
+        <AddAssetModal holding={editing} onSave={handleSave} onClose={() => { setModalOpen(false); setEditing(null); }} />
+      )}
+    </div>
+  );
+}
+
+// ── Header bar (total, change lines, switcher, hide, add) ──
+
+function PortfolioHeaderBar({
+  portfolios,
+  activeId,
+  totalValue,
+  totalCost,
+  dayAgo,
+  hidden,
+  onToggleHide,
+  onAdd,
+  onSwitch,
+  onCreate,
+  onRename,
+  onDelete,
+}: {
+  portfolios: PortfolioMeta[];
+  activeId: string;
+  totalValue: number;
+  totalCost: number;
+  dayAgo: number | null;
+  hidden: boolean;
+  onToggleHide: () => void;
+  onAdd: () => void;
+  onSwitch: (id: string) => void;
+  onCreate: (name: string) => void;
+  onRename: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const pnl = totalValue - totalCost;
+  const pnlPct = totalCost > 0 ? (pnl / totalCost) * 100 : null;
+  const day = dayAgo !== null && dayAgo > 0 ? { delta: totalValue - dayAgo, pct: ((totalValue - dayAgo) / dayAgo) * 100 } : null;
+
+  return (
+    <div className="wallet-cmc-header">
+      <div className="wallet-cmc-toprow">
+        <PortfolioSwitcher
+          portfolios={portfolios}
+          activeId={activeId}
+          onSwitch={onSwitch}
+          onCreate={onCreate}
+          onRename={onRename}
+          onDelete={onDelete}
+        />
+      </div>
+
+      <div className="wallet-cmc-totalrow">
+        <span className="wallet-cmc-total">{hidden ? '••••••' : fmtUsd(totalValue)}</span>
+        <button className="wallet-eye-btn" onClick={onToggleHide} aria-label={hidden ? 'Show value' : 'Hide value'} aria-pressed={hidden}>
+          <Icon name={hidden ? 'eye-off' : 'eye'} size={18} />
+        </button>
+        <button className="wallet-cmc-add" onClick={onAdd} aria-label="Add asset">
+          <Icon name="plus" size={18} />
+        </button>
+      </div>
+
+      {!hidden && (
+        <div className="wallet-cmc-changes">
+          <ChangeLine label="24h" delta={day?.delta ?? null} pct={day?.pct ?? null} />
+          <ChangeLine label="All-time" delta={pnlPct === null ? null : pnl} pct={pnlPct} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChangeLine({ label, delta, pct }: { label: string; delta: number | null; pct: number | null }) {
+  if (delta === null || pct === null) {
+    return (
+      <div className="wallet-cmc-change">
+        <span className="wallet-cmc-change-label">{label}:</span>
+        <span className="wallet-cmc-change-none">—</span>
+      </div>
+    );
+  }
+  const up = delta >= 0;
+  return (
+    <div className="wallet-cmc-change">
+      <span className="wallet-cmc-change-label">{label}:</span>
+      <span className={up ? 'profit' : 'loss'}>
+        {up ? '+ ' : '- '}
+        {fmtUsd(Math.abs(delta))}
+      </span>
+      <span className={up ? 'profit' : 'loss'}>
+        {up ? '▲' : '▼'} {Math.abs(pct).toFixed(2)}%
+      </span>
     </div>
   );
 }

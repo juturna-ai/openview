@@ -1950,7 +1950,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
    it takes a crosshair rather than a text I-beam. */
 .wallet-history-svg { display: block; cursor: crosshair; }
 /* 11px is the real rendered size now — the old 9px was only legible because the viewBox upscaled it. */
-.wallet-axis-label { fill: var(--muted); font-size: 11px; }
+.wallet-axis-label { fill: var(--muted); font-size: 11px; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; }
 /* Fills its parent rather than restating the 220px: it now renders *inside* .wallet-history-chart
    (which the ResizeObserver must always have mounted), so a fixed height here would stack on top of
    the container's and double the card. */
@@ -3547,6 +3547,199 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wallet-embed { min-height: 100vh; }
 .wallet-embed.journal-shell { display: block; }
 .wallet-embed .journal-content { padding: 12px 12px 24px; }
+
+/* ══ CoinMarketCap-style Portfolio (header + chips + panel + asset table) ══
+   Content only — the app's native shell supplies the top/bottom bars. Reuses the wallet colour
+   tokens; the accent blue matches the CMC chips/profit line. */
+
+/* Header */
+.wallet-cmc-header { display: flex; flex-direction: column; gap: 8px; }
+.wallet-cmc-toprow { display: flex; align-items: center; }
+.wallet-switcher { position: relative; }
+.wallet-switcher-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 6px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--text); cursor: pointer;
+  font-size: 17px; font-weight: 700; max-width: 74vw;
+}
+.wallet-switcher-btn:hover { background: var(--hover); }
+.wallet-switcher-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wallet-switcher-menu {
+  position: absolute; top: 100%; left: 0; z-index: 30; margin-top: 4px;
+  min-width: 240px; padding: 6px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel); box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.wallet-switcher-item { display: flex; align-items: center; gap: 2px; border-radius: 6px; }
+.wallet-switcher-item:hover { background: var(--hover); }
+.wallet-switcher-item.active .wallet-switcher-pick { color: var(--accent); font-weight: 600; }
+.wallet-switcher-pick {
+  flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0;
+  padding: 8px 8px; border: 0; background: transparent; color: var(--text);
+  cursor: pointer; text-align: left; font-size: 14px;
+}
+.wallet-switcher-pick span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wallet-switcher-edit {
+  padding: 6px; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 6px;
+}
+.wallet-switcher-edit:hover { color: var(--text); background: var(--border); }
+.wallet-switcher-new {
+  display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px; padding: 8px;
+  border: 0; border-top: 1px solid var(--border); border-radius: 0 0 6px 6px;
+  background: transparent; color: var(--accent); cursor: pointer; font-size: 14px; font-weight: 600;
+}
+.wallet-switcher-new:hover { background: var(--hover); }
+
+.wallet-cmc-totalrow { display: flex; align-items: center; gap: 10px; }
+.wallet-cmc-total {
+  font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.wallet-eye-btn {
+  display: inline-flex; align-items: center; justify-content: center; padding: 4px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer;
+}
+.wallet-eye-btn:hover { color: var(--text); background: var(--hover); }
+.wallet-cmc-add {
+  margin-left: auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border: 0; border-radius: 10px;
+  background: var(--hover); color: var(--text); cursor: pointer;
+}
+.wallet-cmc-add:hover { background: var(--border); }
+.wallet-cmc-changes { display: flex; flex-direction: column; gap: 2px; }
+.wallet-cmc-change {
+  display: flex; align-items: center; gap: 6px; font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.wallet-cmc-change-label { color: var(--muted); }
+.wallet-cmc-change-none { color: var(--muted); }
+.wallet-cmc-change .profit { color: var(--green); }
+.wallet-cmc-change .loss { color: var(--red); }
+
+/* Chips */
+.wallet-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+/* Match the leaderboard asset-class pills (.gl-class-tabs .gl-class-tab): rounded, bordered,
+   transparent idle, dark-purple sidebar accent when active. */
+.wallet-chip {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center;
+  padding: 6px 12px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--muted);
+  cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.wallet-chip:hover {
+  background: rgba(124, 92, 191, 0.10);
+  border-color: #7c5cbf;
+  color: #b79cff;
+}
+.wallet-chip.active,
+.wallet-chip.active:hover {
+  border-color: #7c5cbf;
+  background: rgba(124, 92, 191, 0.14);
+  color: #b79cff;
+}
+.wallet-chip-analyze {
+  display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
+  background: transparent; border: 1px solid var(--accent); color: var(--accent); cursor: default;
+}
+
+.wallet-period-row { margin-top: 2px; }
+
+/* Panel */
+.wallet-panel { min-height: 210px; display: flex; flex-direction: column; gap: 8px; }
+.wallet-chart-box { position: relative; width: 100%; height: 200px; }
+.wallet-profit-legend { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.wallet-profit-legend .profit { color: var(--green); font-weight: 600; }
+.wallet-profit-legend .loss { color: var(--red); font-weight: 600; }
+.wallet-panel .wallet-alloc-body {
+  display: flex; align-items: center; gap: 20px; padding: 6px 0;
+}
+.wallet-panel .wallet-donut-wrap { position: relative; width: 150px; height: 150px; flex-shrink: 0; }
+.wallet-panel .wallet-donut { width: 100%; height: 100%; }
+.wallet-panel .wallet-donut-center {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+}
+.wallet-panel .wallet-donut-total { font-size: 16px; font-weight: 700; color: var(--text); }
+.wallet-panel .wallet-alloc-legend { display: flex; flex-direction: column; gap: 8px; }
+
+/* Asset table (CMC three-column) */
+.wallet-cmc-table { display: flex; flex-direction: column; }
+.wallet-cmc-head, .wallet-cmc-row {
+  display: grid; grid-template-columns: 1.3fr 1fr 1fr; align-items: center; gap: 8px;
+}
+.wallet-cmc-head {
+  padding: 10px 4px; border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--muted);
+}
+.wallet-cmc-head .wc-price, .wallet-cmc-head .wc-third { text-align: right; justify-self: end; }
+.wc-sortable {
+  display: inline-flex; align-items: center; gap: 3px; border: 0; background: transparent;
+  color: var(--accent); cursor: pointer; font-size: 12px; font-weight: 600;
+}
+.wallet-cmc-row {
+  padding: 12px 4px; border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.wallet-cmc-row:hover { background: var(--hover); }
+.wc-asset { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.wc-asset-names { display: flex; flex-direction: column; min-width: 0; }
+.wc-asset-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.wc-asset-sym { font-size: 12px; color: var(--muted); }
+.wc-price, .wc-third { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.wc-price-val, .wc-third-val { font-size: 14px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.wc-price-chg, .wc-third-sub { font-size: 12px; font-variant-numeric: tabular-nums; }
+.wc-price-chg.profit, .wc-third-val.profit, .wc-third-sub.profit { color: var(--green); }
+.wc-price-chg.loss, .wc-third-val.loss, .wc-third-sub.loss { color: var(--red); }
+.wc-third-sub { color: var(--muted); }
+.wc-alloc-bar {
+  width: 100%; max-width: 120px; height: 5px; margin-top: 3px; border-radius: 3px;
+  background: var(--border); overflow: hidden;
+}
+.wc-alloc-fill { display: block; height: 100%; border-radius: 3px; }
+
+.wallet-new-tx {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; margin-top: 4px; padding: 14px; border: 0; border-radius: 12px;
+  background: var(--hover); color: var(--text); cursor: pointer; font-size: 14px; font-weight: 600;
+}
+.wallet-new-tx:hover { background: var(--border); }
+
+/* Overview / Transactions tab strip — sits under the header, above the chips. */
+.wallet-tabstrip {
+  display: flex; gap: 24px; border-bottom: 1px solid var(--border); margin-top: 2px;
+}
+.wallet-tab {
+  position: relative; padding: 10px 0; border: 0; background: transparent;
+  color: var(--muted); cursor: pointer; font-size: 15px; font-weight: 600;
+}
+.wallet-tab:hover { color: var(--text); }
+.wallet-tab.active { color: var(--text); }
+.wallet-tab.active::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: var(--accent); border-radius: 2px;
+}
+
+/* Transactions list — Buy rows grouped by day, with a floating add button. */
+.wallet-tx-list { position: relative; display: flex; flex-direction: column; min-height: 300px; }
+.wallet-tx-group { display: flex; flex-direction: column; }
+.wallet-tx-day { padding: 14px 4px 6px; color: var(--muted); font-size: 13px; }
+.wallet-tx-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 4px; border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.wallet-tx-row:hover { background: var(--hover); }
+.wallet-tx-left { display: flex; align-items: center; gap: 10px; }
+.wallet-tx-type { font-size: 15px; font-weight: 600; color: var(--text); }
+.wallet-tx-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.wallet-tx-amount { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wallet-tx-amount.profit { color: var(--green); }
+.wallet-tx-cost { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wallet-tx-fab {
+  position: sticky; bottom: 16px; align-self: flex-end; margin-top: 16px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 52px; height: 52px; border: 0; border-radius: 50%;
+  background: var(--accent); color: #fff; cursor: pointer; box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+.wallet-tx-fab:hover { filter: brightness(1.08); }
 
 /* ── Narrow screens ── */
 @media (max-width: 1100px) {

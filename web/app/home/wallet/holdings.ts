@@ -51,11 +51,22 @@ function coerce(raw: unknown): Holding | null {
   };
 }
 
-/** Reads all holdings. Returns [] on the server, on missing/corrupt data, or if storage is blocked. */
-export function loadHoldings(): Holding[] {
+// Which storage key the zero-arg helpers below read/write. Defaults to the legacy single-list key;
+// portfolios.ts points it at the active portfolio's key via setActiveHoldingsKey(). Keeping the
+// original functions key-agnostic means every existing caller (loadHoldings/addHolding/…) works
+// unchanged — it just operates on whichever portfolio is active.
+let activeKey = HOLDINGS_KEY;
+
+/** Repoint the zero-arg helpers at a specific portfolio's holdings key. */
+export function setActiveHoldingsKey(key: string): void {
+  activeKey = key;
+}
+
+/** Reads holdings from an explicit key. Returns [] on the server or on missing/corrupt data. */
+export function loadHoldingsFrom(key: string): Holding[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(HOLDINGS_KEY);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -65,14 +76,24 @@ export function loadHoldings(): Holding[] {
   }
 }
 
-/** Writes the full list back. Silently no-ops if storage is unavailable/full. */
-export function saveHoldings(holdings: Holding[]): void {
+/** Writes holdings to an explicit key. Silently no-ops if storage is unavailable/full. */
+export function saveHoldingsTo(key: string, holdings: Holding[]): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(HOLDINGS_KEY, JSON.stringify(holdings));
+    window.localStorage.setItem(key, JSON.stringify(holdings));
   } catch {
     /* storage blocked or quota exceeded — keep the in-memory list rather than throwing */
   }
+}
+
+/** Reads all holdings. Returns [] on the server, on missing/corrupt data, or if storage is blocked. */
+export function loadHoldings(): Holding[] {
+  return loadHoldingsFrom(activeKey);
+}
+
+/** Writes the full list back. Silently no-ops if storage is unavailable/full. */
+export function saveHoldings(holdings: Holding[]): void {
+  saveHoldingsTo(activeKey, holdings);
 }
 
 export function addHolding(holding: Omit<Holding, 'id'>): Holding[] {

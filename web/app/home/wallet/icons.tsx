@@ -76,6 +76,7 @@ const PATHS: Record<string, React.ReactNode> = {
     </>
   ),
   'chevron-down': <path d="m6 9 6 6 6-6" />,
+  'chevron-up': <path d="m18 15-6-6-6 6" />,
   'arrow-left': (
     <>
       <path d="m12 19-7-7 7-7M19 12H5" />
