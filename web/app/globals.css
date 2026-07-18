@@ -1802,6 +1802,59 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wallet-portfolio-menu-item .wallet-portfolio-menu-label { flex: 1; }
 .wallet-portfolio-menu-emoji { font-size: 15px; line-height: 1; }
 .wallet-portfolio-menu-divider { height: 1px; margin: 4px 0; background: var(--border); }
+
+/* ── Edit-portfolio modal ── */
+.wep-body { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+.wep-label { color: var(--text); font-size: 14px; font-weight: 700; margin-top: 8px; }
+.wep-avatar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wep-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--hover);
+  font-size: 28px;
+  line-height: 1;
+}
+.wep-avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.wep-avatar-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.wep-avatar-choice:hover { background: var(--hover); }
+.wep-avatar-choice.active { border-color: var(--accent); background: var(--hover); }
+.wep-name-input {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--hover);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  outline: none;
+}
+.wep-name-input:focus { border-color: var(--accent); }
+.wep-counter { color: var(--muted); font-size: 12px; }
+.wep-save { justify-content: center; margin-top: 12px; padding: 12px; font-size: 15px; }
 .wallet-header-total-row { display: flex; align-items: center; gap: 8px; }
 .wallet-header-total {
   font-size: 34px;
@@ -2015,9 +2068,14 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 }
 .wallet-history-tab:hover { background: var(--hover); color: var(--text); }
 .wallet-history-tab.active { background: var(--reach-accent-gradient); background-size: cover; color: #fff; }
-/* Web timeframe pills: bordered like the Export button / asset tabs (mobile period row is unaffected). */
-.wallet-history-tabs .wallet-history-tab { border: 1px solid var(--border); }
-.wallet-history-tabs .wallet-history-tab.active { border-color: transparent; }
+/* Web timeframe pills: one bordered, transparent segmented control rather than separate pills
+   (mobile .wallet-period-row is unaffected). */
+.wallet-history-tabs {
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: transparent;
+}
 /* Positioned so the hover tooltip anchors to the plot area rather than the page. */
 .wallet-history-chart { position: relative; width: 100%; height: 220px; }
 /* Hover readout — mirrors the market chart's .ov-mc-tip so both charts read the same. Pinned to the
@@ -3851,7 +3909,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   flex-shrink: 0;
   display: inline-flex; align-items: center;
   padding: 6px 12px;
-  border: 1px solid transparent; border-radius: 999px;
+  border: 1px solid var(--border); border-radius: 999px;
   background: transparent; color: var(--muted);
   cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;
   transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
@@ -3921,7 +3979,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wallet-cmc-head .wc-price, .wallet-cmc-head .wc-third { text-align: right; justify-self: end; }
 .wc-sortable {
   display: inline-flex; align-items: center; gap: 3px; border: 0; background: transparent;
-  color: var(--accent); cursor: pointer; font-size: 12px; font-weight: 600;
+  color: #7c5cbf; cursor: pointer; font-size: 12px; font-weight: 600;
 }
 .wallet-cmc-row {
   padding: 12px 4px; border-bottom: 1px solid var(--border); cursor: pointer;
@@ -3945,10 +4003,10 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 
 .wallet-new-tx {
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%; margin-top: 4px; padding: 14px; border: 0; border-radius: 12px;
-  background: var(--hover); color: var(--text); cursor: pointer; font-size: 14px; font-weight: 600;
+  width: 100%; margin-top: 4px; padding: 14px; border: 1px solid var(--border); border-radius: 12px;
+  background: transparent; color: var(--text); cursor: pointer; font-size: 14px; font-weight: 600;
 }
-.wallet-new-tx:hover { background: var(--border); }
+.wallet-new-tx:hover { background: var(--hover); }
 
 /* Overview / Transactions tab strip — sits under the header, above the chips. */
 .wallet-tabstrip {

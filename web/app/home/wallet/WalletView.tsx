@@ -127,10 +127,10 @@ function ValueChart({
     if (data.length < 2 || size.w === 0) return null;
     const W = size.w;
     const H = size.h;
-    // The line spans the full width (x starts at 0); labels float over the right edge like the CMC
-    // reference, so there's no left gutter and no right column stealing plot width. A little top/
-    // bottom breathing room keeps the curve off the edges.
-    const pad = { top: 12, right: 4, bottom: 22, left: 0 };
+    // Reserve a right gutter for the axis labels so the line/area/gridlines end BEFORE the number
+    // column instead of drawing over it. A little top/bottom breathing room keeps the curve off the
+    // edges. (58px fits "$257.00K" at the label font size.)
+    const pad = { top: 12, right: 58, bottom: 22, left: 0 };
     const innerW = W - pad.left - pad.right;
     const innerH = H - pad.top - pad.bottom;
     const values = data.map((d) => d.value);
@@ -203,24 +203,33 @@ function ValueChart({
                 <stop offset="100%" stopColor={chart.color} stopOpacity="0.02" />
               </linearGradient>
             </defs>
+            {/* Gridlines under the line. */}
             {chart.yTicks.map((t, i) => (
-              <g key={i}>
-                <line
-                  x1={0}
-                  y1={t.y}
-                  x2={chart.W}
-                  y2={t.y}
-                  stroke="var(--border)"
-                  strokeWidth="0.5"
-                  opacity="0.35"
-                />
-                <text x={chart.W - chart.pad.right} y={t.y - 4} textAnchor="end" className="wallet-axis-label">
-                  {t.label}
-                </text>
-              </g>
+              <line
+                key={i}
+                x1={0}
+                y1={t.y}
+                x2={chart.W - chart.pad.right}
+                y2={t.y}
+                stroke="var(--border)"
+                strokeWidth="0.5"
+                opacity="0.35"
+              />
             ))}
             <path d={chart.area} fill="url(#ovValGrad)" />
             <path d={chart.line} fill="none" stroke={chart.color} strokeWidth="2" />
+            {/* Axis labels LAST so their --bg stroke halo sits over the line, not under it. */}
+            {chart.yTicks.map((t, i) => (
+              <text
+                key={i}
+                x={chart.W}
+                y={t.y - 4}
+                textAnchor="end"
+                className="wallet-axis-label"
+              >
+                {t.label}
+              </text>
+            ))}
           </svg>
         )
       )}
@@ -339,20 +348,16 @@ function ProfitChart({
             aria-label="All-time profit over time"
           >
             {chart.yTicks.map((t, i) => (
-              <g key={i}>
-                <line
-                  x1={chart.pad.left}
-                  y1={t.y}
-                  x2={chart.W - chart.pad.right}
-                  y2={t.y}
-                  stroke="var(--border)"
-                  strokeWidth="0.5"
-                  opacity="0.4"
-                />
-                <text x={chart.W - chart.pad.right + 4} y={t.y + 3} textAnchor="start" className="wallet-axis-label">
-                  {t.label}
-                </text>
-              </g>
+              <line
+                key={i}
+                x1={chart.pad.left}
+                y1={t.y}
+                x2={chart.W - chart.pad.right}
+                y2={t.y}
+                stroke="var(--border)"
+                strokeWidth="0.5"
+                opacity="0.4"
+              />
             ))}
             {chart.btcPath && (
               <path d={chart.btcPath} fill="none" stroke="#e0a463" strokeWidth="1.5" opacity="0.9" />
@@ -360,6 +365,18 @@ function ProfitChart({
             {chart.profitPath && (
               <path d={chart.profitPath} fill="none" stroke="#3b6ef6" strokeWidth="2" />
             )}
+            {/* Axis labels LAST so their --bg stroke halo sits over the lines. */}
+            {chart.yTicks.map((t, i) => (
+              <text
+                key={i}
+                x={chart.W - chart.pad.right + 4}
+                y={t.y + 3}
+                textAnchor="start"
+                className="wallet-axis-label"
+              >
+                {t.label}
+              </text>
+            ))}
           </svg>
         )}
       </div>
