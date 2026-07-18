@@ -24,6 +24,11 @@ export const dynamic = 'force-dynamic';
 const UPSTREAM_TIMEOUT_MS = 10_000;
 const CACHE_TTL_MS = 60_000;
 
+// api.bybit.com geo-blocks US datacenter IPs (Vercel's default region), returning nothing — which
+// left the Bybit tab permanently empty in production. api.bytick.com is Bybit's official mirror with
+// the identical /v5/* API, reachable from those IPs.
+const BYBIT_HOST = 'https://api.bytick.com';
+
 /** One normalised ticker row. `volume` is 24h quote volume in dollars. */
 export interface ExchangeRow {
   symbol: string;
@@ -101,7 +106,7 @@ async function fetchCoinbase(): Promise<ExchangeRow[]> {
 }
 
 async function fetchBybit(): Promise<ExchangeRow[]> {
-  const data = (await fetchJSON('https://api.bybit.com/v5/market/tickers?category=spot')) as {
+  const data = (await fetchJSON(`${BYBIT_HOST}/v5/market/tickers?category=spot`)) as {
     result?: {
       list?: { symbol?: string; lastPrice?: string; price24hPcnt?: string; turnover24h?: string }[];
     };

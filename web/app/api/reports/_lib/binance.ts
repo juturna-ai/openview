@@ -25,6 +25,11 @@ const UA =
 const UPSTREAM_TIMEOUT_MS = 10_000;
 const KLINES_CONCURRENCY = 10;
 
+// api.binance.com returns HTTP 451 from US datacenter IPs (Vercel's default region), which silently
+// zeroed the daily report's Binance pairs. data-api.binance.vision is Binance's official public
+// market-data mirror — same /api/v3/* endpoints and payload shapes, globally reachable, keyless.
+const BINANCE_HOST = 'https://data-api.binance.vision/api/v3';
+
 /** Mirrors the CMC gate's liquidity floor: below this you can't take a position without moving it. */
 const MIN_QUOTE_VOLUME = 1_000_000;
 /** A five-figure percentage is a broken baseline, not a rally (same reasoning as the CMC gate). */
@@ -73,7 +78,7 @@ const numOf = (v: string | undefined): number => {
  * peg noise, never a move worth reporting.
  */
 async function fetchLiquidUsdtPairs(): Promise<LiquidPair[]> {
-  const raw = (await fetchJSON('https://api.binance.com/api/v3/ticker/24hr')) as RawTicker[];
+  const raw = (await fetchJSON(`${BINANCE_HOST}/ticker/24hr`)) as RawTicker[];
   if (!Array.isArray(raw)) return [];
 
   const STABLES = new Set(['USDC', 'FDUSD', 'TUSD', 'BUSD', 'DAI', 'USDP', 'EUR', 'GBP', 'AEUR']);
@@ -103,7 +108,7 @@ async function fetchLiquidUsdtPairs(): Promise<LiquidPair[]> {
  *  missing or the baseline is zero — never a fabricated number. */
 async function fetchKlineChange(symbol: string, days: number): Promise<number | null> {
   // days+1 closes to span `days` of change (a 7d move needs today's close and the one 7 days back).
-  const url = `https://api.binance.com/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=1d&limit=${days + 1}`;
+  const url = `${BINANCE_HOST}/klines?symbol=${encodeURIComponent(symbol)}&interval=1d&limit=${days + 1}`;
   const rows = (await fetchJSON(url)) as unknown[][];
   if (!Array.isArray(rows) || rows.length < 2) return null;
   // Kline row index 4 is the close price.

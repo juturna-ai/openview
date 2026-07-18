@@ -59,11 +59,15 @@ async function yahooQuote(ticker: string): Promise<Quote | null> {
 }
 
 async function binanceQuote(symbol: string): Promise<Quote | null> {
+  // data-api.binance.vision, not api.binance.com: the latter 451s from US datacenter IPs (Vercel).
   const d = (await fetchJSON(
-    `https://api.binance.com/api/v3/ticker/24hr?symbol=${encodeURIComponent(symbol)}USDT`,
+    `https://data-api.binance.vision/api/v3/ticker/24hr?symbol=${encodeURIComponent(symbol)}USDT`,
   )) as { lastPrice?: string; priceChangePercent?: string };
   const price = parseFloat(d?.lastPrice ?? '');
-  if (!Number.isFinite(price)) return null;
+  // Binance answers 200 for a listed-but-dead pair (e.g. DAIUSDT) with lastPrice "0.00000000". That
+  // is a finite 0, so it slips past a NaN-only guard and surfaces as a real $0 quote — which the
+  // wallet then reads as "no price" and reports as a 100% loss. Reject non-positive prices too.
+  if (!Number.isFinite(price) || price <= 0) return null;
   const change = parseFloat(d?.priceChangePercent ?? '');
   return { price, change24h: Number.isFinite(change) ? change : 0 };
 }
