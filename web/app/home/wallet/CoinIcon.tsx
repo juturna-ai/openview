@@ -45,6 +45,10 @@ export default function CoinIcon({
           className="gl-coin-icon-img"
           onError={() => setFailed(true)}
           loading="lazy"
+          /* bin.bnbstatic.com (Binance-pair logo fallback) hotlink-blocks: 403 whenever a Referer
+             header is present, 200 without one (curl-verified). CMC's s2 CDN doesn't care either
+             way, so omitting the referer fixes the one host and costs the other nothing. */
+          referrerPolicy="no-referrer"
         />
       )}
     </span>

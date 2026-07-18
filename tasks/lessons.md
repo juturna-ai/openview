@@ -646,3 +646,91 @@ correct me: the screenshot illustrated the *look*, and even that wasn't wanted (
 old button style"). Lesson: when the user enumerates UI items, implement exactly that
 enumeration; a reference image only changes what they say it changes. If it seems to imply
 more, ask one question rather than importing the whole design.
+
+---
+
+## NEVER echo secret values into terminal output (2026-07-17)
+
+**What happened:** While debugging why the production Reports cron returned 401, I ran a
+command that printed a partial `SUPABASE_SERVICE_ROLE_KEY` (`sb_secret_...`) to the terminal
+to "confirm it wasn't truncated." The user reacted (rightly) with alarm. The key had to be
+treated as compromised and rotated.
+
+**Rule for myself — secrets are never rendered, ever:**
+- To check a secret's presence/shape, use length and a TRUNCATED hash only:
+  `printf '%s' "$V" | wc -c` and `printf '%s' "$V" | sha256sum | cut -c1-16`. Never print the
+  value, not even a prefix/suffix.
+- Never `cat`, `grep -o`, `echo`, or otherwise surface a line from `.env.local` that contains a
+  value. Extract into a shell var silently; operate on the var.
+- `vercel env pull` writes real values to a file — treat that file as radioactive: pull to a
+  `mktemp`, read by hash, `rm -f` immediately, never leave it in the scratchpad.
+- When comparing "does Vercel match local," compare HASHES, and remember Sensitive vars pull
+  back EMPTY (sha256 of "" = e3b0c442...) — an empty readback means "can't verify," not "differs."
+
+**Second lesson (mechanical):** `printf '%s' "$KEY" | vercel env add NAME production` stored an
+EMPTY value on this machine — the interactive prompt doesn't consume piped stdin here. Proven
+with a throwaway canary var that read back blank. For secret env vars on Vercel, use the
+DASHBOARD (Add/Edit form) or an interactive terminal where the user types at the prompt — do
+not pipe. My piped writes are what blanked the key and caused the persistent 401, not the key
+itself (the local key wrote to Supabase fine in a direct probe).
+
+## "Add icons" means icons on the data the user is LOOKING at — including stored rows
+I added logo enrichment to the report *builder*, verified the live preview showed 18/20 logos, and
+called it done — but the user's tab renders the *stored* report, which predates the new field, so
+they still saw letter chips and had to correct me. Two-part lesson: (1) when enriching a build
+pipeline, the already-persisted rows the UI actually prefers don't get the enrichment — either
+backfill/regenerate them or add a client-side fallback that covers legacy rows; (2) "some coverage"
+isn't "icons" — chase the stragglers to a genuinely complete source (Binance's own
+`bin.bnbstatic.com/static/assets/logos/{BASE}.png` covers every symbol Binance trades, including
+CMC-delisted ones) instead of accepting fallback chips as good enough.
+
+## curl 200 ≠ browser 200 — CDNs hotlink-block on the Referer header
+I verified `bin.bnbstatic.com` logo URLs with curl (200) and shipped them as `<img src>`; in the
+browser every one 403'd and fell back to letter chips, because the CDN rejects any request that
+carries a `Referer` header — which browsers always send and curl never does. The user had to show
+me a screenshot twice. Lesson: when adopting a third-party asset host, test it the way the browser
+will fetch it (`curl -H "Referer: http://localhost:3333/..."`); if it hotlink-blocks, either set
+`referrerPolicy="no-referrer"` on the img or proxy it — and re-verify from an actual browser render,
+not just HTTP status codes.
+
+---
+
+## Diagnose prod integration failures by reading the INNER error first (2026-07-17)
+
+**What happened:** Production Reports were broken (reads 502, cron writes 401). I spent a very
+long time cycling the `SUPABASE_SERVICE_ROLE_KEY` — re-entering it ~6 times, breaking it with
+empty CLI pipes, even exposing it — on the theory the key was wrong. The key was correct the
+whole time. The real cause: Vercel's `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+pointed at the WRONG Supabase project (gfdebbumdbrmzvpnyvsm = UDG's account) instead of
+Openview's (koedodxkryyxizcryggy). That DB has no `reports` table → PostgREST 404 on read,
+401 on write.
+
+**Rule — read the inner error before touching any config:**
+- A wrapped 502 ("Could not load reports") hides the real status. FIRST surface the inner error
+  (temporarily un-swallow the catch) — it said `select reports: HTTP 404`. A 404 (not 401/403)
+  means TABLE/PROJECT NOT FOUND, i.e. wrong database — not an auth problem. I'd have skipped the
+  entire key saga by reading that on step one.
+- When "works locally, fails in prod," the FIRST diff to check is the connection target
+  (URL/project ref), not the credentials. Add a temp diagnostic that echoes the prod
+  `projectRef` (public subdomain, not secret) and compare to `.env.local`.
+- This repo has TWO Supabase projects in play (see [[openview-one-supabase-project]]): the
+  correct koedodxkryyxizcryggy and UDG's gfdebbumdbrmzvpnyvsm. Env drift toward the wrong ref is
+  a known trap — check the ref explicitly.
+
+**Also:** don't iterate config changes against production live. Read ground truth once
+(inner error + which project), then make ONE correct change. I made ~10 prod deploys thrashing.
+
+## 2026-07-17 — Built a feature on the wrong page ("gainers list" was ambiguous)
+
+User asked for "a folder tab above the gainers list to show Coinbase, Bybit gainers". This repo has
+TWO gainers lists: the Gainers & Losers market board (MoversView) and the Reports page's Top
+Gainers tables (PeriodView). I built it into MoversView; the user meant Reports (their previous
+messages that session were all about the Reports page — the context pointed there).
+
+**Rule — resolve WHICH surface before building:**
+- When a request names a UI element ("the gainers list", "the table", "the sidebar") that exists on
+  more than one page, don't pick by best guess. Use the conversation's context page first (what were
+  we just working on?), and if still ambiguous, ask — one AskUserQuestion beats a full feature
+  built, reverted, and rebuilt.
+- A screenshot in an earlier message fixes the page for the whole session unless the user changes
+  subject: this session started with a Reports-page screenshot, and every later request stayed there.

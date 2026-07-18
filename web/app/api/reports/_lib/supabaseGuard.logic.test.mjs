@@ -63,9 +63,9 @@ async function rejects(fn, why) {
   }
 }
 
-/* ── 4. Only the one RPC we own is callable ── */
+/* ── 4. Only the RPCs we own are callable ── */
 {
-  for (const fn of ['increment_reactionX', 'pg_sleep', 'vault.create_secret', '', 'INCREMENT_REACTION']) {
+  for (const fn of ['increment_reactionX', 'decrement_reactionX', 'pg_sleep', 'vault.create_secret', '', 'INCREMENT_REACTION']) {
     await rejects(() => rpc(fn, {}), `rpc must refuse ${JSON.stringify(fn)}`);
   }
 }
@@ -92,6 +92,7 @@ async function rejects(fn, why) {
     await pastGuard(() => selectRows(table, 'select=id&limit=1'));
   }
   await pastGuard(() => rpc('increment_reaction', { p_report_id: 'x', p_emoji: '🚀' }));
+  await pastGuard(() => rpc('decrement_reaction', { p_report_id: 'x', p_emoji: '🚀' }));
 }
 
 console.log('supabaseGuard.logic.test.mjs — all assertions passed');

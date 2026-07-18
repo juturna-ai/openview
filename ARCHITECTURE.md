@@ -853,6 +853,7 @@ The binding constraint (verified in code, not assumed):
 | `/api/market/cmc` | `app/api/market/cmc/route.ts` | GET CoinMarketCap listing + spotlight + Fear & Greed — powers the market page's 6 crypto tabs (§16). No API key; see §16. |
 | `/api/market/global` | `app/api/market/global/route.ts` | GET `{marketCap, marketCapChange24h, marketCapSeries:{t,v}[], fearGreed, altcoinSeason}` — the three snapshot cards (`home/GlobalStats.tsx`) shown above the **crypto** Leaderboards table (`MoversView`, crypto class only). `marketCapSeries` is a **4-year daily** series (~1460 pts via an explicit `timeStart`/`timeEnd` window with `interval=1d`; `range` caps at ~400 pts so it can't reach 4y) powering the Market Cap sparkline's hover crosshair/tooltip — the ▲/▼ badge stays the 24h change from the *latest* endpoint, only the sparkline is long-range. Keyless CMC `global-metrics` (latest + historical) + `altcoin-season/chart` + CMC `public-api/v3/fear-and-greed/latest`; each source fails soft, 60s cache. |
 | `/api/market/screener` | `app/api/market/screener/route.ts` (+ `stocks.ts`) | GET `{stocks, etfs, commodities}` — the non-crypto Leaderboards universes (§16). Keyless: Nasdaq's screener returns 500 market-cap-ranked US stocks in **one** request, of which `stocks.ts` keeps the ~476 that are *common equity* (preferred shares and notes carry the issuer's market cap and would rank as a second copy of the company) and preserves the share class in the name (`Alphabet Inc. (Class A)`) so `GOOGL`/`GOOG` don't render identically; ETFs (40, curated) and commodity futures (16) are priced per-symbol off Yahoo. The size column is filled from Yahoo's crumb-gated `quoteSummary` — **AUM** for ETFs, **notional value** (open interest × price × contract size) for commodities, which have no market cap. |
+| `/api/market/exchange-movers` | `app/api/market/exchange-movers/route.ts` | GET `?venue=coinbase\|bybit` → `{venue, rows:{symbol,pair,price,change24h,volume}[]}` — per-exchange spot tickers for the Reports pairs table's exchange tabs (§17.5). Keyless, one upstream request per venue: Coinbase `products/stats` (Δ = last vs open, base volume × last ≈ $ volume), Bybit `v5/market/tickers?category=spot` (`price24hPcnt`, `turnover24h`). Dollar quotes only (USD/USDT/USDC), deduped per base asset on volume, Bybit leveraged tokens (`…[2-5][LS]`) dropped, 60s cache, fails soft to stale-or-empty. |
 | `/api/market/asset` | `app/api/market/asset/route.ts` (+ `descriptions.ts`, `tokenized.ts`) | GET `?cls=crypto\|stocks\|etfs\|commodities&symbol=…\|id=…&range=24H\|7D\|1M\|1Y\|ALL&mktPage=N` → one **asset detail** payload (quote, price series, stats, links, description, markets) for the page a leaderboard row opens into (§16.1). Keyless; normalises all four classes onto a single shape. **Every** class carries a description (crypto→CMC, stocks→Nasdaq, commodities→Wikipedia, ETFs→hardcoded); crypto carries a markets table, and a commodity with a tokenized proxy (gold→XAUt) carries a real CEX/DEX one for **the token** (§16.2). |
 | `/api/wallet-tracker` | `app/api/wallet-tracker/route.ts` | POST `{action: balance\|tokens\|prices}` — on-chain lookups across 16 chains (§16). |
 | `/api/explorer` | `app/api/explorer/route.ts` (+ `chains.server.ts`, `normalize.ts`) | POST `{action: address\|tx\|families}` — multi-chain **transaction** Explorer (§16.3). `address`→recent txns, `tx`→one tx's detail, both normalised to one `ExplorerTx` shape. Keyless: EVM via Blockscout (`eth/arbitrum/base/polygon`), Solana/Sui/Cardano/NEAR via each chain's public RPC/REST; chains with no keyless tx list (bsc/avalanche/optimism/tron) return `{deepLinkOnly:true, deepLink}` for a "View on explorer" link. Same never-leak-upstream-error contract as `/api/wallet-tracker`. |
@@ -862,7 +863,7 @@ The binding constraint (verified in code, not assumed):
 | `/api/reports/list` | `app/api/reports/list/route.ts` | GET `?period=&limit=` — the feed (anon-key read). Omit `period` for all periods by recency. Returns `{reports, configured}`; `configured:false` when Supabase env is absent, which makes the client fall back to `preview`. |
 | `/api/reports/[id]` | `app/api/reports/[id]/route.ts` | GET — one report + its comments + reaction tallies in one round trip. UUID-validated. |
 | `/api/reports/comment` | `app/api/reports/comment/route.ts` | POST `{reportId,nickname,body}` — service-role write, validated, 5/IP/10 min. |
-| `/api/reports/react` | `app/api/reports/react/route.ts` | POST `{reportId,emoji}` — atomic `increment_reaction()` RPC, emoji allow-list, 20/IP/10 min. |
+| `/api/reports/react` | `app/api/reports/react/route.ts` | POST `{reportId,emoji,op?}` — atomic `increment_reaction()`/`decrement_reaction()` RPC (`op` `add` default / `remove`), emoji allow-list, 20/IP/10 min. |
 
 `/home/*` share `app/home/layout.tsx` → dark folder-tab bar (`OvTabs`, tabs: Home · Openview · Journal · Wallet · Reports) + heading nav (`app/home/HomeNav.tsx`: Home · Openview · APP · Docs · About us). `OvTabs` is a client component that derives the active tab from `usePathname()`. The raw engine tab bars (`index.html`, `web/public/index.html` `#ovTabs`) mirror the same tabs (Journal/Wallet/Reports link to `/home/journal`, `/home/wallet`, `/home/reports`). Each folder-tab dashboard route must be added to the `startsWith` path guards in **both** `HomeNav.tsx` and `HomeFooter.tsx`, which self-suppress on those paths. The nav "Openview" is the **description** page (`/home/openview`), NOT the chart — the chart is the folder-tab "OpenView" → `/`. Old `(site)` navbar pages (`/about`, `/portfolio`, `/contact`) are unrelated leftovers.
 | `/about` | `app/(site)/about/page.tsx` | Marketing copy. |
@@ -1544,6 +1545,24 @@ symbol, and anything quoting 24 h volume is by definition trading. Binance pairs
 USDT, minus stablecoin quotes (peg noise) and leveraged `…UP`/`…DOWN` tokens (they'd double-count the
 underlying's move).
 
+**Pair logos** — Binance's API carries none, so `build.ts` stamps each pair's optional
+`RankedPair.thumb` from a CMC base-symbol match: first the already-fetched top-500 listing, then
+(only if any pair is still unmatched) one extra thumbs-only listing page covering ranks 501–1500
+(`fetchDeepThumbs`, failing soft). First symbol match wins — the listing is market-cap-ordered, so a
+collision resolves to the larger coin. Bases CMC doesn't rank (delisted/renamed — COCOS, TOMO) get
+Binance's own symbol-keyed logo CDN, `bin.bnbstatic.com/static/assets/logos/{BASE}.png`, which
+covers everything Binance trades (an unknown symbol 403s and `CoinIcon` degrades to its initial
+chip). `PeriodView` applies the same chain client-side (baked thumb → report's own CMC rows →
+bnbstatic) so reports stored before the field existed still show logos. **bnbstatic hotlink-blocks**:
+it 403s any request carrying a `Referer` header, so `CoinIcon`'s `<img>` sets
+`referrerPolicy="no-referrer"` — without it every bnbstatic logo silently degraded to the initial
+chip in the browser while curl checks passed.
+
+**Sortable columns** — both report tables sort client-side on header click (`sortRows`/`cycleSort`
+in `PeriodView`, same interaction and `.gl-sortable` header style as `MoversView`): rank and the
+alphabetic columns open ascending, numeric columns open descending, second click flips. One sort
+state per table; the CMC table's thesis rows travel with their coin row.
+
 ### 17.3 The LLM — `_lib/llm.ts`
 
 `gemini-flash-latest` (free tier, ~1,500 req/day; we need 3) → **Groq `llama-3.1-8b-instant` on a 429
@@ -1605,9 +1624,11 @@ report, arriving independently over time, needing their own ordering.
 direct write access and reduce the rate limiter to decoration. The default-deny is the whole
 security model (§18.2).
 
-**`increment_reaction()`** is `security definer` with no grant to `anon`/`authenticated`, so it's
-service-role-only. It exists because a read-then-write from the route would drop concurrent clicks
-(lost update); `count = count + 1` inside the upsert is resolved under Postgres's row lock.
+**`increment_reaction()` / `decrement_reaction()`** are `security definer` with no grant to
+`anon`/`authenticated`, so they're service-role-only. They exist because a read-then-write from the
+route would drop concurrent clicks (lost update); the `count = count ± 1` inside the upsert/update is
+resolved under Postgres's row lock. Decrement floors at zero (`greatest(count - 1, 0)`) and returns 0
+for a missing row — un-reacting something never stored is a no-op, not an error.
 
 **Idempotency.** Vercel does **not** guarantee at-most-once cron delivery, so every write upserts on
 `(period, report_date)`. **Verified live**: two authenticated cron runs, both `saved=true`, still one
@@ -1644,7 +1665,7 @@ misses are 20/IP/min, and an empty build caches for 60 s rather than not at all.
 
 **The service-role key can reach the mobile app's tables** (`push_tokens`/`sync_state`/`push_alerts`)
 — RLS is no defence against it. `_lib/supabase.ts` therefore enforces a hardcoded **allow-list**
-(`reports`, `report_comments`, `report_reactions`, + the one `increment_reaction` RPC) and throws on
+(`reports`, `report_comments`, `report_reactions`, + the `increment_reaction`/`decrement_reaction` RPCs) and throws on
 anything else. Every call site passes a literal today, so nothing can reach them — but the
 allow-list means a future route that threads a request param into `table` fails loudly instead of
 writing across tenants. Locked by `supabaseGuard.logic.test.mjs`.
@@ -1654,9 +1675,13 @@ writing across tenants. Locked by `supabaseGuard.logic.test.mjs`.
 The limiter is **module state, so per-lambda-instance** — the effective global limit is
 N × warm instances. That's acceptable *because it isn't load-bearing*: the tables have no public
 write path, so beating the limiter buys extra rows, not access. Nicknames are unverified by design
-and the UI says so. The client-side reaction dedupe is UI courtesy, not enforcement — with no
-identity there's nothing to enforce against. Fine for emoji on a market report; **not** fine for
-anything where the tally must be trustworthy.
+and the UI says so. Reactions **toggle**: a click adds, a second click removes (`op:'remove'` →
+`decrement_reaction`, floored at 0). "My reactions" live in
+`localStorage['openview:reports-my-reactions']` (`reactions.ts`, pruned past 50 reports) so the
+toggle survives reload — but that's per-browser courtesy, not enforcement — with no identity
+there's nothing to enforce against; a hostile client can at worst zero a public counter it could
+equally have inflated. Fine for emoji on a market report; **not** fine for anything where the tally
+must be trustworthy.
 
 ### 17.5 UI notes
 
@@ -1671,6 +1696,12 @@ Two gotchas found by screenshotting rather than by DOM assertions:
   make the prose wrap instead. Scoped to Reports — the board relies on content-driven sizing.
 - `.rp-reaction` names the emoji font stack explicitly: the inherited UI stack has no emoji
   coverage, so on systems without one in the default chain they render as tofu boxes.
+- **The pairs table has exchange tabs** (PeriodView): **Binance** · **Coinbase** · **Bybit**,
+  rendered with the shared `.gl-class-tab` vocabulary. Binance is the report's own baked,
+  period-correct list; Coinbase/Bybit fetch live from `/api/market/exchange-movers` on first open
+  (same $1M liquidity floor as `_lib/binance.ts`, gainers only, top 20, shaped into `RankedPair` so
+  the one table renders all three). Exchange tickers only publish 24h stats, so those tabs label the
+  change column `24h %` whatever the period; the report payload/schema is untouched.
 
 ---
 
@@ -1708,7 +1739,7 @@ venues/artists/events, it is on the wrong project.
 | --- | --- | --- | --- | --- |
 | `reports` | web | `id`; `unique (period, report_date)` | `SELECT` to all; **no write policy** | server routes (service_role) |
 | `report_comments` | web | `id` → `reports(id)` cascade | `SELECT` to all; **no write policy** | `/api/reports/comment` |
-| `report_reactions` | web | (`report_id`,`emoji`) | `SELECT` to all; **no write policy** | `/api/reports/react` → `increment_reaction()` |
+| `report_reactions` | web | (`report_id`,`emoji`) | `SELECT` to all; **no write policy** | `/api/reports/react` → `increment_reaction()`/`decrement_reaction()` |
 | `keep_alive` | web | one row | `SELECT` to `anon`,`authenticated` | nothing (read-only ping target) |
 | `sync_state` | mobile | (`user_id`,`key`) | own-rows: `select/insert/update/delete` where `auth.uid() = user_id` | the app (anon key) |
 | `push_tokens` | mobile | (`user_id`,`device_id`) | own-rows: `ALL` | the app (anon key) |

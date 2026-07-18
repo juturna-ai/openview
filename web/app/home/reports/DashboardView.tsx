@@ -5,6 +5,7 @@ import CoinIcon from '../wallet/CoinIcon';
 import { Icon } from '../wallet/icons';
 import { getFeed, setFeed } from './dataCache';
 import { getNickname, setNickname } from './nickname';
+import { getMyReactions, setMyReactions } from './reactions';
 
 // The Dashboard — the wall.
 //
@@ -42,6 +43,14 @@ const PERIOD_LABEL: Record<Period, string> = {
   monthly: 'Monthly report',
 };
 
+/** Which change window each period's percentages cover — mirrors CHANGE_KEY in
+ *  app/api/reports/_lib/gate.ts (daily → 24h, weekly → 7d, monthly → 30d). */
+const CHANGE_WINDOW: Record<Period, string> = {
+  daily: '24-hour change',
+  weekly: '7-day change',
+  monthly: '30-day change',
+};
+
 /** Must stay in sync with ALLOWED in app/api/reports/react/route.ts. */
 const REACTIONS = ['🚀', '📈', '👀', '🤔'] as const;
 
@@ -66,6 +75,29 @@ function ReportCard({ report }: { report: FeedReport }) {
 
   useEffect(() => setNick(getNickname()), []);
 
+  // `mine` mirrors localStorage so the toggle survives a reload; the ref is the always-current
+  // copy (state snapshots go stale inside same-frame double clicks). Loaded in an effect, not the
+  // initializer, because localStorage doesn't exist during SSR and the markup must hydrate clean.
+  const mineRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!report.id) return;
+    mineRef.current = new Set(getMyReactions(report.id));
+    setMine(mineRef.current);
+  }, [report.id]);
+
+  const setMinePersist = (mutate: (n: Set<string>) => void) => {
+    const n = new Set(mineRef.current);
+    mutate(n);
+    mineRef.current = n;
+    setMine(n);
+    if (report.id) setMyReactions(report.id, [...n]);
+  };
+
+  // Emojis clicked this session. The mount fetch above can resolve after a click, and its
+  // snapshot predates the click — letting it overwrite those tallies would visibly "undo" the
+  // reaction until the POST reconciles.
+  const touched = useRef<Set<string>>(new Set());
+
   // Wall data lives behind the card's own fetch so the feed paints immediately; a card with no DB
   // row (the live fallback) has nothing to load.
   useEffect(() => {
@@ -76,11 +108,13 @@ function ReportCard({ report }: { report: FeedReport }) {
         const r = await fetch(`/api/reports/${report.id}`);
         if (!r.ok || dead) return;
         const d = await r.json();
-        setCounts(
-          Object.fromEntries(
+        setCounts((c) => {
+          const fetched = Object.fromEntries(
             (d.reactions ?? []).map((x: { emoji: string; count: number }) => [x.emoji, x.count]),
-          ),
-        );
+          );
+          for (const e of touched.current) if (c[e] !== undefined) fetched[e] = c[e];
+          return fetched;
+        });
         setComments(d.comments ?? []);
       } catch {
         // The card still reads fine without its wall.
@@ -92,30 +126,31 @@ function ReportCard({ report }: { report: FeedReport }) {
   }, [report.id]);
 
   const react = async (emoji: string) => {
-    if (!report.id || mine.has(emoji)) return;
-    // Optimistic: the tally moves now, and reconciles to the server's number on reply. One reaction
-    // per emoji per session — `mine` is UI courtesy, not enforcement (there's no identity to
-    // enforce against; the server's rate limit is the real bound).
-    setCounts((c) => ({ ...c, [emoji]: (c[emoji] ?? 0) + 1 }));
-    setMine((m) => new Set(m).add(emoji));
+    if (!report.id) return;
+    // Toggle: a click on an active reaction removes it, otherwise it adds one. `mine` is
+    // per-browser courtesy, not enforcement (there's no identity to enforce against; the server's
+    // rate limit is the real bound) — it's only what decides which direction this click goes.
+    const removing = mineRef.current.has(emoji);
+    const delta = removing ? -1 : 1;
+    touched.current.add(emoji);
+
+    // Optimistic: the tally moves now, and reconciles to the server's number on reply.
+    setCounts((c) => ({ ...c, [emoji]: Math.max(0, (c[emoji] ?? 0) + delta) }));
+    setMinePersist((n) => (removing ? n.delete(emoji) : n.add(emoji)));
 
     // Undo BOTH halves of the optimistic update. Rolling back only `counts` while leaving `mine`
-    // set would leave the button permanently inert — react() early-returns on mine.has(emoji) — so
-    // a single offline blip would silently cost the user that reaction for the rest of the session.
+    // flipped would make the next click fire the same failed direction against a tally that never
+    // moved — a single offline blip would leave the button lying about state for the session.
     const rollback = () => {
-      setCounts((c) => ({ ...c, [emoji]: Math.max(0, (c[emoji] ?? 1) - 1) }));
-      setMine((m) => {
-        const n = new Set(m);
-        n.delete(emoji);
-        return n;
-      });
+      setCounts((c) => ({ ...c, [emoji]: Math.max(0, (c[emoji] ?? 0) - delta) }));
+      setMinePersist((n) => (removing ? n.add(emoji) : n.delete(emoji)));
     };
 
     try {
       const res = await fetch('/api/reports/react', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportId: report.id, emoji }),
+        body: JSON.stringify({ reportId: report.id, emoji, op: removing ? 'remove' : 'add' }),
       });
       // A 2xx with an unparseable body is a failure too — don't let it reach the catch and get
       // treated as a network error with a different rollback path.
@@ -185,10 +220,12 @@ function ReportCard({ report }: { report: FeedReport }) {
 
       <div className="rp-chips">
         {report.coins.slice(0, 6).map((c) => (
-          <span className="rp-chip" key={c.id}>
+          <span className="rp-chip" key={c.id} title={c.name || c.symbol}>
             <CoinIcon symbol={c.symbol} thumb={c.thumb} size={18} />
             {c.symbol}
-            <span className="gl-change-pill positive">+{c.changePct.toFixed(1)}%</span>
+            <span className="gl-change-pill positive" title={CHANGE_WINDOW[report.period]}>
+              +{c.changePct.toFixed(1)}%
+            </span>
           </span>
         ))}
       </div>
@@ -202,7 +239,7 @@ function ReportCard({ report }: { report: FeedReport }) {
               onClick={() => void react(e)}
               disabled={!persisted}
               aria-pressed={mine.has(e)}
-              aria-label={`React ${e}`}
+              aria-label={mine.has(e) ? `Remove ${e} reaction` : `React ${e}`}
               title={persisted ? undefined : 'Reactions need the reports database'}
             >
               {e}

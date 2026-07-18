@@ -26,7 +26,7 @@ const serviceKey = () => process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
  * typo; the cost of omitting it is someone's push tokens.
  */
 const ALLOWED_TABLES = new Set(['reports', 'report_comments', 'report_reactions']);
-const ALLOWED_FUNCTIONS = new Set(['increment_reaction']);
+const ALLOWED_FUNCTIONS = new Set(['increment_reaction', 'decrement_reaction']);
 
 /** Throws rather than returns: a disallowed target is always a programming error, never input. */
 function assertTable(table: string) {

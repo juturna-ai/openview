@@ -42,6 +42,10 @@ export interface RankedPair {
   lastPrice: number;
   /** 24h quote volume in USDT. Binance reports this for the last 24h only, at any period. */
   quoteVolume: number;
+  /** Coin logo URL, borrowed from the CMC listing by base-symbol match at build time. Binance's
+   *  API carries no logos, and bases outside CMC's top 500 stay undefined — the client falls back
+   *  to an initial chip. Optional also because stored reports predate the field. */
+  thumb?: string;
 }
 
 export interface Sentiment {

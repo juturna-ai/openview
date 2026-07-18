@@ -97,6 +97,25 @@ export async function fetchListing(): Promise<Coin[]> {
   return (res?.data?.cryptoCurrencyList ?? []).map(mapListingCoin);
 }
 
+/**
+ * Symbol → logo URL for ranks 501–1500 — fetched only to decorate Binance pairs whose base falls
+ * outside the ranked pool (build.ts skips the call when every pair already matched the top 500).
+ * One page: the endpoint serves limit=1000 from start=501 (curl-verified). First symbol wins,
+ * matching the market-cap-ordered collision rule used for the main listing.
+ */
+export async function fetchDeepThumbs(): Promise<Map<string, string>> {
+  const url =
+    `https://api.coinmarketcap.com/data-api/v3/cryptocurrency/listing` +
+    `?start=${LISTING_SIZE + 1}&limit=1000&sortBy=market_cap&sortType=desc&convert=USD` +
+    `&cryptoType=all&tagType=all&audited=false`;
+  const res = (await fetchJSON(url)) as { data?: { cryptoCurrencyList?: RawListingCoin[] } };
+  const map = new Map<string, string>();
+  for (const c of res?.data?.cryptoCurrencyList ?? []) {
+    if (c.symbol && !map.has(c.symbol)) map.set(c.symbol, thumbFor(c.id));
+  }
+  return map;
+}
+
 /* ── Sentiment ──
  *
  * Stands in for the social/news read we don't have. X (Twitter) has no free tier, so the report

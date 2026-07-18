@@ -1,3 +1,53 @@
+# Reports pairs table: exchange tabs (Binance | Coinbase | Bybit)
+
+CORRECTION: first build went into the Gainers & Losers board by mistake — user meant the REPORTS
+page's pairs table. MoversView fully reverted (`git checkout`); lesson captured in lessons.md.
+
+- [x] Revert all MoversView.tsx changes (back to HEAD state)
+- [x] Keep `web/app/api/market/exchange-movers/route.ts` (venue data source, UI-agnostic)
+- [x] `PeriodView.tsx` — Binance/Coinbase/Bybit tab row above the pairs table; Coinbase/Bybit fetch
+      live on first open, $1M floor + gainers-only + top 20, shaped into RankedPair; 24h % label on
+      live tabs; Refresh refetches the open venue; sort resets on venue switch
+- [x] Verify: tsc + lint + /home/reports compiles
+- [x] ARCHITECTURE.md: G&L row restored, route entry re-pointed at Reports, §17.5 note added
+
+## Review
+- Binance tab = the report's baked, period-correct list (untouched payload/schema). Coinbase/Bybit
+  tabs = live 24h top gainers from /api/market/exchange-movers, so on weekly/monthly reports those
+  tabs are 24h data and say so in the column header.
+- tsc exit 0, ESLint clean, /home/reports 200. Worth a quick look in the browser.
+
+---
+
+# Reaction toggle (un-like on second click)
+
+User picked: clicking an already-active reaction removes the like (server-side too), and the
+active state survives reload.
+
+- [x] DB: `decrement_reaction(p_report_id, p_emoji)` function (floor 0), grants matching `increment_reaction` (service_role only)
+- [x] `web/app/api/reports/_lib/supabase.ts`: allow-list `decrement_reaction`
+- [x] `web/app/api/reports/react/route.ts`: accept `op: 'add' | 'remove'` (default `add`)
+- [x] `web/app/home/reports/reactions.ts`: localStorage persistence of "my reactions" per report
+- [x] `web/app/home/reports/DashboardView.tsx`: toggle logic + persisted `mine`
+- [x] Verify: tsc + lint + exercised add/remove/floor/bad-op against the live API
+- [x] ARCHITECTURE.md update (route map, RPC block, allow-list, anonymous-writes, storage table)
+
+## Review
+- Root cause of the reported "click again undoes the like": it never did server-side — there was no
+  un-like path at all; a second click was a silent no-op. User chose real toggle semantics instead.
+- Server: new `decrement_reaction()` (security definer, service_role-only execute, `greatest(count-1,0)`,
+  missing row → 0). Verified live: add 1→2, remove 2→1→0, remove-on-missing-row → 0, `op:"nuke"` → 400.
+  DB left exactly as found (👀 1, 🤔 1 intact; test 🚀 back to 0).
+- Client: `mine` now backed by a ref (immune to same-frame double-click staleness) and persisted to
+  `localStorage['openview:reports-my-reactions']` (pruned to 50 reports) so the toggle survives reload.
+- Also fixed while in there: the card's mount fetch could resolve *after* a click and clobber the
+  optimistic tally with its pre-click snapshot (the likely visual "undo" the user saw) — fetched
+  counts no longer overwrite emojis touched this session.
+- `supabaseGuard.logic.test.mjs` extended for the second RPC; passes. tsc exit 0, ESLint clean.
+- Not run: `next build` (user's dev server holds `.next/` on 3333 — didn't want to corrupt it).
+
+---
+
 # Symbol search — full coverage (Big-5 crypto exchanges + every asset class)
 
 ## Goal

@@ -9,7 +9,7 @@
 // list over an ungated one.
 
 import { fetchBinanceMovers } from './binance';
-import { fetchListing, fetchSentiment } from './cmc';
+import { fetchDeepThumbs, fetchListing, fetchSentiment } from './cmc';
 import { gateAndRank } from './gate';
 import { analyze } from './llm';
 import { canWrite, upsertRow } from './supabase';
@@ -27,11 +27,34 @@ export const utcDate = (d: Date): string => d.toISOString().slice(0, 10);
 
 export async function buildReport(period: Period, at: Date = new Date()): Promise<Report> {
   // The three sources are independent; one failing must not take the others down with it.
-  const [coins, binancePairs, sentiment] = await Promise.all([
+  const [coins, rawPairs, sentiment] = await Promise.all([
     fetchListing().catch(() => []),
     fetchBinanceMovers(period).catch(() => [] as RankedPair[]),
     fetchSentiment().catch(() => EMPTY_SENTIMENT),
   ]);
+
+  // Binance's API carries no logos; borrow the CMC listing's thumb where the base symbol matches.
+  // First match wins: the listing is market-cap-ordered, so a symbol collision resolves to the
+  // larger coin.
+  const thumbBySymbol = new Map<string, string>();
+  for (const c of coins) if (c.symbol && !thumbBySymbol.has(c.symbol)) thumbBySymbol.set(c.symbol, c.thumb);
+  let binancePairs: RankedPair[] = rawPairs.map((p) => ({
+    ...p,
+    thumb: thumbBySymbol.get(p.base),
+  }));
+
+  // Long-tail bases (ranks 501–1500): one extra listing page, thumbs only, failing soft. Anything
+  // still unmatched (CMC-delisted/renamed bases like COCOS, TOMO) gets Binance's own logo CDN,
+  // which is keyed by base symbol and covers everything Binance trades (curl-verified; an unknown
+  // symbol 403s and CoinIcon degrades to its initial chip).
+  if (binancePairs.some((p) => !p.thumb)) {
+    const deep = await fetchDeepThumbs().catch(() => new Map<string, string>());
+    binancePairs = binancePairs.map((p) =>
+      p.thumb
+        ? p
+        : { ...p, thumb: deep.get(p.base) ?? `https://bin.bnbstatic.com/static/assets/logos/${p.base}.png` },
+    );
+  }
 
   // The gate is what makes this a report rather than a list of broken microcaps. See gate.ts.
   const ranked: RankedCoin[] = gateAndRank(coins, period);
