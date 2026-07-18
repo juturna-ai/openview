@@ -3713,26 +3713,27 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 
 /* Chips */
 .wallet-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
-/* Idle chips blend into the background (no grey border/fill); the active chip is the app's
-   solid purple #4E3470 — the exact colour of the phone app's "Create alert" button (theme.accent). */
+/* Match the leaderboard asset-class pills (.gl-class-tabs .gl-class-tab): rounded, bordered,
+   transparent idle, dark-purple sidebar accent when active. */
 .wallet-chip {
   flex-shrink: 0;
   display: inline-flex; align-items: center;
   padding: 6px 12px;
-  border: 1px solid transparent; border-radius: 999px;
+  border: 1px solid var(--border); border-radius: 999px;
   background: transparent; color: var(--muted);
   cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;
   transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 .wallet-chip:hover {
-  background: rgba(78, 52, 112, 0.20);
-  color: var(--text);
+  background: rgba(124, 92, 191, 0.10);
+  border-color: #7c5cbf;
+  color: #b79cff;
 }
 .wallet-chip.active,
 .wallet-chip.active:hover {
-  border-color: #4E3470;
-  background: #4E3470;
-  color: #fff;
+  border-color: #7c5cbf;
+  background: rgba(124, 92, 191, 0.14);
+  color: #b79cff;
 }
 .wallet-chip-analyze {
   display: inline-flex; align-items: center; gap: 6px; margin-left: auto;
