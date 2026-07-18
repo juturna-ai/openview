@@ -66,16 +66,10 @@ export async function GET(req: Request) {
     );
     return NextResponse.json({ reports: rows.map(toReport), configured: true });
   } catch (e) {
-    // TEMP diagnostic (revert): inner error + which Supabase PROJECT REF prod is hitting (public
-    // subdomain, not a secret) + whether anon key is non-empty. No key values, no row data.
-    const host = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/^https?:\/\//, '').split('.')[0];
+    // TEMP diagnostic (revert): surface the inner PostgREST error message. Contains an HTTP
+    // status code only — no keys, no row data.
     return NextResponse.json(
-      {
-        error: 'Could not load reports',
-        detail: String((e as Error)?.message ?? e),
-        projectRef: host,
-        anonLen: (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '').length,
-      },
+      { error: 'Could not load reports', detail: String((e as Error)?.message ?? e) },
       { status: 502 },
     );
   }
