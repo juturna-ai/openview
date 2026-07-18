@@ -4,7 +4,10 @@ import dynamic from 'next/dynamic';
 import React, { useEffect, useState } from 'react';
 import type { AssetRef } from './AssetDetailView';
 import Sidebar, { type WalletTab } from './Sidebar';
+// Two wallet layouts: the browser keeps the original stat-card WalletViewWeb; the phone-app embed
+// (?embed=wallet) gets the CoinMarketCap-style WalletView. Same `addAssetSignal` prop on both.
 import WalletView from './WalletView';
+import WalletViewWeb from './WalletViewWeb';
 import { useEmbedWallet } from './useEmbedWallet';
 
 // Sidebar + content, mirroring JournalShell. The sidebar owns the active view; Add Asset always
@@ -90,6 +93,7 @@ export default function WalletShell() {
     return (
       <div className="journal-shell wallet-embed">
         <div className="journal-content">
+          {/* Phone app: the CoinMarketCap-style portfolio layout. */}
           <WalletView addAssetSignal={addAssetSignal} />
         </div>
       </div>
@@ -107,7 +111,8 @@ export default function WalletShell() {
         <div
           style={view === 'wallet' && !selected ? undefined : { display: 'none' }}
         >
-          <WalletView addAssetSignal={addAssetSignal} />
+          {/* Browser: the original stat-card wallet, not the phone/CMC layout. */}
+          <WalletViewWeb addAssetSignal={addAssetSignal} />
         </div>
         {trackerMounted && (
           <div style={view === 'tracker' && !selected ? undefined : { display: 'none' }}>

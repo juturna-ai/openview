@@ -129,6 +129,17 @@ export interface Snapshot {
 
 export const SNAPSHOTS_KEY = 'ov_portfolio_snapshots';
 
+// Snapshots record the portfolio *total*, so — like holdings — each portfolio needs its own history.
+// A single shared key let one portfolio's totals pollute another's chart, poison valueAgo(), and trip
+// the jump-trim/throttle. The active portfolio's key is set by portfolios.ts (main = the legacy key,
+// so existing single-portfolio history is preserved).
+let activeSnapshotsKey = SNAPSHOTS_KEY;
+
+/** Repoint the snapshot helpers at a specific portfolio's key. */
+export function setActiveSnapshotsKey(key: string): void {
+  activeSnapshotsKey = key;
+}
+
 /** One snapshot every 5 min is plenty for a 24h..All chart, and keeps the row count sane. */
 const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;
 /** ~90 days at 5-min spacing, the longest bounded range the chart offers. */
@@ -137,7 +148,7 @@ const MAX_SNAPSHOTS = 26_000;
 export function loadSnapshots(): Snapshot[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(SNAPSHOTS_KEY);
+    const raw = window.localStorage.getItem(activeSnapshotsKey);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -193,7 +204,7 @@ export function recordSnapshot(value: number): Snapshot[] {
 
   const next = [...existing, { t: now, value }].slice(-MAX_SNAPSHOTS);
   try {
-    window.localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(next));
+    window.localStorage.setItem(activeSnapshotsKey, JSON.stringify(next));
   } catch {
     /* storage full — the in-memory series still renders this session */
   }

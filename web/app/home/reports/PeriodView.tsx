@@ -119,6 +119,57 @@ const BinanceMark = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
+/** Coinbase — the brand-blue disc with the concentric-ring "C". */
+const CoinbaseMark = ({ size = 16 }: { size?: number }) => (
+  <svg viewBox="0 0 1024 1024" width={size} height={size} aria-hidden="true">
+    <rect width="1024" height="1024" rx="180" fill="#0052FF" />
+    <path
+      fill="#fff"
+      d="M512 692c-99.4 0-180-80.6-180-180s80.6-180 180-180c89.2 0 163.3 64.9 177.6 150h181.3C854.5 302.3 700.2 168 512 168 322 168 168 322 168 512s154 344 344 344c188.2 0 342.5-134.3 358.9-312H689.6C675.3 627.1 601.2 692 512 692z"
+    />
+  </svg>
+);
+
+/** Bybit — the official wordmark on a dark tile: "BYB T" in white with the signature
+ *  tall orange "I" bar (the brand reads "BYB|T"). No standalone Bybit symbol exists,
+ *  so the wordmark tile is the on-brand mark at header size. */
+const BybitMark = ({ size = 16 }: { size?: number }) => (
+  <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
+    <rect width="64" height="64" rx="12" fill="#17181E" />
+    {/* "BYB" + signature tall orange "I" bar + "T" → reads "BYB|T" */}
+    <text
+      x="8"
+      y="41"
+      textAnchor="start"
+      fontSize="17"
+      fontWeight="800"
+      fontFamily="Arial, Helvetica, sans-serif"
+      letterSpacing="-1.2"
+      fill="#FFFFFF"
+    >
+      BYB
+    </text>
+    <rect x="41" y="19" width="4.5" height="25" rx="1" fill="#F7A600" />
+    <text
+      x="48"
+      y="41"
+      textAnchor="start"
+      fontSize="17"
+      fontWeight="800"
+      fontFamily="Arial, Helvetica, sans-serif"
+      fill="#FFFFFF"
+    >
+      T
+    </text>
+  </svg>
+);
+
+const VENUE_MARK: Record<ExVenue, ({ size }: { size?: number }) => React.ReactElement> = {
+  binance: BinanceMark,
+  coinbase: CoinbaseMark,
+  bybit: BybitMark,
+};
+
 /* ── Formatters (same behaviour as MoversView's, so report rows match board rows) ── */
 
 const fmtPrice = (p: number | null): string => {
@@ -211,6 +262,26 @@ export default function PeriodView({ period }: { period: Period }) {
   const [venue, setVenue] = useState<ExVenue>('binance');
   const [venuePairs, setVenuePairs] = useState<Partial<Record<ExVenue, RankedPair[]>>>({});
   const [venueLoading, setVenueLoading] = useState(false);
+
+  // Symbol → CMC logo URL, from the shared /api/market/coinlogos map (~7k tickers, id-keyed off
+  // CMC's s2 CDN — which, unlike bnbstatic, ignores the Referer header so it always renders). The
+  // universal logo fallback for every pair across all three venues; fetched once per mount, cached.
+  const [logoMap, setLogoMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/market/coinlogos')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { base?: string; ext?: string; ids?: Record<string, number> } | null) => {
+        if (!alive || !d?.ids) return;
+        const out: Record<string, string> = {};
+        for (const [sym, id] of Object.entries(d.ids)) out[sym] = `${d.base}${id}${d.ext}`;
+        setLogoMap(out);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const fetchVenue = useCallback(async (v: ExVenue) => {
     if (v === 'binance') return;
@@ -309,13 +380,14 @@ export default function PeriodView({ period }: { period: Period }) {
   const thesisFor = (symbol: string): string | null =>
     report?.analysis?.coinTheses.find((t) => t.symbol === symbol)?.thesis ?? null;
 
-  /** Logo for a Binance pair. Prefers the thumb baked in at build time; reports stored before that
-   *  field existed fall back to a same-symbol match against this report's own CMC rows, then to
-   *  Binance's own symbol-keyed logo CDN (covers everything Binance trades; a miss 403s and
-   *  CoinIcon degrades to its initial chip). */
+  /** Logo for a pair, any venue. In order: the thumb baked in at build time (Binance only) → a
+   *  same-symbol match against this report's own CMC rows → the shared CMC logo map (covers ~7k
+   *  tickers off CMC's Referer-agnostic CDN) → Binance's symbol-keyed CDN as a final reach. A base
+   *  that resolves on none of these (delisted everywhere) 403/404s and CoinIcon shows its chip. */
   const pairThumb = (p: RankedPair): string =>
     p.thumb ??
     report?.coins.find((c) => c.symbol === p.base)?.thumb ??
+    logoMap[p.base] ??
     `https://bin.bnbstatic.com/static/assets/logos/${p.base}.png`;
 
   if (!report && loading) return <p className="gl-page-loading">Building report…</p>;
@@ -505,7 +577,7 @@ export default function PeriodView({ period }: { period: Period }) {
             ))}
           </div>
           <div className="gl-section-header gainers">
-            {venue === 'binance' ? <BinanceMark size={16} /> : <Icon name="coins" size={16} />}
+            {React.createElement(VENUE_MARK[venue], { size: 16 })}
             Top Gainers · {VENUE_HEADER[venue]}
             <span className="gl-section-badge">{activePairs.length}</span>
           </div>

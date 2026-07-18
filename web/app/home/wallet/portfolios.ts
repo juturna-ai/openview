@@ -16,6 +16,8 @@ import {
   loadHoldingsFrom,
   saveHoldingsTo,
   setActiveHoldingsKey,
+  setActiveSnapshotsKey,
+  SNAPSHOTS_KEY,
 } from './holdings';
 
 export interface PortfolioMeta {
@@ -37,6 +39,17 @@ const DEFAULT_NAME = 'My Portfolio';
 /** Per-portfolio holdings live here; the legacy portfolio keeps using `ov_holdings` untouched. */
 export function holdingsKeyFor(id: string): string {
   return id === LEGACY_PORTFOLIO_ID ? HOLDINGS_KEY : `${HOLDINGS_KEY}__${id}`;
+}
+
+/** Per-portfolio value-history key; main keeps the legacy `ov_portfolio_snapshots` so its history survives. */
+export function snapshotsKeyFor(id: string): string {
+  return id === LEGACY_PORTFOLIO_ID ? SNAPSHOTS_KEY : `${SNAPSHOTS_KEY}__${id}`;
+}
+
+/** Point holdings.ts's zero-arg helpers at a portfolio's holdings AND snapshots keys together. */
+function pointAt(id: string): void {
+  setActiveHoldingsKey(holdingsKeyFor(id));
+  setActiveSnapshotsKey(snapshotsKeyFor(id));
 }
 
 /** A monotonic-ish id without Date.now (unavailable in some sandboxes) — good enough for a local key. */
@@ -90,7 +103,7 @@ function writeIndex(idx: PortfolioIndex): void {
 export function ensurePortfolios(): PortfolioIndex {
   const existing = readIndex();
   if (existing) {
-    setActiveHoldingsKey(holdingsKeyFor(existing.activeId));
+    pointAt(existing.activeId);
     return existing;
   }
   const idx: PortfolioIndex = {
@@ -98,14 +111,14 @@ export function ensurePortfolios(): PortfolioIndex {
     activeId: LEGACY_PORTFOLIO_ID,
   };
   writeIndex(idx);
-  setActiveHoldingsKey(holdingsKeyFor(idx.activeId));
+  pointAt(idx.activeId);
   return idx;
 }
 
-/** Persist the index AND repoint holdings.ts at the (possibly new) active key. */
+/** Persist the index AND repoint holdings.ts at the (possibly new) active keys. */
 function commit(idx: PortfolioIndex): PortfolioIndex {
   writeIndex(idx);
-  setActiveHoldingsKey(holdingsKeyFor(idx.activeId));
+  pointAt(idx.activeId);
   return idx;
 }
 
@@ -161,10 +174,15 @@ export function deletePortfolio(id: string): PortfolioIndex {
   if (!idx.portfolios.some((p) => p.id === id)) return idx;
   if (typeof window !== 'undefined') {
     try {
-      // Never remove the legacy ov_holdings key — deleting the "main" portfolio clears its list
-      // instead, so a downgrade doesn't find a missing key.
-      if (id === LEGACY_PORTFOLIO_ID) saveHoldingsTo(holdingsKeyFor(id), []);
-      else window.localStorage.removeItem(holdingsKeyFor(id));
+      // Never remove the legacy keys — deleting the "main" portfolio clears its lists instead, so a
+      // downgrade doesn't find a missing key.
+      if (id === LEGACY_PORTFOLIO_ID) {
+        saveHoldingsTo(holdingsKeyFor(id), []);
+        window.localStorage.setItem(snapshotsKeyFor(id), '[]');
+      } else {
+        window.localStorage.removeItem(holdingsKeyFor(id));
+        window.localStorage.removeItem(snapshotsKeyFor(id));
+      }
     } catch {
       /* ignore — index update below still removes it from the list */
     }

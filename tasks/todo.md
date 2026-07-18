@@ -274,3 +274,27 @@ per the Prove-It escape hatch.
       component-level and untested — no React harness in-repo; not adding jest/RTL for three guards.
 
 **Verified:** tsc clean, ESLint clean, all 18 logic suites pass, `next build` succeeds.
+
+---
+
+# 2026-07-18 — Revert web wallet to stat-card (phone CMC layout was applied to web by mistake)
+
+## Problem
+Commit d0b0e74 ("CoinMarketCap-style Portfolio redesign") rewrote WalletView.tsx in place with the
+PHONE app's layout. WalletShell renders the same WalletView for both the browser and the phone-embed
+(?embed=wallet), so the web wallet started showing the phone "My Portfolio" design.
+
+## Fix (Web = old stat-card, embed = new CMC)
+- [x] Extracted the old stat-card WalletView from 31c434f → new `WalletViewWeb.tsx` (export renamed).
+- [x] WalletShell: browser view renders `WalletViewWeb`; embed (?embed=wallet) keeps `WalletView` (CMC).
+- [x] Verified all WalletViewWeb imports resolve against current holdings.ts/assets/etc (backward-compat).
+- [x] Confirmed holdings data safe: loadHoldings/recordSnapshot default to legacy ov_holdings keys, so
+      the old view reads/writes the same data — no portfolio migration touched, nothing wiped.
+- [x] Only 2 CSS classes (wallet-hover-marker, wallet-tooltip-label) lack a globals.css rule — they
+      never had one in any commit (inline/SVG styling), harmless.
+- [x] tsc clean, ESLint clean, /home/wallet + ?embed=wallet both compile 200.
+- [x] ARCHITECTURE.md updated (WalletViewWeb = browser, WalletView = phone-embed only).
+
+## Needs the user's attention
+- Visual confirm in browser: /home → Wallet should now be the stat-card layout, not "My Portfolio".
+- Phone app (embed) is unchanged — still the CMC layout.
