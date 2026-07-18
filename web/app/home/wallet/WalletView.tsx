@@ -96,9 +96,31 @@ function ValueChart({
   const { ref, size } = useChartSize();
 
   const data = useMemo(() => {
-    const cutoff = period.hours ? Date.now() - period.hours * 3600_000 : 0;
-    const inRange = snapshots.filter((s) => s.t >= cutoff);
-    return liveValue > 0 ? [...inRange, { t: Date.now(), value: liveValue }] : inRange;
+    const now = Date.now();
+    const cutoff = period.hours ? now - period.hours * 3600_000 : 0;
+    let inRange = snapshots.filter((s) => s.t >= cutoff);
+
+    // Snapshots record the *portfolio total*, so adding/removing a holding (or switching portfolios)
+    // makes the series jump — e.g. $63k for a week, then $92k the instant ETH is added. That vertical
+    // step is real data but reads as a chart glitch. Treat a >20% jump between consecutive snapshots
+    // as a composition change and keep only the run after the last such jump, so the chart shows the
+    // current portfolio's history rather than splicing two different totals together.
+    let start = 0;
+    for (let i = 1; i < inRange.length; i++) {
+      const prev = inRange[i - 1].value;
+      if (prev > 0 && Math.abs(inRange[i].value - prev) / prev > 0.2) start = i;
+    }
+    if (start > 0) inRange = inRange.slice(start);
+
+    if (liveValue <= 0) return inRange;
+    if (inRange.length === 0) return [{ t: now, value: liveValue }];
+
+    // Only append the live "now" point when it's continuous with history: >60s newer than the last
+    // snapshot (a just-recorded one already IS the live value) and within 20% of it.
+    const last = inRange[inRange.length - 1];
+    const ageOk = now - last.t > 60_000;
+    const deltaOk = last.value > 0 && Math.abs(liveValue - last.value) / last.value <= 0.2;
+    return ageOk && deltaOk ? [...inRange, { t: now, value: liveValue }] : inRange;
   }, [snapshots, liveValue, period]);
 
   const chart = useMemo(() => {
@@ -218,11 +240,22 @@ function ProfitChart({
   // Portfolio profit as a % of cost, over time. Snapshot value → (value - cost)/cost.
   const profitSeries = useMemo(() => {
     if (totalCost <= 0) return [];
-    const cutoff = period.hours ? Date.now() - period.hours * 3600_000 : 0;
-    const pts = snapshots
-      .filter((s) => s.t >= cutoff)
-      .map((s) => ({ t: s.t, v: ((s.value - totalCost) / totalCost) * 100 }));
-    if (liveValue > 0) pts.push({ t: Date.now(), v: ((liveValue - totalCost) / totalCost) * 100 });
+    const now = Date.now();
+    const cutoff = period.hours ? now - period.hours * 3600_000 : 0;
+    let inRange = snapshots.filter((s) => s.t >= cutoff);
+    // Trim history before the last >20% composition jump (same reasoning as ValueChart).
+    let start = 0;
+    for (let i = 1; i < inRange.length; i++) {
+      const prev = inRange[i - 1].value;
+      if (prev > 0 && Math.abs(inRange[i].value - prev) / prev > 0.2) start = i;
+    }
+    if (start > 0) inRange = inRange.slice(start);
+
+    const pts = inRange.map((s) => ({ t: s.t, v: ((s.value - totalCost) / totalCost) * 100 }));
+    const last = inRange[inRange.length - 1];
+    const contiguous =
+      !last || (now - last.t > 60_000 && last.value > 0 && Math.abs(liveValue - last.value) / last.value <= 0.2);
+    if (liveValue > 0 && contiguous) pts.push({ t: now, v: ((liveValue - totalCost) / totalCost) * 100 });
     return pts;
   }, [snapshots, liveValue, totalCost, period]);
 

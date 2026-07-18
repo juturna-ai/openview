@@ -3643,7 +3643,23 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   background: transparent; border: 1px solid var(--accent); color: var(--accent); cursor: default;
 }
 
-.wallet-period-row { margin-top: 2px; }
+/* CMC-style timeframe row: pills spread full width in a rounded track, like the reference. Scoped
+   to .wallet-period-row so the shared .wallet-history-tabs used elsewhere is unaffected. */
+.wallet-period-row {
+  margin-top: 2px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--hover);
+}
+.wallet-period-row .wallet-history-tab {
+  flex: 1;
+  text-align: center;
+  padding: 7px 0;
+  border-radius: 7px;
+  font-size: 13px;
+}
 
 /* Panel */
 .wallet-panel { min-height: 210px; display: flex; flex-direction: column; gap: 8px; }
