@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "sync-engine": "node -e \"require('fs').copyFileSync('../index.html','public/index.html')\"",
+    "predev": "npm run sync-engine",
     "dev": "next dev -p 3333",
+    "prebuild": "npm run sync-engine",
     "build": "next build",
     "start": "next start -p 3333",
     "lint": "next lint"

@@ -18,13 +18,15 @@ There is **no build step** and **no backend**. All data comes from public exchan
 
 ## 2. File Layout
 
-Everything lives in **`index.html`** (~9950 lines). The file is three sections in order:
+Everything lives in **`index.html`** (~13,350 lines). The file is three sections in order:
 
 | Section | Lines (approx.) | Contents |
 |---|---|---|
-| `<style>` | 11–787 | All CSS: dark-theme variables, layout (flex #app), toolbar, topbar, watchlist, dialogs, sub-panes, indicator legend, context menu, alert dialog, add-symbol dialog, pair info card |
-| HTML skeleton | 789–913 | `<body>` tree: `#toolbar` (left drawing bar), `#main` > `#topbar` + `#chartWrap`/`#chart`/`#draw` + `#rsiWrap`/`#rsi` + `#subPanes`, floating UI (`#ctxMenu`, `#indicatorsMenu`, `#alertsPanel`, `#settingsDlg`, `#alertDlg`, `#scriptDlg`, `#symDlg`, `#pairCards`, `#dlgBackdrop`), `#watchlist` |
-| `<script>` | 914–9944 | The entire application: data layer, render layer, drawing engine, indicators, Freeview Script, alerts, watchlist, persistence, boot |
+| `<style>` | 11–~1140 | All CSS: dark-theme variables, layout (flex #app), toolbar, topbar, watchlist, dialogs, sub-panes, indicator legend, context menu, alert dialog, add-symbol dialog, pair info card |
+| HTML skeleton | ~1141–~1320 | `<body>` tree: `#toolbar` (left drawing bar), `#main` > `#topbar` + `#chartWrap`/`#chart`/`#draw` + `#rsiWrap`/`#rsi` + `#subPanes`, floating UI (`#ctxMenu`, `#indicatorsMenu`, `#alertsPanel`, `#settingsDlg`, `#alertDlg`, `#scriptDlg`, `#symDlg`, `#pairCards`, `#dlgBackdrop`), `#watchlist` |
+| `<script>` | ~1321–end | The entire application: data layer, render layer, drawing engine, indicators, Freeview Script, alerts, watchlist, persistence, boot |
+
+> **Engine lives in ONE source file, copied to the deploy path at build time.** The repo-root `index.html` is the **single source of truth**. `web/public/index.html` (what Next.js actually serves) is a **generated copy** produced by `web`'s `sync-engine` script — a `predev` + `prebuild` hook (`node -e "fs.copyFileSync('../index.html','public/index.html')"`), so `npm run dev` and `next build` both regenerate it from root first. **Edit the repo-root file only** — hand-edits to `web/public/index.html` are overwritten on the next dev/build. (History: the two forked once when edits landed only on the deployed copy without back-porting; reconciled 2026-07-18 by making root authoritative — the newer deployed content was copied back over root — and adding the copy hook so drift can't recur. See the Engine-sync note under the Next.js Migration section.)
 
 ### Supporting documents
 
@@ -825,7 +827,7 @@ The binding constraint (verified in code, not assumed):
 
 ### Decision (lowest-risk) — logged
 
-1. **Engine is served byte-for-byte from `web/public/index.html`** (copied verbatim; `cmp` clean). Its 11,213 lines of logic are **unchanged**. Assets (`assets/`, `images/`) copied to `web/public/` so `/assets/*` resolve identically.
+1. **Engine is served from `web/public/index.html`**, a copy of the repo-root `index.html` (regenerated from root by the `sync-engine` `predev`/`prebuild` hook — see §2 and the Engine-sync note). Assets (`assets/`, `images/`) copied to `web/public/` so `/assets/*` resolve identically.
 2. **Root `/` serves the engine** via a `next.config.js` `beforeFiles` rewrite `{'/' → '/index.html'}`. Next serves `public/index.html` **directly** at `/index.html` (200, no redirect) — strictly better than the old Vercel `/index.html → /` 308 hop; grid iframe `src="index.html?…"` now hits the engine directly with params preserved.
 3. **"Chart engine as ONE `'use client'` component"** requirement is met by `web/app/chart/ChartEngine.tsx` — a `'use client'` wrapper that mounts the engine full-viewport in an iframe and forwards the query string; it backs the in-app **`/chart`** route (navbar use). The **canonical mobile / grid / embed contract stays on the raw `/` document** (never the iframe wrapper), which is why mobile keeps working untouched.
 4. **Mobile app is NOT modified or redeployed** — lowest risk. Its URL (`/?embed=1…`) still lands on the engine. (The instruction allowed updating the mobile config in the same commit; not needed because the root contract is preserved.)
@@ -844,8 +846,8 @@ The binding constraint (verified in code, not assumed):
 | `/home/docs` | `app/home/docs/page.tsx` | **Docs — AI assistant (MCP + API).** Full setup guide for the LLM bridge: quick start, MCP tool table, REST endpoints, config, security. Mirrors `mcp/README.md` — keep both in sync when the bridge API changes. The chart's Help panel links here rather than restating it. |
 | `/home/about` | `app/home/about/page.tsx` | Who we are. |
 | `/home/journal` | `app/home/journal/page.tsx` + `JournalShell.tsx` (`'use client'`) | **Trade journal dashboard** (folder-tab "Journal"): sidebar + Calendar/Notes. See §15. |
-| `/home/assets` | `app/home/assets/page.tsx` + `AssetsShell.tsx` (`'use client'`) | **Assets dashboard** (folder-tab "Assets"): sidebar + Leaderboards (default) / Gainers & Losers. Same dashboard design as the wallet, **no Add Asset button**. Reuses the wallet's `MoversView` + `AssetDetailView` (§16). |
-| `/home/wallet` | `app/home/wallet/page.tsx` + `WalletShell.tsx` (`'use client'`) | **Wallet dashboard** (folder-tab "Wallet"): sidebar + Wallet / Wallet Tracker. Leaderboards / Gainers & Losers moved to `/home/assets`. See §16. |
+| `/home/wallet` | `app/home/wallet/page.tsx` + `WalletShell.tsx` (`'use client'`) | **Wallet dashboard** (folder-tab "Wallet"): sidebar + Wallet · Wallet Tracker · Explorer · **Leaderboards · Gainers & Losers** — all five views live here (a separate `/home/assets` route was considered but never shipped; both boards remain in the wallet sidebar). See §16. |
+| `/home/privacy` | `app/home/privacy/page.tsx` | Privacy policy — keyless / client-side data claims. |
 | `/home/reports` | `app/home/reports/page.tsx` + `ReportsShell.tsx` (`'use client'`) | **Reports dashboard** (folder-tab "Reports"): sidebar + four views — Dashboard (feed), Daily, Weekly, Monthly. The sidebar is the wallet's shell with a nav list but **no action button**. Same mount-once/keep-mounted tab discipline as `WalletShell`. See §17. |
 | `/api/market/prices` | `app/api/market/prices/route.ts` | POST holdings → `{symbol: {price, change24h}}`. Server-side price proxy (§16). Rejects a non-positive Binance `lastPrice` (a listed-but-dead pair like DAIUSDT answers 200 with `"0.00000000"`, which would otherwise surface as a real $0 quote and read as a 100% loss). |
 | `/api/market/klines` | `app/api/market/klines/route.ts` | GET `?symbol=BTC&range=7d` → `{points: [{t, close}]}`. Keyless Binance klines for the wallet's All-time-profit "BTC trend" line; symbol allow-list (BTC/ETH) only. |
@@ -917,7 +919,8 @@ web/
     (site)/contact/ContactForm.tsx   'use client' mailto form
     chart/page.tsx + chart/ChartEngine.tsx   'use client' engine wrapper (/chart)
   public/
-    index.html         ENGINE, byte-identical copy of repo-root index.html
+    index.html         ENGINE (generated copy of repo-root index.html via the
+                       sync-engine predev/prebuild hook — do not hand-edit)
     assets/  images/   engine assets, verbatim
 ```
 
@@ -959,7 +962,9 @@ Supabase pauses a free-tier project after **7 days with no database activity**. 
 
 ### Engine-sync note
 
-`web/public/index.html` is a **copy** of the repo-root `index.html`. Any future engine change must be applied to the root file and re-copied (`cp index.html web/public/index.html`), or the copy replaced by a Next build/prebuild step. Bump `ENGINE_VERSION` in `openviewapp/src/components/ChartWebView*.tsx` when the deployed engine changes (existing convention).
+`web/public/index.html` is a **generated copy** of the repo-root `index.html`, produced automatically by the `sync-engine` script in `web/package.json` — wired as a `predev` **and** `prebuild` hook (`node -e "require('fs').copyFileSync('../index.html','public/index.html')"`). So both `npm run dev` and `next build` (locally and on Vercel, whose build runs in `web/` with the repo checked out one level up) copy the current root file into place before doing anything. **Apply every engine change to the repo-root `index.html` only**; the deployed copy regenerates itself. Bump `ENGINE_VERSION` in `openviewapp/src/components/ChartWebView*.tsx` when the deployed engine changes (existing convention).
+
+> **2026-07-18 reconciliation.** Before this hook existed, the two files were kept in sync by hand and **drifted**: four post-migration commits (link-preview OG tags, RSI-alert-line-blue, journal-delete/leverage-P&L, plus the migration commit) edited the *deployed* `web/public/index.html` without back-porting to root, leaving the deployed engine ~1,000 lines **ahead** of its supposed source (newer CMC-logo pipeline, `DARK_LOGO`/`CMC_BAD_LOGO` handling, extra exchange interval maps, more quote currencies). A full hunk-by-hunk diff confirmed every difference was the deployed copy being strictly newer — the root file's only "unique" lines were the pre-upgrade versions of that same code, so nothing was lost. Fix: `cp web/public/index.html index.html` to make root authoritative again, then the `sync-engine` hook above so a hand-sync gap can never reopen. `cmp index.html web/public/index.html` is clean and `next build` passes.
 
 ### Verification
 
@@ -979,7 +984,7 @@ A code-quality/security pass over `web/app/**` produced three fixes (re-verified
 - `(site)/home/page.tsx` — the `/about` link is now `next/link` (client transition + prefetch); the `/` link stays a plain `<a>` (raw engine, not a page). Redundant page-level `metadata` dropped (inherits root layout).
 - `.eslintrc.json` + `eslint`/`eslint-config-next` devDeps added so `next lint` runs non-interactively.
 
-Security review confirmed clean: no secrets/keys/creds anywhere in `web/` source; the contact `mailto:` handler `encodeURIComponent`s the fully-composed subject/body, neutralizing header/body injection; no `dangerouslySetInnerHTML`/`eval`; iframe is first-party same-origin. `web/public/index.html` verified byte-identical to root `index.html`.
+Security review confirmed clean: no secrets/keys/creds anywhere in `web/` source; the contact `mailto:` handler `encodeURIComponent`s the fully-composed subject/body, neutralizing header/body injection; no `dangerouslySetInnerHTML`/`eval`; iframe is first-party same-origin. `web/public/index.html` is generated from root `index.html` at build time (sync-engine hook), so the two are identical by construction.
 
 ## 15. Journal — Trade Dashboard (`/home/journal`)
 
