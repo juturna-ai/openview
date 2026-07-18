@@ -878,7 +878,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.35);
 }
 .trade-modal {
   width: 100%;
@@ -886,10 +886,14 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   max-height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--panel);
+  background: #1b2130;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 24px rgba(0, 0, 0, 0.45),
+    0 30px 70px rgba(0, 0, 0, 0.55);
   overflow: hidden;
 }
 .trade-modal-header {
@@ -1441,9 +1445,13 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   max-height: 80vh;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--panel);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  border-radius: 16px;
+  background: #1b2130;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 24px rgba(0, 0, 0, 0.45),
+    0 30px 70px rgba(0, 0, 0, 0.55);
 }
 .note-form-header {
   display: flex;
@@ -1616,9 +1624,13 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   min-height: min(480px, 80vh);
   max-height: 80vh;
   border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--panel);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  border-radius: 16px;
+  background: #1b2130;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 24px rgba(0, 0, 0, 0.45),
+    0 30px 70px rgba(0, 0, 0, 0.55);
 }
 .note-view-header {
   display: flex;
@@ -1804,6 +1816,15 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
 .wallet-portfolio-menu-divider { height: 1px; margin: 4px 0; background: var(--border); }
 
 /* ── Edit-portfolio modal ── */
+/* Match the reference: blue buttons + blue avatar puck, generous padding, centered card. */
+.wallet-edit-portfolio .wep-avatar { background: var(--reach-accent-gradient); }
+.wallet-edit-portfolio .modal-header {
+  justify-content: flex-start;
+  border-bottom: none;
+  padding: 20px 22px 4px;
+}
+.wallet-edit-portfolio .modal-header h2 { font-size: 20px; font-weight: 700; }
+.wallet-edit-portfolio .wep-body { padding: 4px 22px 22px; }
 .wep-body { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
 .wep-label { color: var(--text); font-size: 14px; font-weight: 700; margin-top: 8px; }
 .wep-avatar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -2389,7 +2410,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.35);
 }
 .modal.wallet-modal {
   display: flex;
@@ -2398,9 +2419,13 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   max-width: 460px;
   max-height: 100%;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  border-radius: 16px;
+  background: #1b2130;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 24px rgba(0, 0, 0, 0.45),
+    0 30px 70px rgba(0, 0, 0, 0.55);
   overflow: hidden;
 }
 .modal-header {
@@ -2493,7 +2518,8 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
-  max-height: 230px;
+  /* 5 rows of 46px buttons + 4 gaps of 6px = 254px — sized so the 5th row lands flush, not cut. */
+  max-height: 254px;
   overflow-y: auto;
 }
 .wallet-asset-btn {
@@ -3672,9 +3698,13 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   max-width: 420px;
   padding: 18px;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  border-radius: 16px;
+  background: #1b2130;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 24px rgba(0, 0, 0, 0.45),
+    0 30px 70px rgba(0, 0, 0, 0.55);
 }
 .wt-edit-header {
   display: flex;
@@ -3707,7 +3737,7 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.35);
 }
 .wt-detail-panel {
   display: flex;
@@ -3716,9 +3746,13 @@ h2.ov-h2 { font-size: 26px; margin-bottom: 20px; }
   max-width: 540px;
   max-height: 100%;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--panel);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  border-radius: 16px;
+  background: #1b2130;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 24px rgba(0, 0, 0, 0.45),
+    0 30px 70px rgba(0, 0, 0, 0.55);
   overflow: hidden;
 }
 .wt-detail-header {

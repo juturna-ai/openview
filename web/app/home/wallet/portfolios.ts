@@ -23,7 +23,12 @@ import {
 export interface PortfolioMeta {
   id: string;
   name: string;
+  /** Emoji shown as the portfolio avatar. Absent on records written before this field existed. */
+  avatar?: string;
 }
+
+/** Default avatar for portfolios that haven't picked one. */
+export const DEFAULT_AVATAR = '👻';
 
 interface PortfolioIndex {
   portfolios: PortfolioMeta[];
@@ -66,7 +71,11 @@ function coerceIndex(raw: unknown): PortfolioIndex | null {
   if (!Array.isArray(o.portfolios)) return null;
   const portfolios = o.portfolios
     .filter((p): p is PortfolioMeta => !!p && typeof p === 'object')
-    .map((p) => ({ id: String((p as PortfolioMeta).id), name: String((p as PortfolioMeta).name) }))
+    .map((p) => {
+      const meta = p as PortfolioMeta;
+      const avatar = typeof meta.avatar === 'string' && meta.avatar ? meta.avatar : undefined;
+      return { id: String(meta.id), name: String(meta.name), ...(avatar ? { avatar } : {}) };
+    })
     .filter((p) => p.id && p.name);
   if (portfolios.length === 0) return null;
   const activeRaw = typeof o.activeId === 'string' ? o.activeId : '';
@@ -107,7 +116,7 @@ export function ensurePortfolios(): PortfolioIndex {
     return existing;
   }
   const idx: PortfolioIndex = {
-    portfolios: [{ id: LEGACY_PORTFOLIO_ID, name: DEFAULT_NAME }],
+    portfolios: [{ id: LEGACY_PORTFOLIO_ID, name: DEFAULT_NAME, avatar: DEFAULT_AVATAR }],
     activeId: LEGACY_PORTFOLIO_ID,
   };
   writeIndex(idx);
@@ -142,14 +151,27 @@ export function setActivePortfolio(id: string): PortfolioIndex {
 }
 
 /** Creates a portfolio (with an empty holdings list) and makes it active. */
-export function createPortfolio(name: string): PortfolioIndex {
+export function createPortfolio(name: string, avatar: string = DEFAULT_AVATAR): PortfolioIndex {
   const idx = ensurePortfolios();
   const clean = name.trim() || `Portfolio ${idx.portfolios.length + 1}`;
   const id = newId(idx.portfolios);
   saveHoldingsTo(holdingsKeyFor(id), []); // seed an empty list so the key exists
   return commit({
-    portfolios: [...idx.portfolios, { id, name: clean }],
+    portfolios: [...idx.portfolios, { id, name: clean, avatar }],
     activeId: id,
+  });
+}
+
+/** Copies a portfolio's holdings into a new "… copy" portfolio and makes it active. */
+export function duplicatePortfolio(id: string): PortfolioIndex {
+  const idx = ensurePortfolios();
+  const src = idx.portfolios.find((p) => p.id === id);
+  if (!src) return idx;
+  const newIdVal = newId(idx.portfolios);
+  saveHoldingsTo(holdingsKeyFor(newIdVal), loadHoldingsFrom(holdingsKeyFor(id)));
+  return commit({
+    portfolios: [...idx.portfolios, { id: newIdVal, name: `${src.name} copy`, avatar: src.avatar ?? DEFAULT_AVATAR }],
+    activeId: newIdVal,
   });
 }
 
@@ -161,6 +183,20 @@ export function renamePortfolio(id: string, name: string): PortfolioIndex {
   return commit({
     ...idx,
     portfolios: idx.portfolios.map((p) => (p.id === id ? { ...p, name: clean } : p)),
+  });
+}
+
+/** Updates a portfolio's name and/or avatar in one write (used by the Edit modal). */
+export function updatePortfolio(id: string, patch: { name?: string; avatar?: string }): PortfolioIndex {
+  const idx = ensurePortfolios();
+  const name = patch.name?.trim();
+  return commit({
+    ...idx,
+    portfolios: idx.portfolios.map((p) =>
+      p.id === id
+        ? { ...p, ...(name ? { name } : {}), ...(patch.avatar ? { avatar: patch.avatar } : {}) }
+        : p,
+    ),
   });
 }
 

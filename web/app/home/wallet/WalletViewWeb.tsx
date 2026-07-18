@@ -16,8 +16,20 @@ import {
   updateHolding,
   valueAgo,
 } from './holdings';
+import EditPortfolioModal from './EditPortfolioModal';
 import { Icon } from './icons';
-import { loadWalletName, saveWalletName } from './walletName';
+import {
+  createPortfolio,
+  DEFAULT_AVATAR,
+  deletePortfolio,
+  duplicatePortfolio,
+  ensurePortfolios,
+  getActiveId,
+  loadPortfolios,
+  type PortfolioMeta,
+  setActivePortfolio,
+  updatePortfolio,
+} from './portfolios';
 
 // Portfolio view — ported from Reach's WalletView.jsx.
 //
@@ -449,67 +461,161 @@ function FilterDropdown({
   );
 }
 
+// ── Portfolio name menu (avatar + name, click for switch list + Edit / Duplicate / Remove) ──
+
+function PortfolioNameMenu({
+  portfolios,
+  active,
+  onSwitch,
+  onEdit,
+  onDuplicate,
+  onDelete,
+}: {
+  portfolios: PortfolioMeta[];
+  active: PortfolioMeta | null;
+  onSwitch: (id: string) => void;
+  onEdit: () => void;
+  onDuplicate: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const avatar = active?.avatar ?? DEFAULT_AVATAR;
+
+  return (
+    <div className="wallet-header-name-row" ref={wrapRef}>
+      <button className="wallet-header-name" onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open}>
+        <span className="wallet-header-avatar" aria-hidden="true">
+          {avatar}
+        </span>
+        {active?.name ?? 'Portfolio'}
+        <Icon name="chevron-down" size={15} />
+      </button>
+
+      {open && (
+        <div className="wallet-portfolio-menu" role="menu">
+          {portfolios.length > 1 && (
+            <>
+              <div className="wallet-portfolio-menu-section">Switch</div>
+              {portfolios.map((p) => (
+                <button
+                  key={p.id}
+                  className={'wallet-portfolio-menu-item' + (p.id === active?.id ? ' active' : '')}
+                  onClick={() => {
+                    onSwitch(p.id);
+                    setOpen(false);
+                  }}
+                  role="menuitemradio"
+                  aria-checked={p.id === active?.id}
+                >
+                  <span className="wallet-portfolio-menu-emoji">{p.avatar ?? DEFAULT_AVATAR}</span>
+                  <span className="wallet-portfolio-menu-label">{p.name}</span>
+                  {p.id === active?.id && <Icon name="check" size={15} />}
+                </button>
+              ))}
+              <div className="wallet-portfolio-menu-divider" />
+            </>
+          )}
+
+          <button
+            className="wallet-portfolio-menu-item"
+            onClick={() => {
+              onEdit();
+              setOpen(false);
+            }}
+            role="menuitem"
+          >
+            <Icon name="edit" size={15} />
+            <span className="wallet-portfolio-menu-label">Edit</span>
+          </button>
+          <button
+            className="wallet-portfolio-menu-item"
+            onClick={() => {
+              if (active) onDuplicate(active.id);
+              setOpen(false);
+            }}
+            role="menuitem"
+          >
+            <Icon name="copy" size={15} />
+            <span className="wallet-portfolio-menu-label">Duplicate</span>
+          </button>
+          <button
+            className="wallet-portfolio-menu-item danger"
+            onClick={() => {
+              if (active) onDelete(active.id);
+              setOpen(false);
+            }}
+            disabled={portfolios.length <= 1}
+            role="menuitem"
+          >
+            <Icon name="trash" size={15} />
+            <span className="wallet-portfolio-menu-label">Remove</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Portfolio header (name + total + 24h change on the left, actions on the right) ──
 
 function PortfolioHeader({
-  name,
-  editingName,
-  onStartRename,
-  onCommitName,
-  onCancelRename,
+  portfolios,
+  active,
   totalValue,
   change,
   hidden,
   onToggleHide,
   onAdd,
+  onCreate,
+  onSwitch,
+  onEdit,
+  onDuplicate,
+  onDelete,
   money,
 }: {
-  name: string;
-  editingName: boolean;
-  onStartRename: () => void;
-  onCommitName: (value: string) => void;
-  onCancelRename: () => void;
+  portfolios: PortfolioMeta[];
+  active: PortfolioMeta | null;
   totalValue: number;
   change: { delta: number; pct: number; label: string } | null;
   hidden: boolean;
   onToggleHide: () => void;
   onAdd: () => void;
+  onCreate: () => void;
+  onSwitch: (id: string) => void;
+  onEdit: () => void;
+  onDuplicate: (id: string) => void;
+  onDelete: (id: string) => void;
   money: (n: number) => string;
 }) {
-  // First letter of the name, as a fallback avatar (no user-profile system in the web wallet).
-  const initial = name.trim().charAt(0).toUpperCase() || 'P';
   const up = change ? change.delta >= 0 : true;
 
   return (
     <div className="wallet-header">
       <div className="wallet-header-main">
-        <div className="wallet-header-name-row">
-          <span className="wallet-header-avatar" aria-hidden="true">
-            {initial}
-          </span>
-          {editingName ? (
-            <input
-              className="wallet-header-name-input"
-              defaultValue={name}
-              autoFocus
-              onBlur={(e) => onCommitName(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onCommitName(e.currentTarget.value);
-                if (e.key === 'Escape') onCancelRename();
-              }}
-              aria-label="Portfolio name"
-            />
-          ) : (
-            <button
-              className="wallet-header-name"
-              onClick={onStartRename}
-              title="Rename portfolio"
-            >
-              {name}
-              <Icon name="edit" size={13} />
-            </button>
-          )}
-        </div>
+        <PortfolioNameMenu
+          portfolios={portfolios}
+          active={active}
+          onSwitch={onSwitch}
+          onEdit={onEdit}
+          onDuplicate={onDuplicate}
+          onDelete={onDelete}
+        />
 
         <div className="wallet-header-total-row">
           <span className="wallet-header-total">{hidden ? '••••••' : money(totalValue)}</span>
@@ -541,12 +647,8 @@ function PortfolioHeader({
         <button className="btn-primary" onClick={onAdd}>
           <Icon name="plus" size={16} /> Add Transaction
         </button>
-        {/* Export and ⋯ are visual-only for now — no CSV/menu wired yet. */}
-        <button className="wallet-header-btn" type="button" aria-label="Export" disabled>
-          <Icon name="download" size={15} /> Export
-        </button>
-        <button className="wallet-header-btn wallet-header-btn-icon" type="button" aria-label="More" disabled>
-          <Icon name="more-horizontal" size={16} />
+        <button className="wallet-header-btn" type="button" onClick={onCreate}>
+          <Icon name="plus" size={15} /> Create Portfolio
         </button>
       </div>
     </div>
@@ -568,22 +670,58 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
   const [txType, setTxType] = useState<TxType>('all');
   const [txCoin, setTxCoin] = useState<string>('all');
   const [txSearch, setTxSearch] = useState('');
-  // Portfolio header: editable name + a hide-values toggle, both persisted (name to localStorage,
-  // hide kept per-session).
-  const [name, setName] = useState('My Portfolio');
-  const [editingName, setEditingName] = useState(false);
+  // Portfolios: the header name is the active portfolio; switching/creating repoints holdings.ts at
+  // that portfolio's keys (see the handlers below). Hide-values is kept per-session.
+  const [portfolios, setPortfolios] = useState<PortfolioMeta[]>([]);
+  const [activeId, setActiveId] = useState<string>('main');
   const [hidden, setHidden] = useState(false);
+  const [editPortfolioOpen, setEditPortfolioOpen] = useState(false);
 
-  // localStorage is client-only; seed after mount so SSR and first paint agree.
+  const active = portfolios.find((p) => p.id === activeId) ?? portfolios[0] ?? null;
+
+  // localStorage is client-only; seed after mount so SSR and first paint agree. ensurePortfolios()
+  // migrates the legacy single-list wallet into a "main" portfolio and points holdings.ts at it.
   useEffect(() => {
+    ensurePortfolios();
+    setPortfolios(loadPortfolios());
+    setActiveId(getActiveId());
     setHoldings(loadHoldings());
     setSnapshots(loadSnapshots());
-    setName(loadWalletName());
   }, []);
 
-  const commitName = (value: string) => {
-    setName(saveWalletName(value));
-    setEditingName(false);
+  // Re-read holdings + snapshots for whatever portfolio is now active, and drop stale prices so the
+  // poll refetches for the new set. Shared by switch/create/duplicate/delete.
+  const reloadActive = () => {
+    setActiveId(getActiveId());
+    setPortfolios(loadPortfolios());
+    setHoldings(loadHoldings());
+    setSnapshots(loadSnapshots());
+    setPrices({});
+  };
+
+  const switchTo = (id: string) => {
+    setActivePortfolio(id);
+    reloadActive();
+  };
+  const doCreate = () => {
+    createPortfolio('New Portfolio');
+    reloadActive();
+  };
+  const doDuplicate = (id: string) => {
+    duplicatePortfolio(id);
+    reloadActive();
+  };
+  const doDelete = (id: string) => {
+    if (portfolios.length <= 1) return;
+    const p = portfolios.find((x) => x.id === id);
+    if (!window.confirm(`Remove "${p?.name ?? 'this portfolio'}"? Its holdings will be removed.`)) return;
+    deletePortfolio(id);
+    reloadActive();
+  };
+  const saveEditPortfolio = (data: { name: string; avatar: string }) => {
+    updatePortfolio(activeId, data);
+    setPortfolios(loadPortfolios());
+    setEditPortfolioOpen(false);
   };
 
   // The sidebar's Add Asset button bumps a counter rather than calling in directly (same pattern as
@@ -784,16 +922,18 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
     return (
       <div className="wallet-view">
         <PortfolioHeader
-          name={name}
-          editingName={editingName}
-          onStartRename={() => setEditingName(true)}
-          onCommitName={commitName}
-          onCancelRename={() => setEditingName(false)}
+          portfolios={portfolios}
+          active={active}
           totalValue={0}
           change={null}
           hidden={hidden}
           onToggleHide={() => setHidden((v) => !v)}
           onAdd={openAdd}
+          onCreate={doCreate}
+          onSwitch={switchTo}
+          onEdit={() => setEditPortfolioOpen(true)}
+          onDuplicate={doDuplicate}
+          onDelete={doDelete}
           money={money}
         />
         <div className="wallet-empty">
@@ -816,6 +956,14 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
             }}
           />
         )}
+        {editPortfolioOpen && active && (
+          <EditPortfolioModal
+            name={active.name}
+            avatar={active.avatar ?? DEFAULT_AVATAR}
+            onSave={saveEditPortfolio}
+            onClose={() => setEditPortfolioOpen(false)}
+          />
+        )}
       </div>
     );
   }
@@ -823,16 +971,18 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
   return (
     <div className="wallet-view">
       <PortfolioHeader
-        name={name}
-        editingName={editingName}
-        onStartRename={() => setEditingName(true)}
-        onCommitName={commitName}
-        onCancelRename={() => setEditingName(false)}
+        portfolios={portfolios}
+        active={active}
         totalValue={totalValue}
         change={headerChange}
         hidden={hidden}
         onToggleHide={() => setHidden((v) => !v)}
         onAdd={openAdd}
+        onCreate={doCreate}
+        onSwitch={switchTo}
+        onEdit={() => setEditPortfolioOpen(true)}
+        onDuplicate={doDuplicate}
+        onDelete={doDelete}
         money={money}
       />
 
@@ -1204,6 +1354,14 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
             setModalOpen(false);
             setEditing(null);
           }}
+        />
+      )}
+      {editPortfolioOpen && active && (
+        <EditPortfolioModal
+          name={active.name}
+          avatar={active.avatar ?? DEFAULT_AVATAR}
+          onSave={saveEditPortfolio}
+          onClose={() => setEditPortfolioOpen(false)}
         />
       )}
     </div>
