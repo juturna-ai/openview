@@ -17,6 +17,7 @@ import {
   valueAgo,
 } from './holdings';
 import { Icon } from './icons';
+import { buildPortfolioSeries, usePortfolioHistory } from './portfolioSeries';
 import {
   createPortfolio,
   deletePortfolio,
@@ -88,19 +89,34 @@ function ValueChart({
   snapshots,
   liveValue,
   period,
+  holdings,
+  prices,
   onHover,
 }: {
   snapshots: Snapshot[];
   liveValue: number;
   period: (typeof PERIODS)[number];
+  holdings: Holding[];
+  prices: PriceMap;
   onHover?: (value: number | null) => void;
 }) {
   const { ref, size } = useChartSize();
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  // Market kline history per holding — primary source, so the chart shows real movement over the
+  // whole period instead of only the snapshots recorded while the app was open.
+  const marketSeries = usePortfolioHistory(holdings, period.range);
 
   const data = useMemo(() => {
     const now = Date.now();
     const cutoff = period.hours ? now - period.hours * 3600_000 : 0;
+
+    const livePrices: Record<string, number> = {};
+    for (const h of holdings) livePrices[h.symbol] = prices[h.symbol]?.price ?? 0;
+    const market = buildPortfolioSeries(holdings, marketSeries, livePrices, cutoff, now, liveValue);
+    if (market.length >= 2) return market;
+
+    // Fallback (upstreams unreachable): recorded snapshots, with the composition-jump trim and
+    // live-point continuity guards below.
     let inRange = snapshots.filter((s) => s.t >= cutoff);
 
     // Snapshots record the *portfolio total*, so adding/removing a holding (or switching portfolios)
@@ -124,7 +140,7 @@ function ValueChart({
     const ageOk = now - last.t > 60_000;
     const deltaOk = last.value > 0 && Math.abs(liveValue - last.value) / last.value <= 0.2;
     return ageOk && deltaOk ? [...inRange, { t: now, value: liveValue }] : inRange;
-  }, [snapshots, liveValue, period]);
+  }, [snapshots, liveValue, period, holdings, prices, marketSeries]);
 
   const chart = useMemo(() => {
     if (data.length < 2 || size.w === 0) return null;
@@ -181,8 +197,8 @@ function ValueChart({
     for (let v = Math.ceil(min / step) * step; v <= max; v += step) {
       yTicks.push({ y: y(v), label: fmtAxis(v) });
     }
-    // Screen position of each snapshot so the hover layer can hit-test without redoing the scales.
-    const points = data.map((d) => ({ x: x(d.t), y: y(d.value), value: d.value }));
+    // Screen position of each point so the hover layer can hit-test without redoing the scales.
+    const points = data.map((d) => ({ x: x(d.t), y: y(d.value), t: d.t, value: d.value }));
     return { W, H, pad, innerW, innerH, line, area, color, yTicks, points };
   }, [data, size]);
 
@@ -211,6 +227,7 @@ function ValueChart({
         </div>
       ) : (
         chart && (
+          <>
           <svg
             className="wallet-history-svg"
             width={chart.W}
@@ -273,6 +290,34 @@ function ValueChart({
               </g>
             )}
           </svg>
+          {hovered && (
+            // Time + value follow the cursor; flips to the left near the right edge so it never
+            // spills the card (same behaviour as the web History card's tooltip).
+            <div
+              className="wallet-chart-tooltip"
+              style={
+                hovered.x > chart.W - 150
+                  ? { right: chart.W - hovered.x + 12 }
+                  : { left: hovered.x + 12 }
+              }
+            >
+              <div className="wallet-tooltip-time">
+                {new Date(hovered.t).toLocaleString([], {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+              </div>
+              <div className="wallet-tooltip-row">
+                <span className="wallet-tooltip-dot" style={{ backgroundColor: chart.color }} />
+                <span className="wallet-tooltip-label">Portfolio:</span>
+                <span className="wallet-tooltip-value">{fmtUsd(hovered.value)}</span>
+              </div>
+            </div>
+          )}
+          </>
         )
       )}
     </div>
@@ -941,7 +986,14 @@ export default function WalletView({ addAssetSignal = 0 }: { addAssetSignal?: nu
       {/* ── Panel (swaps with the chip) ── */}
       <div className="wallet-panel">
         {chip === 'holdings' && (
-          <ValueChart snapshots={snapshots} liveValue={totalValue} period={period} onHover={setHoverValue} />
+          <ValueChart
+            snapshots={snapshots}
+            liveValue={totalValue}
+            period={period}
+            holdings={holdings}
+            prices={prices}
+            onHover={setHoverValue}
+          />
         )}
         {chip === 'profit' && (
           <ProfitChart

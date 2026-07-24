@@ -18,6 +18,7 @@ import {
 } from './holdings';
 import EditPortfolioModal from './EditPortfolioModal';
 import { Icon } from './icons';
+import { buildPortfolioSeries, usePortfolioHistory } from './portfolioSeries';
 import {
   createPortfolio,
   DEFAULT_AVATAR,
@@ -51,12 +52,12 @@ const POLL_MS = 30_000;
 // Must match .wallet-history-chart's height in globals.css — used as the pre-measurement fallback.
 const CHART_H = 220;
 
-const HISTORY_PERIODS: { label: string; hours: number | null }[] = [
-  { label: '24h', hours: 24 },
-  { label: '7d', hours: 168 },
-  { label: '30d', hours: 720 },
-  { label: '90d', hours: 2160 },
-  { label: 'All', hours: null },
+const HISTORY_PERIODS: { label: string; hours: number | null; range: string }[] = [
+  { label: '24h', hours: 24, range: '24h' },
+  { label: '7d', hours: 168, range: '7d' },
+  { label: '30d', hours: 720, range: '30d' },
+  { label: '90d', hours: 2160, range: '90d' },
+  { label: 'All', hours: null, range: 'all' },
 ];
 
 // Transaction-type filter. Every derived transaction is a "Buy" (holdings record purchases only), so
@@ -76,11 +77,18 @@ const TX_TYPES: { key: TxType; label: string; icon: string }[] = [
 function PortfolioHistory({
   snapshots,
   liveValue,
+  holdings,
+  prices,
 }: {
   snapshots: Snapshot[];
   liveValue: number;
+  holdings: Holding[];
+  prices: PriceMap;
 }) {
   const [period, setPeriod] = useState(HISTORY_PERIODS[0]);
+  // Market kline history per holding — the primary data source, so the chart shows the real
+  // movement over the whole period even when the app was closed for most of it.
+  const marketSeries = usePortfolioHistory(holdings, period.range);
 
   // The SVG is drawn at the container's true pixel size (1 user unit = 1 CSS px) rather than being
   // scaled from a fixed viewBox — a fixed 400×200 box stretched to fill a ~900×220 container scales
@@ -103,12 +111,21 @@ function PortfolioHistory({
   }, []);
 
   const data = useMemo(() => {
-    const cutoff = period.hours ? Date.now() - period.hours * 3600_000 : 0;
+    const now = Date.now();
+    const cutoff = period.hours ? now - period.hours * 3600_000 : 0;
+
+    // Market-derived series first: holdings × historical prices covers the whole period (and gives
+    // the hover a point per candle) no matter when the app was last open.
+    const livePrices: Record<string, number> = {};
+    for (const h of holdings) livePrices[h.symbol] = prices[h.symbol]?.price ?? 0;
+    const market = buildPortfolioSeries(holdings, marketSeries, livePrices, cutoff, now, liveValue);
+    if (market.length >= 2) return market;
+
+    // Fallback (upstreams unreachable): recorded snapshots, live value appended so the line
+    // reaches "now".
     const inRange = snapshots.filter((s) => s.t >= cutoff);
-    // Append the live value so the line always reaches "now" instead of stopping at the last
-    // 5-minute snapshot.
-    return liveValue > 0 ? [...inRange, { t: Date.now(), value: liveValue }] : inRange;
-  }, [snapshots, liveValue, period]);
+    return liveValue > 0 ? [...inRange, { t: now, value: liveValue }] : inRange;
+  }, [snapshots, liveValue, period, holdings, prices, marketSeries]);
 
   const chart = useMemo(() => {
     // Width is 0 until the ResizeObserver reports; skip the geometry until then.
@@ -224,7 +241,7 @@ function PortfolioHistory({
           History
           <span
             className="wallet-info-icon"
-            title="Portfolio value is recorded each time prices refresh, so history builds up as you use the app."
+            title="Your current holdings priced with market history over the selected period."
           >
             <Icon name="info" size={13} />
           </span>
@@ -988,7 +1005,7 @@ export default function WalletViewWeb({ addAssetSignal = 0 }: { addAssetSignal?:
 
       {/* ── Charts ── */}
       <div className="wallet-charts-row">
-        <PortfolioHistory snapshots={snapshots} liveValue={totalValue} />
+        <PortfolioHistory snapshots={snapshots} liveValue={totalValue} holdings={holdings} prices={prices} />
 
         {segments.length > 0 && (
           <WithHint hint="allocation" className="wallet-allocation-card">
