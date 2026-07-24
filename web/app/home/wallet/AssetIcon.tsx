@@ -9,6 +9,7 @@ import {
   getLogoUrl,
   getMetalFallbackUrl,
   hasLogoOverride,
+  needsLightChip,
 } from './assets';
 
 // Asset avatar with Reach's fallback chain: try the logo CDN, fall back once (crypto only) to a
@@ -28,6 +29,7 @@ interface Props {
 export default function AssetIcon({ symbol, assetType, size = 28 }: Props) {
   const [failed, setFailed] = useState(false);
   const [triedFallback, setTriedFallback] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   // React reuses this instance when the parent re-renders with a different asset
   // (e.g. the Best/Worst Performer card changing between polls) — reset the error
@@ -37,10 +39,14 @@ export default function AssetIcon({ symbol, assetType, size = 28 }: Props) {
     setPrevAsset(`${symbol}|${assetType}`);
     setFailed(false);
     setTriedFallback(false);
+    setLoaded(false);
   }
 
   const isOverride = hasLogoOverride(symbol, assetType);
-  const color = getAssetColor(symbol);
+  // Dark-glyph-on-transparent logos (ADA, WLD, 1INCH…) vanish over a dark tint — back those with a
+  // light disc instead, mirroring the chart engine's `.on-light` treatment.
+  const lightChip = needsLightChip(symbol, assetType);
+  const color = lightChip ? '#f5f6fa' : getAssetColor(symbol);
   const char = getIconChar(symbol);
 
   const primary = getLogoUrl(symbol, assetType);
@@ -85,7 +91,13 @@ export default function AssetIcon({ symbol, assetType, size = 28 }: Props) {
         fontSize: Math.round(size * 0.4),
       }}
     >
-      {!isOverride && <span className="wallet-icon-char">{char}</span>}
+      {/* The glyph waits under the image until it paints, then unmounts — a transparent-background
+          logo must not have a stray letter showing through it. Dark text on the light chip. */}
+      {!isOverride && !loaded && (
+        <span className="wallet-icon-char" style={lightChip ? { color: '#1b1f27' } : undefined}>
+          {char}
+        </span>
+      )}
       {showImg && (
         /* eslint-disable-next-line @next/next/no-img-element -- remote CDN logos across many hosts;
            next/image would need every host in next.config and buys nothing for a 28px avatar. */
@@ -94,6 +106,7 @@ export default function AssetIcon({ symbol, assetType, size = 28 }: Props) {
           alt=""
           className={imgClass}
           onError={handleError}
+          onLoad={() => setLoaded(true)}
           loading="lazy"
         />
       )}

@@ -734,3 +734,22 @@ messages that session were all about the Reports page — the context pointed th
   built, reverted, and rebuilt.
 - A screenshot in an earlier message fixes the page for the whole session unless the user changes
   subject: this session started with a Reports-page screenshot, and every later request stayed there.
+
+## 2026-07-24 — "Logo URL returns 200" is not "logo is visible" — audit visual assets at the PIXEL level, in the real UI
+
+Fixed the wallet's missing crypto logos by swapping to CMC's CDN and verified every URL returned
+200 with a real body — then the user came back: icons still "missing or wrong", and the allocation
+donut was black. Two things HTTP verification can't see:
+1. **A 200 PNG can still be invisible**: 12 of 203 logos are a dark glyph on a transparent
+   background — rendered over this app's dark chips they read as a broken/blank icon. Only decoding
+   the PNGs (opaque coverage + mean luminance per pixel) found them. The engine had already solved
+   this exact problem (`DARK_LOGO`/`.on-light`) — grep for prior art on the SAME failure mode
+   before declaring a new asset source done.
+2. **Colours derived from a brand table drift from the artwork**: `BRAND_COLORS` held literal
+   brand blacks (NEAR #000000), so the donut painted black-on-black. When a colour is supposed to
+   "match the icon", measure it from the icon (dominant-colour extraction), don't transcribe brand
+   hex codes.
+**Rule:** for any visual-asset task (logos, icons, images), the definition of done is a REAL
+browser screenshot/DOM probe of the actual surface — img.naturalWidth for loads, computed styles
+for backing, pixel decode for visibility — across ALL items, not a URL status sweep. And when the
+user says "match X's colour", extract the colour from X programmatically.

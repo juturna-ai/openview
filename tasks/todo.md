@@ -1,3 +1,37 @@
+# Wallet history chart: real market history + full-range hover
+
+Bug: the wallet History chart only plots locally recorded snapshots (written every 5 min
+while the app is open), so "24h" shows just the minutes since page load, and hover can only
+land on those few snapshot times.
+
+Fix: build the chart series from market klines (holdings × historical prices) — full range
+regardless of app-open time; snapshots stay as fallback + 24h header change source.
+
+## Plan
+- [x] Read WalletViewWeb/WalletView charts, klines + prices routes, holdings.ts
+- [x] Repro test (subagent): portfolioSeries.logic.test.mjs — snapshot-only series can't
+      cover the period; market-derived series must
+- [x] Extend /api/market/klines with POST: history for crypto (Binance), stock/metal
+      (Yahoo), currency (Frankfurter), per range, with a short server cache
+- [x] New portfolioSeries.ts: pure buildPortfolioSeries() (step-interpolated sum of
+      amount × price at each grid time) + usePortfolioHistory() hook
+- [x] WalletViewWeb PortfolioHistory: use market series (snapshot fallback), hover
+      unchanged (now spans the whole range)
+- [x] WalletView ValueChart (embed): same series source + add time+value tooltip
+- [x] Run logic tests + tsc/build
+- [x] Update ARCHITECTURE.md
+
+## Review
+- POST /api/market/klines verified live: BTC/NEAR 96×15m points spanning the full 24h, AAPL
+  (market hours), XAU 183 pts, EUR daily via Frankfurter; GET (BTC trend) unchanged, 96 pts.
+- portfolioSeries.logic.test.mjs + chartSeries.logic.test.mjs pass; tsc + ESLint clean;
+  /home/wallet compiles and serves 200 on :3333 (server stopped afterwards).
+- Both charts fall back to the old snapshot series only when every upstream fails.
+- Note: the hover tooltip shows real values even while the hide-values eye is on (pre-existing
+  behaviour of the web tooltip, now also true in the embed).
+
+---
+
 # Reports pairs table: exchange tabs (Binance | Coinbase | Bybit)
 
 CORRECTION: first build went into the Gainers & Losers board by mistake — user meant the REPORTS
@@ -298,3 +332,54 @@ PHONE app's layout. WalletShell renders the same WalletView for both the browser
 ## Needs the user's attention
 - Visual confirm in browser: /home → Wallet should now be the stat-card layout, not "My Portfolio".
 - Phone app (embed) is unchanged — still the CMC layout.
+
+---
+
+# 2026-07-24 — Wallet asset logos: full audit + CMC migration
+
+## Plan
+- [x] Audit all 4 asset tabs: script tests every catalog symbol against the live logo chain
+- [x] Crypto: 46/203 broken (CoinCap 404 + jsdelivr miss) — NEAR, HBAR, ARB, OP, APT, SUI-era etc.
+- [x] Stocks 50/50 have domains; metals 4/4 gifs exist; currencies 10/10 flag codes — no gaps
+- [x] Resolve CMC id per crypto symbol by *name* match against CMC's full coin map; hand-fix
+      rebrands/collisions (TON→11419, ALPHA→7232, FXS→6953, FTM→3513, RNDR→5690, MATIC→3890,
+      DAR→11374, DOCK→2675, LEVER→20873, ERN→37508)
+- [x] Verify all 203 logo URLs return 200 with a real image body
+- [x] assets.ts: `CMC_LOGO_IDS` map; getLogoUrl crypto → s2.coinmarketcap CDN, old CoinCap→jsdelivr
+      chain kept for uncataloged symbols
+- [x] tsc clean (full non-incremental)
+- [x] ARCHITECTURE.md: assets.ts row + new "Crypto logos" paragraph
+
+## Review
+- Same logo source the chart engine's watchlist uses (§chart-icons / api/market/coinlogos), but ids
+  pinned statically: the live listing mis-assigns ambiguous tickers (TON matched an AT&T tokenized
+  stock) and drops rebranded coins entirely — a curated map is the only correct option for a fixed
+  catalog.
+- Prove-It: remote-CDN visual issue, no unit seam — proof is the audit script
+  (scratchpad/audit-logos.mjs): 46/203 fail before, 203/203 verified 200 after.
+- Not run: `next build` / browser check — dev server not running; tsc + URL verification cover the
+  change (one map + one branch in a pure resolver).
+
+## Round 2 (user: donut is black, still missing/wrong icons)
+- [x] Pixel-level audit of all 203 CMC logos (decode PNG): loads, opaque coverage, luminance,
+      dominant colour
+- [x] Generated `CRYPTO_ICON_COLORS`: donut/chip colour = the icon's dominant colour (NEAR → green)
+- [x] Dark-glyph logos (12: ADA ONDO APT WLD AR BAL CVC TLM OCEAN CFX LSK 1INCH): light chip
+      backing, mirroring the engine's `.on-light`
+- [x] AssetIcon: hide the fallback letter once the image actually loads (stops it showing through
+      transparent-background logos); `visibleColor` lightness floor catches remaining near-black
+      brands (XRP, Nike, Palantir)
+- [x] Real-browser verification on :3333 (playwright-core + cached Chromium): Add Asset modal,
+      all 4 tabs — 203 crypto + 50 stocks + 4 metals + 10 currencies, **0 failed icons**; all 12
+      light chips confirmed via computed style; donut stroke `#01d88a` (NEAR green) with a seeded
+      NEAR holding; 0 console errors. Dev server started for the check and stopped after.
+- [x] tsc (full) + ESLint clean
+- [x] lessons.md (pixel-level verification rule) + ARCHITECTURE.md (Icon colours + dark glyphs)
+
+## Round 2 review
+- Root cause of the black donut: `BRAND_COLORS` carries literal brand blacks (NEAR #000000) and
+  the donut colours via getAssetColor. Colours now come from the measured dominant colour of each
+  logo PNG (gen-colors.mjs), with a runtime lightness floor as backstop.
+- Root cause of "still missing": 12 logos are dark glyphs on transparency — HTTP 200, invisible
+  over a dark chip. They now sit on a light disc (#f5f6fa), same as the chart engine's DARK_LOGO
+  treatment.
